@@ -83,7 +83,7 @@ function saveReadIds(ids) { try { localStorage.setItem(STORAGE_KEY, JSON.stringi
 
 export default function Notifications() {
   const ctx           = useOutletContext() || {};
-  const { setNotif }  = ctx;
+  const { setNotif, member } = ctx;
   const navigate      = useNavigate();
   const { user }      = useAuth();
   const isUser        = user?.role === "user";
@@ -280,15 +280,21 @@ export default function Notifications() {
 
           // ── 7. SAVINGS ────────────────────────────────────────────────────
           try {
-            const savings = await getMemberSavingsAPI("me");
-            if (savings?.transactions?.length > 0) {
-              savings.transactions.slice(0, 3).forEach((tx, i) => built.push({
-                id:`savings-${tx.id || i}`, type:"savings",
-                title:`Savings ${tx.transaction_type} — ₱${Number(tx.amount).toLocaleString()}`,
-                msg:`A ${tx.transaction_type.toLowerCase()} of ₱${Number(tx.amount).toLocaleString()} was recorded to your savings.${tx.note ? " Note: " + tx.note : ""} New balance: ₱${Number(tx.balance_after).toLocaleString()}.`,
-                time:timeAgo(tx.created_at), date:tx.created_at,
-                read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
-              }));
+            // FIX: dati "me" (literal string) ang ipinapasa dito — palaging
+            // 404 kasi ang backend endpoint ay umaasa sa totoong numeric
+            // Member ID, hindi sa "me". Gamitin natin ang member.id na
+            // galing sa MemberLayout's outlet context.
+            if (member?.id) {
+              const savings = await getMemberSavingsAPI(member.id);
+              if (savings?.transactions?.length > 0) {
+                savings.transactions.slice(0, 3).forEach((tx, i) => built.push({
+                  id:`savings-${tx.id || i}`, type:"savings",
+                  title:`Savings ${tx.transaction_type} — ₱${Number(tx.amount).toLocaleString()}`,
+                  msg:`A ${tx.transaction_type.toLowerCase()} of ₱${Number(tx.amount).toLocaleString()} was recorded to your savings.${tx.note ? " Note: " + tx.note : ""} New balance: ₱${Number(tx.balance_after).toLocaleString()}.`,
+                  time:timeAgo(tx.created_at), date:tx.created_at,
+                  read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
+                }));
+              }
             }
           } catch {}
         }
@@ -308,7 +314,7 @@ export default function Notifications() {
       finally { setLoading(false); }
     };
     build();
-  }, [isUser]);
+  }, [isUser, member?.id]);
 
   const unreadCount = notifs.filter(n => !n.read).length;
 

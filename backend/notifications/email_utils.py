@@ -228,11 +228,11 @@ def send_gcash_rejected_email(email, fullname, member_id, loan_id, reference_num
 # Also APPEND send_application_approved_email at the bottom
 
 def send_member_approved_email(email, fullname, member_id, username, plain_password, membership_date):
-    """Send email when applicant becomes an official member."""
+    """Send email when admin registers a member F2F — credentials only, no requirements."""
     content = f"""
     <p>Dear <strong>{fullname}</strong>,</p>
     <p>Congratulations! You are now an official member of <strong>LEAF Multi-Purpose Cooperative</strong>.
-    Your membership has been approved and your account is ready to use.</p>
+    Your membership account has been created and is ready to use.</p>
 
     <div class="info-box">
       <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
@@ -242,37 +242,24 @@ def send_member_approved_email(email, fullname, member_id, username, plain_passw
       <div class="info-row"><span class="info-label">Membership Date</span><span class="info-value">{membership_date}</span></div>
     </div>
 
-    <div class="alert-box" style="background:#e3f2fd;border-left-color:#1565c0;">
-      <strong>Requirements to bring to the office:</strong>
-      <ul style="margin:10px 0 0 0;padding-left:20px;line-height:2.2;color:#1a237e;">
-        <li>2 pieces 2x2 ID picture (white background)</li>
-        <li>Photocopy of Birth Certificate (PSA copy preferred)</li>
-        <li>Photocopy of Marriage Certificate (if married — optional)</li>
-        <li>Valid Government-issued ID</li>
-        <li>Initial Share Capital Payment (minimum ₱4,000)</li>
-      </ul>
-      <p style="margin-top:10px;"><strong>Office hours:</strong> Monday – Friday, 8:00 AM – 5:00 PM<br>
-      <strong>Location:</strong> LEAF MPC Office, Lucban, Quezon</p>
-    </div>
-
     <div class="alert-box">
       <strong>Important:</strong> Please keep your login credentials safe and confidential.
-      Change your password after your first login.
+      Change your password after your first login for security.
     </div>
 
-    <p>You may now log in to the LEAF MPC system to view your membership details,
+    <p>You may now log in to the LEAF MPC member portal to view your membership details,
     apply for loans, and track your savings.</p>
     <p>Welcome to the LEAF MPC family!</p>
     """
     return send_email(
         email,
-        "Welcome to LEAF MPC — Membership Approved",
+        "Welcome to LEAF MPC — Your Membership Account is Ready",
         _base(content)
     )
 
 
 def send_application_approved_email(email, fullname, app_id):
-    """Send email when online application is approved — reminder to visit office."""
+    """Send email when online application is approved — with requirements to bring to office."""
     content = f"""
     <p>Dear <strong>{fullname}</strong>,</p>
     <p>Your LEAF MPC membership application (<strong>{app_id}</strong>) has been

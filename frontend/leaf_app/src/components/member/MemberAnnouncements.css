@@ -130,3 +130,127 @@
   .ma-wrapper { padding:12px 12px 24px; }
   .ma-post-title { font-size:15px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   IDAGDAG ITO sa dulo ng MemberAnnouncements.css (Reactions feature) —
+   huwag i-overwrite ang buong file, i-append lang ito.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ma-reaction-wrap { position: relative; }
+.ma-reaction-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  padding: 5px 10px; border-radius: 8px;
+  transition: all 0.15s; font-family: inherit;
+  display: flex; align-items: center; gap: 6px;
+}
+.ma-reaction-btn:hover { background: #f0f8f0; }
+
+.ma-reaction-picker {
+  position: absolute; bottom: 38px; left: 0;
+  display: flex; gap: 4px;
+  background: #fff; border-radius: 30px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 20;
+  animation: maReactionPop 0.15s ease;
+}
+@keyframes maReactionPop {
+  from { opacity: 0; transform: translateY(6px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ma-reaction-emoji {
+  font-size: 24px; cursor: pointer;
+  transition: transform 0.12s;
+  display: inline-block;
+}
+.ma-reaction-emoji:hover { transform: scale(1.3) translateY(-3px); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   IDAGDAG ITO sa dulo ng MemberAnnouncements.css (Clickable post +
+   Facebook-style image fit + Detail modal) — huwag i-overwrite ang
+   buong file, i-append lang ito.
+
+   PAALALA: dapat mo ring PALITAN/ALISIN ang lumang rule na ito sa
+   file mo (kasi ma-o-override ito ng bago sa ibaba):
+
+     .ma-post-image img { width:100%; max-height:340px; object-fit:cover; display:block; }
+
+   Papalitan natin ito para "fit" (buong picture makikita) hindi
+   naka-crop, tulad ng Facebook.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ma-post-card-clickable { cursor: pointer; transition: box-shadow 0.15s, transform 0.15s; }
+.ma-post-card-clickable:hover { box-shadow: 0 6px 20px rgba(46,125,50,0.14); transform: translateY(-1px); }
+
+/* Image fit — parang Facebook, hindi naka-crop */
+.ma-post-image {
+  margin: 0; overflow: hidden; background: #f5f5f5;
+  max-height: 420px; display: flex; align-items: center; justify-content: center;
+}
+.ma-post-image img { width: 100%; height: auto; max-height: 420px; object-fit: contain; display: block; }
+
+.ma-post-image-full {
+  margin: 12px 0; overflow: hidden; background: #f5f5f5; border-radius: 12px;
+  max-height: 520px; display: flex; align-items: center; justify-content: center;
+}
+.ma-post-image-full img { width: 100%; height: auto; max-height: 520px; object-fit: contain; display: block; }
+
+.ma-tap-hint { font-size: 11px; color: #2e7d32; font-weight: 600; margin-left: auto; }
+
+/* ── Detail Modal ── */
+.ma-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: maModalFadeIn 0.18s ease;
+}
+@keyframes maModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.ma-modal-box {
+  background: #fff; border-radius: 16px; width: 100%; max-width: 560px;
+  max-height: 88vh; overflow: hidden; position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: maModalSlideIn 0.2s ease;
+}
+@keyframes maModalSlideIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+
+.ma-modal-scroll { overflow-y: auto; max-height: 88vh; padding: 18px 20px 24px; }
+
+.ma-modal-close {
+  position: absolute; top: 14px; right: 14px; z-index: 10;
+  background: rgba(0,0,0,0.06); border: none; border-radius: 50%;
+  width: 32px; height: 32px; font-size: 15px; cursor: pointer;
+  color: #555; transition: background 0.15s;
+}
+.ma-modal-close:hover { background: rgba(0,0,0,0.12); }
+
+.ma-post-caption-full { font-size: 13px; color: #444; line-height: 1.7; padding: 8px 0; }
+.ma-modal-comments-title { font-size: 12px; font-weight: 700; color: #555; margin: 14px 0 8px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+
+@media (max-width: 600px) {
+  .ma-modal-overlay { padding: 0; align-items: flex-end; }
+  .ma-modal-box { border-radius: 16px 16px 0 0; max-height: 92vh; max-width: 100%; }
+  .ma-modal-scroll { max-height: 92vh; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IDAGDAG ITO sa dulo ng MemberAnnouncements.css ("Reacted by" names
+   list, tulad ng ginawa natin sa Admin side) — i-append lang.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ma-reaction-wrap { display: flex; align-items: center; gap: 10px; }
+.ma-reaction-btn-wrap { position: relative; }
+
+.ma-reacted-by-wrap { position: relative; }
+.ma-reacted-by-count { font-size: 11px; color: #888; cursor: default; border-bottom: 1px dotted #ccc; }
+.ma-reacted-by-list {
+  position: absolute; bottom: 22px; left: 0;
+  background: #fff; border-radius: 10px;
+  padding: 10px 12px; min-width: 160px; max-width: 220px;
+  max-height: 200px; overflow-y: auto;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  z-index: 20;
+  display: flex; flex-direction: column; gap: 6px;
+  animation: maReactionPop 0.15s ease;
+}
+.ma-reacted-by-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #333; }

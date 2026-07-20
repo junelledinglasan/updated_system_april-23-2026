@@ -1,11 +1,67 @@
-import { useState, useEffect } from "react";
-import { getAnnouncementsAPI, createAnnouncementAPI, updateAnnouncementAPI, deleteAnnouncementAPI, addCommentAPI, deleteCommentAPI } from "../../api/announcements";
+import { useState, useEffect, useRef } from "react";
+import { getAnnouncementsAPI, createAnnouncementAPI, updateAnnouncementAPI, deleteAnnouncementAPI, addCommentAPI, deleteCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
 import { useAuth } from "../../context/AuthContext";
 import { Search, Pin, Bell, Pencil, Trash2, MessageCircle } from "lucide-react";
 import "./Announcement.css";
 
 const POST_TYPES = ["Activity","Seminar","Notice","Announcement","Event"];
 const TYPE_COLOR = { Activity:"type-activity", Seminar:"type-seminar", Notice:"type-notice", Announcement:"type-announce", Event:"type-event" };
+
+// ── Reactions (parang Facebook) ──────────────────────────────────────────
+const REACTION_EMOJI = { Like:"👍", Love:"❤️", Haha:"😂", Wow:"😮", Sad:"😢", Angry:"😠" };
+const REACTION_COLOR = { Like:"#1565c0", Love:"#c62828", Haha:"#f57f17", Wow:"#f57f17", Sad:"#f57f17", Angry:"#e65100" };
+
+// ── Reaction button + "Reacted by" list (hover sa count = makikita ang mga pangalan) ──
+function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPropagation }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [showWho,    setShowWho]    = useState(false);
+  const hideTimer = useRef(null);
+
+  const openPicker = () => { clearTimeout(hideTimer.current); setShowPicker(true); };
+  const scheduleHide = () => { hideTimer.current = setTimeout(() => setShowPicker(false), 300); };
+
+  const emoji = myReaction ? REACTION_EMOJI[myReaction] : "👍";
+  const color = myReaction ? (REACTION_COLOR[myReaction] || "#2e7d32") : "#888";
+  const label = myReaction || "Like";
+
+  return (
+    <div className="an-reaction-wrap" onClick={e => stopPropagation && e.stopPropagation()}>
+      <div className="an-reaction-btn-wrap" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
+        {showPicker && (
+          <div className="an-reaction-picker" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
+            {Object.entries(REACTION_EMOJI).map(([type, e]) => (
+              <span key={type} className="an-reaction-emoji" title={type}
+                onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
+                {e}
+              </span>
+            ))}
+          </div>
+        )}
+        <button className="an-reaction-btn" style={{ color }} onClick={(e) => { e.stopPropagation(); onReact(myReaction || "Like"); }}>
+          <span>{emoji}</span>
+          <span style={{ fontWeight: myReaction ? 800 : 600 }}>{label}</span>
+        </button>
+      </div>
+
+      {/* ── "Reacted by" — parang Facebook, i-hover ang count para makita ang mga pangalan ── */}
+      {totalReactions > 0 && (
+        <div className="an-reacted-by-wrap" onMouseEnter={() => setShowWho(true)} onMouseLeave={() => setShowWho(false)}>
+          <span className="an-reacted-by-count">{totalReactions} reacted</span>
+          {showWho && (
+            <div className="an-reacted-by-list">
+              {(reactions || []).map(r => (
+                <div key={r.id} className="an-reacted-by-item">
+                  <span>{REACTION_EMOJI[r.reaction_type] || "👍"}</span>
+                  <span>{r.posted_by_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Create / Edit Post Modal ──────────────────────────────────────────────────
 function PostModal({ editPost, onClose, onSave }) {
@@ -110,7 +166,7 @@ function PostModal({ editPost, onClose, onSave }) {
 }
 
 // ─── View Post Modal ───────────────────────────────────────────────────────────
-function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh }) {
+function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh, onReact }) {
   const [comment,  setComment]  = useState("");
   const [comments, setComments] = useState(post?.comments||[]);
   const [loading,  setLoading]  = useState(false);
@@ -162,19 +218,26 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
             <span className="an-view-author">by {post.posted_by_name||"Admin"}</span>
             <span className="an-view-date">{post.created_at}</span>
           </div>
-          {/* ── Image shown prominently in view modal ── */}
+          {/* ── Image — "fit" na parang Facebook, hindi naka-crop ── */}
           {post.image_url && (
-            <div style={{margin:"12px 0",borderRadius:10,overflow:"hidden"}}>
-              <img
-                src={post.image_url}
-                alt="post"
-                style={{width:"100%",maxHeight:400,objectFit:"cover",borderRadius:10,display:"block"}}
-              />
+            <div className="an-view-image-wrap">
+              <img src={post.image_url} alt="post" className="an-view-image"/>
             </div>
           )}
           <div className="an-view-body" style={{whiteSpace:"pre-wrap",lineHeight:1.7,color:"#333",fontSize:14}}>
             {post.body||post.caption}
           </div>
+
+          {/* ── Reaction bar ── */}
+          <div className="an-view-reaction-row">
+            <ReactionButton
+              myReaction={post.my_reaction}
+              totalReactions={post.total_reactions || 0}
+              reactions={post.reactions}
+              onReact={(type) => onReact(post.id, type)}
+            />
+          </div>
+
           <div className="an-comments-section">
             <div className="an-comments-title">💬 Comments ({comments.length})</div>
             <div className="an-comments-list">
@@ -225,7 +288,7 @@ export default function Announcement() {
   const [showCreate, setCreate]   = useState(false);
   const [editPost,   setEditPost] = useState(null);
   const [viewPost,   setViewPost] = useState(null);
-  const [deleteId,   setDeleteId] = useState(null); // ← NEW: custom delete confirm
+  const [deleteId,   setDeleteId] = useState(null);
   const [toast,      setToast]    = useState(null);
 
   const showToast = (msg,type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
@@ -244,7 +307,6 @@ export default function Announcement() {
       const newPost = await createAnnouncementAPI(data);
       setCreate(false);
       showToast("Announcement posted successfully!");
-      // Direktang idagdag sa list — instant, no refetch needed
       setPosts(prev => [newPost, ...prev]);
     } catch(err) {
       console.error("[CREATE ERROR]", err.response?.data || err.message);
@@ -260,7 +322,6 @@ export default function Announcement() {
       const updated = await updateAnnouncementAPI(editPost.id, data);
       setEditPost(null); setViewPost(null);
       showToast("Announcement updated!");
-      // Direktang i-update ang post sa list
       setPosts(prev => prev.map(p => p.id === editPost.id ? updated : p));
     } catch(err) {
       console.error("[UPDATE ERROR]", err.response?.data || err.message);
@@ -272,7 +333,7 @@ export default function Announcement() {
   };
 
   const handleDelete = async (id) => {
-    setDeleteId(id); // show custom confirm modal
+    setDeleteId(id);
   };
 
   const confirmDelete = async () => {
@@ -283,6 +344,18 @@ export default function Announcement() {
       showToast("Announcement deleted.", "danger");
       setPosts(prev => prev.filter(p => p.id !== deleteId));
     } catch { showToast("Failed to delete.", "danger"); }
+  };
+
+  // ── Reaction handler — i-update lang lokal, walang buong re-fetch ────────
+  const handleReact = async (postId, reactionType) => {
+    try {
+      const result = await reactToAnnouncementAPI(postId, reactionType);
+      // Kailangan din ng buong `reactions` list (para sa "reacted by") kaya
+      // isang re-fetch lang para dito, hindi masyadong mabigat naman.
+      const updated = await getAnnouncementsAPI();
+      setPosts(updated);
+      setViewPost(prev => prev ? updated.find(p => p.id === postId) || null : prev);
+    } catch(e) { console.error(e); }
   };
 
   const filtered = posts.filter(p => {
@@ -310,7 +383,7 @@ export default function Announcement() {
       {toast && <div className={`an-toast an-toast-${toast.type}`}>{toast.msg}</div>}
       {showCreate && <PostModal onClose={()=>setCreate(false)} onSave={handleCreate}/>}
       {editPost   && <PostModal editPost={editPost} onClose={()=>setEditPost(null)} onSave={handleEdit}/>}
-      {viewPost   && <ViewPostModal post={viewPost} onClose={()=>setViewPost(null)} onEdit={p=>{setViewPost(null);setEditPost(p);}} onDelete={handleDelete} currentUser={user} onRefresh={fetchPosts}/>}
+      {viewPost   && <ViewPostModal post={viewPost} onClose={()=>setViewPost(null)} onEdit={p=>{setViewPost(null);setEditPost(p);}} onDelete={handleDelete} currentUser={user} onRefresh={fetchPosts} onReact={handleReact}/>}
 
       {/* ── Custom Delete Confirmation Modal ── */}
       {deleteId && (
@@ -400,7 +473,7 @@ export default function Announcement() {
                     {/* Title */}
                     <div className="an-post-title">{post.title}</div>
 
-                    {/* Caption — actual body text, not "Text" */}
+                    {/* Caption */}
                     <div className="an-post-caption">
                       {bodyText.length > 180
                         ? <>{bodyText.slice(0,180)}<span className="an-see-more"> ... See more</span></>
@@ -408,19 +481,22 @@ export default function Announcement() {
                       }
                     </div>
 
-                    {/* Image thumbnail on post card */}
+                    {/* Image — "fit" na parang Facebook */}
                     {post.image_url && (
-                      <div style={{marginTop:10,borderRadius:10,overflow:"hidden",maxHeight:300}}>
-                        <img
-                          src={post.image_url}
-                          alt="post"
-                          style={{width:"100%",maxHeight:300,objectFit:"cover",borderRadius:10,display:"block"}}
-                        />
+                      <div className="an-post-image-wrap">
+                        <img src={post.image_url} alt="post" className="an-post-image"/>
                       </div>
                     )}
 
-                    {/* Footer */}
+                    {/* Footer — Reaction + Comment count */}
                     <div className="an-post-footer">
+                      <ReactionButton
+                        myReaction={post.my_reaction}
+                        totalReactions={post.total_reactions || 0}
+                        reactions={post.reactions}
+                        onReact={(type) => handleReact(post.id, type)}
+                        stopPropagation
+                      />
                       <span className="an-comment-count"><MessageCircle size={13}/> {post.comment_count||0} Comments</span>
                     </div>
 

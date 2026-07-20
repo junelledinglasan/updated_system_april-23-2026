@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { getAnnouncementsAPI, addCommentAPI } from "../../api/announcements";
+import { useState, useEffect, useRef } from "react";
+import { getAnnouncementsAPI, addCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
 import { useAuth } from "../../context/AuthContext";
 import "./MemberAnnouncements.css";
 
@@ -7,6 +7,10 @@ const TYPE_COLOR = {
   Activity:"tag-activity", Seminar:"tag-seminar", Notice:"tag-notice",
   Announcement:"tag-announce", Event:"tag-event",
 };
+
+// ── Reactions (parang Facebook) ──────────────────────────────────────────
+const REACTION_EMOJI = { Like:"👍", Love:"❤️", Haha:"😂", Wow:"😮", Sad:"😢", Angry:"😠" };
+const REACTION_COLOR = { Like:"#1565c0", Love:"#c62828", Haha:"#f57f17", Wow:"#f57f17", Sad:"#f57f17", Angry:"#e65100" };
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -18,14 +22,156 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-PH", { month:"short", day:"numeric", year:"numeric" });
 }
 
+function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPropagation }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [showWho,    setShowWho]    = useState(false);
+  const hideTimer = useRef(null);
+
+  const openPicker = () => { clearTimeout(hideTimer.current); setShowPicker(true); };
+  const scheduleHide = () => { hideTimer.current = setTimeout(() => setShowPicker(false), 300); };
+
+  const emoji = myReaction ? REACTION_EMOJI[myReaction] : "👍";
+  const color = myReaction ? (REACTION_COLOR[myReaction] || "#2e7d32") : "#888";
+  const label = myReaction || "Like";
+
+  return (
+    <div className="ma-reaction-wrap" onClick={e => stopPropagation && e.stopPropagation()}>
+      <div className="ma-reaction-btn-wrap" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
+        {showPicker && (
+          <div className="ma-reaction-picker" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
+            {Object.entries(REACTION_EMOJI).map(([type, e]) => (
+              <span key={type} className="ma-reaction-emoji" title={type}
+                onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
+                {e}
+              </span>
+            ))}
+          </div>
+        )}
+        <button className="ma-reaction-btn" style={{ color }} onClick={(e) => { e.stopPropagation(); onReact(myReaction || "Like"); }}>
+          <span>{emoji}</span>
+          <span style={{ fontWeight: myReaction ? 800 : 600 }}>{label}</span>
+        </button>
+      </div>
+
+      {/* ── "Reacted by" — i-hover ang count para makita ang mga pangalan ── */}
+      {totalReactions > 0 && (
+        <div className="ma-reacted-by-wrap" onMouseEnter={() => setShowWho(true)} onMouseLeave={() => setShowWho(false)}>
+          <span className="ma-reacted-by-count">{totalReactions} reacted</span>
+          {showWho && (
+            <div className="ma-reacted-by-list">
+              {(reactions || []).map(r => (
+                <div key={r.id} className="ma-reacted-by-item">
+                  <span>{REACTION_EMOJI[r.reaction_type] || "👍"}</span>
+                  <span>{r.posted_by_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Comments list + input — reusable, ginagamit sa loob ng modal ─────────
+function CommentsSection({ post, user, onCommentAdded }) {
+  const [commText, setCommText] = useState("");
+  const [sending,  setSending]  = useState(false);
+
+  const submit = async () => {
+    if (!commText.trim() || sending) return;
+    setSending(true);
+    try {
+      await addCommentAPI(post.id, commText.trim());
+      setCommText("");
+      onCommentAdded();
+    } catch(e) { console.error(e); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="ma-comments-section">
+      {!post.comments?.length ? (
+        <div className="ma-no-comments">No comments yet. Be the first!</div>
+      ) : post.comments.map(c => (
+        <div key={c.id} className="ma-comment">
+          <div className="ma-comment-avatar">{(c.posted_by_name || c.author || "U")[0].toUpperCase()}</div>
+          <div className="ma-comment-body">
+            <div className="ma-comment-author">
+              {c.posted_by_name || c.author}
+              {c.posted_by_role && <span className="ma-comment-time" style={{marginLeft:6,color:"#aaa",fontSize:10}}>{c.posted_by_role}</span>}
+              <span className="ma-comment-time">{timeAgo(c.created_at)}</span>
+            </div>
+            <div className="ma-comment-text">{c.body || c.text}</div>
+          </div>
+        </div>
+      ))}
+      <div className="ma-comment-input-row">
+        <div className="ma-comment-avatar me">{user?.name?.[0]?.toUpperCase()||"M"}</div>
+        <input
+          className="ma-comment-input"
+          placeholder="Write a comment..."
+          value={commText}
+          onChange={e => setCommText(e.target.value)}
+          onKeyDown={e => e.key==="Enter" && submit()}
+        />
+        <button className="ma-comment-send" onClick={submit} disabled={!commText.trim() || sending}>
+          {sending ? "..." : "Send"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Full detail "pop-up" — buong post + reactions + comments ─────────────
+function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
+  if (!post) return null;
+  const bodyText   = post.body || post.caption || post.content || "";
+  const authorName = post.posted_by_name || "Admin";
+  const authorRole = post.posted_by_role || "admin";
+
+  return (
+    <div className="ma-modal-overlay" onClick={onClose}>
+      <div className="ma-modal-box" onClick={e => e.stopPropagation()}>
+        <button className="ma-modal-close" onClick={onClose}>✕</button>
+        <div className="ma-modal-scroll">
+          <div className="ma-post-header">
+            <div className="ma-post-meta">
+              <div className="ma-post-avatar">{authorName[0].toUpperCase()}</div>
+              <div>
+                <div className="ma-post-author">{authorName}<span className="ma-admin-tag">{authorRole}</span></div>
+                <div className="ma-post-time">{timeAgo(post.created_at)}</div>
+              </div>
+            </div>
+            {post.type && <span className={`ma-type-tag ${TYPE_COLOR[post.type]||""}`}>{post.type}</span>}
+          </div>
+
+          <div className="ma-post-title">{post.title}</div>
+          {bodyText && <div className="ma-post-caption-full" style={{whiteSpace:"pre-wrap"}}>{bodyText}</div>}
+          {post.image_url && (
+            <div className="ma-post-image-full">
+              <img src={post.image_url} alt="announcement"/>
+            </div>
+          )}
+
+          <div className="ma-post-footer">
+            <ReactionButton myReaction={post.my_reaction} totalReactions={post.total_reactions || 0} reactions={post.reactions} onReact={(type) => onReact(post.id, type)} />
+          </div>
+
+          <div className="ma-modal-comments-title">Comments ({post.comments?.length || 0})</div>
+          <CommentsSection post={post} user={user} onCommentAdded={onCommentAdded} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MemberAnnouncements() {
   const { user } = useAuth();
-  const [posts,    setPosts]    = useState([]);
-  const [filter,   setFilter]   = useState("All");
-  const [commPost, setCommPost] = useState(null);
-  const [commText, setCommText] = useState("");
-  const [loading,  setLoading]  = useState(true);
-  const [sending,  setSending]  = useState(false);
+  const [posts,      setPosts]     = useState([]);
+  const [filter,     setFilter]    = useState("All");
+  const [loading,    setLoading]   = useState(true);
+  const [detailPost, setDetailPost]= useState(null); // ← post na naka-open sa popup
 
   useEffect(() => {
     getAnnouncementsAPI()
@@ -37,20 +183,34 @@ export default function MemberAnnouncements() {
   const types     = ["All", ...new Set(posts.map(p => p.type).filter(Boolean))];
   const displayed = posts.filter(p => filter === "All" || p.type === filter);
 
-  const submitComment = async (postId) => {
-    if (!commText.trim() || sending) return;
-    setSending(true);
+  const refreshPosts = async () => {
+    const updated = await getAnnouncementsAPI();
+    setPosts(updated);
+    // ── I-sync din yung laman ng bukas na modal (kung meron) ──
+    setDetailPost(prev => prev ? updated.find(p => p.id === prev.id) || null : null);
+  };
+
+  const handleReact = async (postId, reactionType) => {
     try {
-      await addCommentAPI(postId, commText.trim());
-      const updated = await getAnnouncementsAPI();
-      setPosts(updated);
-      setCommText("");
+      await reactToAnnouncementAPI(postId, reactionType);
+      // Kailangan din ng buong `reactions` list (para sa "reacted by")
+      // kaya nag-re-refresh tayo — hindi masyadong mabigat naman.
+      await refreshPosts();
     } catch(e) { console.error(e); }
-    finally { setSending(false); }
   };
 
   return (
     <div className="ma-wrapper">
+      {detailPost && (
+        <PostDetailModal
+          post={detailPost}
+          user={user}
+          onClose={() => setDetailPost(null)}
+          onReact={handleReact}
+          onCommentAdded={refreshPosts}
+        />
+      )}
+
       <div className="ma-page-header">
         <div className="ma-page-title">Announcements</div>
         <div className="ma-page-sub">Latest updates, events, and notices from LEAF MPC.</div>
@@ -73,96 +233,41 @@ export default function MemberAnnouncements() {
             </div>
           ) : displayed.map(post => {
             const bodyText     = post.body || post.caption || post.content || "";
+            const preview      = bodyText.length > 200 ? bodyText.slice(0,200) + "..." : bodyText;
             const authorName   = post.posted_by_name || "Admin";
             const authorRole   = post.posted_by_role || "admin";
             const commentCount = post.comments?.length || post.comment_count || 0;
 
             return (
-              <div key={post.id} className="ma-post-card">
-                {/* Header */}
+              <div key={post.id} className="ma-post-card ma-post-card-clickable" onClick={() => setDetailPost(post)}>
                 <div className="ma-post-header">
                   <div className="ma-post-meta">
                     <div className="ma-post-avatar">{authorName[0].toUpperCase()}</div>
                     <div>
-                      <div className="ma-post-author">
-                        {authorName}
-                        <span className="ma-admin-tag">{authorRole}</span>
-                      </div>
+                      <div className="ma-post-author">{authorName}<span className="ma-admin-tag">{authorRole}</span></div>
                       <div className="ma-post-time">{timeAgo(post.created_at)}</div>
                     </div>
                   </div>
-                  {post.type && (
-                    <span className={`ma-type-tag ${TYPE_COLOR[post.type]||""}`}>{post.type}</span>
-                  )}
+                  {post.type && <span className={`ma-type-tag ${TYPE_COLOR[post.type]||""}`}>{post.type}</span>}
                 </div>
 
-                {/* Title */}
                 <div className="ma-post-title">{post.title}</div>
+                {preview && <div className="ma-post-caption" style={{whiteSpace:"pre-wrap"}}>{preview}</div>}
 
-                {/* Body */}
-                {bodyText && (
-                  <div className="ma-post-caption" style={{whiteSpace:"pre-wrap"}}>
-                    {bodyText}
-                  </div>
-                )}
-
-                {/* Image */}
+                {/* Image — "fit" na parang Facebook, buong picture makikita */}
                 {post.image_url && (
                   <div className="ma-post-image">
                     <img src={post.image_url} alt="announcement"/>
                   </div>
                 )}
 
-                {/* Footer */}
                 <div className="ma-post-footer">
-                  <button className="ma-comment-toggle" onClick={() => setCommPost(commPost===post.id ? null : post.id)}>
+                  <ReactionButton myReaction={post.my_reaction} totalReactions={post.total_reactions || 0} reactions={post.reactions} onReact={(type) => handleReact(post.id, type)} stopPropagation/>
+                  <button className="ma-comment-toggle" onClick={(e) => { e.stopPropagation(); setDetailPost(post); }}>
                     💬 {commentCount} Comment{commentCount!==1?"s":""}
                   </button>
+                  <span className="ma-tap-hint">Click to view →</span>
                 </div>
-
-                {/* Comments */}
-                {commPost === post.id && (
-                  <div className="ma-comments-section">
-                    {!post.comments?.length ? (
-                      <div className="ma-no-comments">No comments yet. Be the first!</div>
-                    ) : post.comments.map(c => (
-                      <div key={c.id} className="ma-comment">
-                        <div className="ma-comment-avatar">
-                          {(c.posted_by_name || c.author || "U")[0].toUpperCase()}
-                        </div>
-                        <div className="ma-comment-body">
-                          <div className="ma-comment-author">
-                            {c.posted_by_name || c.author}
-                            {c.posted_by_role && (
-                              <span className="ma-comment-time" style={{marginLeft:6,color:"#aaa",fontSize:10}}>
-                                {c.posted_by_role}
-                              </span>
-                            )}
-                            <span className="ma-comment-time">{timeAgo(c.created_at)}</span>
-                          </div>
-                          <div className="ma-comment-text">{c.body || c.text}</div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="ma-comment-input-row">
-                      <div className="ma-comment-avatar me">{user?.name?.[0]?.toUpperCase()||"M"}</div>
-                      <input
-                        className="ma-comment-input"
-                        placeholder="Write a comment..."
-                        value={commText}
-                        onChange={e => setCommText(e.target.value)}
-                        onKeyDown={e => e.key==="Enter" && submitComment(post.id)}
-                      />
-                      <button
-                        className="ma-comment-send"
-                        onClick={() => submitComment(post.id)}
-                        disabled={!commText.trim() || sending}
-                      >
-                        {sending ? "..." : "Send"}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}

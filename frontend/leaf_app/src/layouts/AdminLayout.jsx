@@ -594,20 +594,33 @@ function RegField({ name, label, type="text", options=null, required=false, form
 // ─── Register Member Modal ────────────────────────────────────────────────────
 function RegisterModal({ onClose }) {
   const TABS = [
-    { key: "personal",       label: "👤 Personal Info"  },
-    { key: "classification", label: "📋 Classification" },
-    { key: "account",        label: "🔐 Account Info"   },
+    { key: "personal",       label: "Personal Info"   },
+    { key: "spouse",         label: "Spouse & Family" },
+    { key: "classification", label: "Classification"  },
+    { key: "account",        label: "Account Info"    },
   ];
 
   const [form, setForm] = useState({
-    first_name: "", last_name: "", middle_name: "", birth_date: "",
+    // Personal
+    last_name: "", first_name: "", middle_name: "",
+    birth_date: "", place_of_birth: "", sex: "Male",
     civil_status: "Single", educational_attainment: "",
-    contact_number: "", email: "", address: "", occupation: "",
-    income: "", share_capital: "", birth_certificate: false, marriage_certificate: false,
+    contact_number: "", email: "", address: "",
+    occupation: "", income: "", tin_no: "", sss_gsis_no: "",
+    religious_social_affiliation: "",
+    share_capital: "",
+    birth_certificate: false, marriage_certificate: false,
+    // Spouse & Family
+    spouse_name: "", spouse_occupation: "", spouse_income: "",
+    no_of_dependants: "",
+    beneficiary_name: "", beneficiary_relationship: "",
+    credit_references: "",
+    // Classification
     classification: "Employed",
     school_name: "", year_level: "", allowance: "",
     pension_income: "", job_type: "Employed", monthly_income: "",
   });
+
   const [errors,  setErrors]  = useState({});
   const [done,    setDone]    = useState(false);
   const [tab,     setTab]     = useState("personal");
@@ -646,27 +659,39 @@ function RegisterModal({ onClose }) {
     setLoading(true);
     try {
       const result = await registerMemberAPI({
-        first_name:             form.first_name,
-        last_name:              form.last_name,
-        middle_name:            form.middle_name,
-        birth_date:             form.birth_date,
-        civil_status:           form.civil_status,
-        educational_attainment: form.educational_attainment,
-        contact_number:         form.contact_number,
-        email:                  form.email,
-        address:                form.address,
-        occupation:             form.occupation,
-        income:                 form.income || 0,
-        birth_certificate:      form.birth_certificate,
-        marriage_certificate:   form.marriage_certificate,
-        classification:         form.classification,
-        school_name:            form.school_name,
-        year_level:             form.year_level,
-        allowance:              form.allowance || 0,
-        pension_income:         form.pension_income || 0,
-        job_type:               form.job_type,
-        monthly_income:         form.monthly_income || 0,
-        share_capital:          form.share_capital || 0,
+        first_name:                   form.first_name,
+        last_name:                    form.last_name,
+        middle_name:                  form.middle_name,
+        birth_date:                   form.birth_date,
+        place_of_birth:               form.place_of_birth,
+        sex:                          form.sex,
+        civil_status:                 form.civil_status,
+        educational_attainment:       form.educational_attainment,
+        contact_number:               form.contact_number,
+        email:                        form.email,
+        address:                      form.address,
+        occupation:                   form.occupation,
+        income:                       form.income || 0,
+        tin_no:                       form.tin_no,
+        sss_gsis_no:                  form.sss_gsis_no,
+        religious_social_affiliation: form.religious_social_affiliation,
+        birth_certificate:            form.birth_certificate,
+        marriage_certificate:         form.marriage_certificate,
+        spouse_name:                  form.spouse_name,
+        spouse_occupation:            form.spouse_occupation,
+        spouse_income:                form.spouse_income || 0,
+        no_of_dependants:             form.no_of_dependants || 0,
+        beneficiary_name:             form.beneficiary_name,
+        beneficiary_relationship:     form.beneficiary_relationship,
+        credit_references:            form.credit_references,
+        classification:               form.classification,
+        school_name:                  form.school_name,
+        year_level:                   form.year_level,
+        allowance:                    form.allowance || 0,
+        pension_income:               form.pension_income || 0,
+        job_type:                     form.job_type,
+        monthly_income:               form.monthly_income || 0,
+        share_capital:                form.share_capital || 0,
       });
       setCreds({ memberId: result.member_id, username: result.username, password: result.plain_password });
       setDone(true);
@@ -690,7 +715,7 @@ function RegisterModal({ onClose }) {
         <div className="al-modal-header">
           <div>
             <div className="al-modal-title">Register New Member</div>
-            <div className="al-modal-sub">Walk-in / F2F member registration at the office</div>
+            <div className="al-modal-sub">LEAF MPC Member Application & Information Sheet</div>
           </div>
           <button className="al-modal-close" onClick={onClose}>✕</button>
         </div>
@@ -706,37 +731,62 @@ function RegisterModal({ onClose }) {
         </div>
 
         <div className="al-modal-body">
+
+          {/* ── TAB 1: Personal Info ── */}
           {tab === "personal" && (
             <div className="al-form-grid">
-              <RegField name="last_name"              label="Last Name"              required form={form} errors={errors} handle={handle} clearErr={n => setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="first_name"             label="First Name"             required form={form} errors={errors} handle={handle} clearErr={n => setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="middle_name"            label="Middle Name"                     form={form} errors={errors} handle={handle}/>
-              <RegField name="birth_date"             label="Birthdate"              required type="date" form={form} errors={errors} handle={handle} clearErr={n => setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="civil_status"           label="Civil Status"           options={["Single","Married","Widowed","Separated"]} form={form} errors={errors} handle={handle}/>
-              <RegField name="educational_attainment" label="Educational Attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} form={form} errors={errors} handle={handle}/>
-              <RegField name="contact_number"         label="Contact No."            required form={form} errors={errors} handle={handle} clearErr={n => setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="email"                  label="Email"                  type="email" form={form} errors={errors} handle={handle}/>
-              <RegField name="occupation"             label="Occupation"                      form={form} errors={errors} handle={handle}/>
+              {/* Name */}
+              <RegField name="last_name"   label="Surname"     required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+              <RegField name="first_name"  label="First Name"  required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+              <RegField name="middle_name" label="Middle Name"          form={form} errors={errors} handle={handle}/>
+
+              {/* Address */}
+              <div className="al-field al-full">
+                <label className="al-label">Address <span className="al-req">*</span></label>
+                <input className={`al-input ${errors.address?"al-input-err":""}`} name="address" value={form.address} onChange={handle} placeholder="Complete address"/>
+                {errors.address && <div className="al-field-err">{errors.address}</div>}
+              </div>
+
+              {/* Birth */}
+              <RegField name="birth_date"     label="Date of Birth"   required type="date" form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+              <RegField name="place_of_birth" label="Place of Birth"           form={form} errors={errors} handle={handle}/>
+
+              {/* Sex & Civil Status */}
+              <RegField name="sex" label="Sex" options={["Male","Female"]} form={form} errors={errors} handle={handle}/>
+              <RegField name="civil_status" label="Civil Status" options={["Single","Married","Widowed","Separated"]} form={form} errors={errors} handle={handle}/>
+
+              {/* IDs */}
+              <RegField name="tin_no"      label="TIN No."      form={form} errors={errors} handle={handle}/>
+              <RegField name="sss_gsis_no" label="SSS/GSIS No." form={form} errors={errors} handle={handle}/>
+
+              {/* Occupation & Income */}
+              <RegField name="occupation" label="Occupation"        form={form} errors={errors} handle={handle}/>
+              <RegField name="income"     label="Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
+
+              {/* Contact */}
+              <RegField name="contact_number" label="Tel. No. / CP No." required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+              <RegField name="email"          label="Email Address"             type="email" form={form} errors={errors} handle={handle}/>
+
+              {/* Education & Affiliation */}
+              <RegField name="educational_attainment"       label="Educational Attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} form={form} errors={errors} handle={handle}/>
+              <RegField name="religious_social_affiliation" label="Religious/Social Affiliation" form={form} errors={errors} handle={handle}/>
+
+              {/* Share Capital */}
               <div className="al-field">
                 <label className="al-label">Amount Paid for Membership (₱)</label>
                 <div className="al-amount-wrap">
                   <span className="al-peso">₱</span>
                   <input className="al-amount-in" type="number" name="share_capital"
-                    value={form.share_capital||""} onChange={e => { handle(e); }}
-                    placeholder="e.g. 4000" style={{fontSize:14}}/>
+                    value={form.share_capital||""} onChange={handle} placeholder="e.g. 4000"/>
                 </div>
                 {form.share_capital > 0 && (
                   <div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-                    💡 Share Capital = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (paid × 2) · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
+                    Share Capital = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (paid × 2) · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
                   </div>
                 )}
               </div>
-              <RegField name="income" label="Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
-              <div className="al-field al-full">
-                <label className="al-label">Address <span className="al-req">*</span></label>
-                <input className={`al-input ${errors.address ? "al-input-err" : ""}`} name="address" value={form.address} onChange={handle} placeholder="Full address"/>
-                {errors.address && <div className="al-field-err">{errors.address}</div>}
-              </div>
+
+              {/* Documents */}
               <div className="al-field">
                 <label className="al-label">Birth Certificate Submitted</label>
                 <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}>
@@ -752,6 +802,43 @@ function RegisterModal({ onClose }) {
             </div>
           )}
 
+          {/* ── TAB 2: Spouse & Family ── */}
+          {tab === "spouse" && (
+            <div className="al-form-grid">
+              <div style={{gridColumn:"1/-1",background:"#f9fef9",border:"1px solid #e8f5e9",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#555",marginBottom:4}}>
+                Fill in spouse information if married. Leave blank if not applicable.
+              </div>
+
+              {/* Spouse */}
+              <RegField name="spouse_name"       label="Spouse Name"             form={form} errors={errors} handle={handle}/>
+              <RegField name="spouse_occupation" label="Spouse Occupation"       form={form} errors={errors} handle={handle}/>
+              <RegField name="spouse_income"     label="Spouse Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
+              <RegField name="no_of_dependants"  label="No. of Dependants"       type="number" form={form} errors={errors} handle={handle}/>
+
+              {/* Divider */}
+              <div style={{gridColumn:"1/-1",borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Beneficiary Information</div>
+              </div>
+
+              <RegField name="beneficiary_name"         label="Beneficiary Name"         form={form} errors={errors} handle={handle}/>
+              <RegField name="beneficiary_relationship" label="Relationship to Member"   form={form} errors={errors} handle={handle}/>
+
+              {/* Divider */}
+              <div style={{gridColumn:"1/-1",borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Credit References</div>
+              </div>
+
+              <div className="al-field al-full">
+                <label className="al-label">Credit References</label>
+                <textarea className="al-input" name="credit_references" rows={3}
+                  value={form.credit_references} onChange={handle}
+                  placeholder="Names and contact details of credit references..."
+                  style={{resize:"none"}}/>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 3: Classification ── */}
           {tab === "classification" && (
             <div className="al-form-grid">
               <div className="al-field al-full">
@@ -771,7 +858,7 @@ function RegisterModal({ onClose }) {
                 </div>
               </div>
               {form.classification === "Student" && (<>
-                <RegField name="school_name" label="School Name" required form={form} errors={errors} handle={handle} clearErr={n => setErrors(p=>({...p,[n]:""})) }/>
+                <RegField name="school_name" label="School Name" required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
                 <RegField name="year_level"  label="Year Level"  required form={form} errors={errors} handle={handle}
                   options={["Grade 7","Grade 8","Grade 9","Grade 10","Grade 11","Grade 12","1st Year","2nd Year","3rd Year","4th Year","5th Year","Graduate"]}/>
                 <RegField name="allowance" label="Monthly Allowance (₱)" type="number" form={form} errors={errors} handle={handle}/>
@@ -792,6 +879,7 @@ function RegisterModal({ onClose }) {
             </div>
           )}
 
+          {/* ── TAB 4: Account ── */}
           {tab === "account" && (
             <div className="al-form-grid">
               {done ? (<>
@@ -803,7 +891,7 @@ function RegisterModal({ onClose }) {
                   <div style={{fontSize:12,color:"#888"}}>Share the credentials below with the member.</div>
                 </div>
                 <div className="al-cred-card" style={{gridColumn:"1/-1"}}>
-                  <div className="al-cred-title">🔑 Login Credentials</div>
+                  <div className="al-cred-title">Login Credentials</div>
                   <div className="al-cred-sub">Give this slip to the member</div>
                   {[["Member ID",creds.memberId,"id"],["Username",creds.username,"user"],["Password",creds.password,"pass"]].map(([k,v,key]) => (
                     <div key={k} className="al-cred-row">
@@ -811,18 +899,18 @@ function RegisterModal({ onClose }) {
                       <div className="al-cred-val-wrap">
                         <span className="al-cred-val">{v}</span>
                         <button className="al-copy-btn" onClick={() => copyText(v,key)}>
-                          {copied===key ? "✓ Copied" : "Copy"}
+                          {copied===key ? "Copied" : "Copy"}
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="al-cred-notice" style={{gridColumn:"1/-1"}}>
-                  💡 The member can change their username and password anytime in <strong>My Profile → Account Settings</strong> after logging in.
+                  The member can change their password anytime in My Profile after logging in.
                 </div>
               </>) : (
                 <div className="al-field al-full" style={{textAlign:"center",padding:"24px 0",color:"#888"}}>
-                  Complete Personal Info and Classification first, then submit to generate credentials.
+                  Complete all tabs first, then submit to generate credentials.
                 </div>
               )}
             </div>
@@ -835,17 +923,17 @@ function RegisterModal({ onClose }) {
               <button className="al-btn-cancel" onClick={() => {
                 const keys = TABS.map(t => t.key);
                 setTab(keys[keys.indexOf(tab) - 1]);
-              }}>← Previous</button>
+              }}>Previous</button>
             )}
             {tab === "personal" && <button className="al-btn-cancel" onClick={onClose}>Cancel</button>}
             {tab !== "classification" ? (
               <button className="al-btn-save" onClick={() => {
                 const keys = TABS.map(t => t.key);
                 setTab(keys[keys.indexOf(tab) + 1]);
-              }}>Next →</button>
+              }}>Next</button>
             ) : (
               <button className="al-btn-save" onClick={handleSubmit} disabled={loading}>
-                {loading ? "Registering..." : "✓ Register Member"}
+                {loading ? "Registering..." : "Register Member"}
               </button>
             )}
           </>) : (
@@ -869,6 +957,7 @@ function NewLoanModal({ onClose }) {
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [showConfirm,   setShowConfirm]   = useState(false);
   const [refNo,         setRefNo]         = useState("");
   const [monthlyResult, setMonthlyResult] = useState(0);
   const [members,       setMembers]       = useState([]);
@@ -922,6 +1011,7 @@ function NewLoanModal({ onClose }) {
     if (Object.keys(e).length) { setErrors(e); return; }
     setLoadingSubmit(true);
     try {
+      // F2F loan — create with is_f2f flag then immediately approve
       const result = await createLoanAPI({
         member:      selMember.id,
         loan_type:   form.loanType,
@@ -929,8 +1019,12 @@ function NewLoanModal({ onClose }) {
         term_months: parseInt(form.term),
         purpose:     form.purpose,
         collateral:  form.collateral,
+        is_f2f:      true,
       });
-      await updateLoanStatusAPI(result.id, "Approved");
+      // Approve immediately — F2F loans skip the approval queue
+      if (result.status !== 'Active') {
+        await updateLoanStatusAPI(result.id, 'Approved');
+      }
       setRefNo(result.loan_id);
       setMonthlyResult(result.monthly_due);
       setDone(true);
@@ -962,6 +1056,38 @@ function NewLoanModal({ onClose }) {
         </div>
         <div className="al-modal-footer">
           <button className="al-btn-save" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Confirmation Modal ──
+  if (showConfirm) return (
+    <div className="al-overlay" onClick={() => setShowConfirm(false)}>
+      <div className="al-modal al-modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="al-modal-header">
+          <div className="al-modal-title">Confirm Loan Application</div>
+          <button className="al-modal-close" onClick={() => setShowConfirm(false)}>✕</button>
+        </div>
+        <div className="al-modal-body" style={{gap:14}}>
+          <div style={{background:"#e8f5e9",borderRadius:10,padding:"14px 16px",fontSize:13,color:"#1b5e20",lineHeight:1.7}}>
+            <strong>Please confirm the following loan details:</strong>
+            <br/><br/>
+            <strong>Member:</strong> {selMember?.fullname}<br/>
+            <strong>Loan Type:</strong> {form.loanType}<br/>
+            <strong>Amount:</strong> ₱{parseFloat(form.amount||0).toLocaleString()}<br/>
+            <strong>Term:</strong> {form.term} months<br/>
+            <strong>Purpose:</strong> {form.purpose}
+          </div>
+          <div style={{fontSize:12,color:"#f57c00",background:"#fff8e1",borderRadius:8,padding:"10px 14px",border:"1px solid #ffe082"}}>
+            ⚠ This will immediately activate the loan. Please double-check all details before confirming.
+          </div>
+        </div>
+        <div className="al-modal-footer">
+          <button className="al-btn-cancel" onClick={() => setShowConfirm(false)}>Go Back</button>
+          <button className="al-btn-save" onClick={() => { setShowConfirm(false); handleSubmit(); }} disabled={loadingSubmit}>
+            {loadingSubmit ? "Processing..." : "Yes, Confirm & Approve"}
+          </button>
         </div>
       </div>
     </div>
@@ -1131,7 +1257,7 @@ function NewLoanModal({ onClose }) {
             </div>
             <div className="al-modal-footer">
               <button className="al-btn-cancel" onClick={() => setStep(1)}>← Back</button>
-              <button className="al-btn-save" onClick={handleSubmit}>Submit Application</button>
+              <button className="al-btn-save" onClick={() => setShowConfirm(true)}>Submit Application</button>
             </div>
           </>
         )}

@@ -922,16 +922,19 @@ def my_online_application_view(request):
 @permission_classes([IsAuthenticated])
 def share_capital_deposit_view(request, pk):
     """Record a manual share capital deposit for a member / list transactions."""
-    if request.user.role not in ['admin', 'staff']:
-        return Response({'error': 'Unauthorized.'}, status=403)
-
     try:
         member = Member.objects.get(pk=pk)
     except Member.DoesNotExist:
         return Response({'error': 'Member not found.'}, status=404)
-
+ 
     if request.method == 'GET':
-        # ── Return share capital transaction history ──
+        # ── Payagan ang admin/staff (kahit kaninong member), AT ang
+        # member mismo na tumitingin ng sarili niyang share capital
+        # history — hindi tulad ng POST na admin/staff-only pa rin. ──
+        is_owner = member.user_id == request.user.id
+        if request.user.role not in ['admin', 'staff'] and not is_owner:
+            return Response({'error': 'Unauthorized.'}, status=403)
+ 
         from .models import ShareCapitalTransaction
         txns = ShareCapitalTransaction.objects.filter(member=member).order_by('-created_at')[:100]
         return Response([{
@@ -943,21 +946,24 @@ def share_capital_deposit_view(request, pk):
             'recorded_by':  t.recorded_by,
             'created_at':   t.created_at.strftime('%Y-%m-%d %H:%M'),
         } for t in txns])
-
-    # POST — record deposit
+ 
+    # POST — record deposit (ADMIN/STAFF ONLY — hindi ito nabago)
+    if request.user.role not in ['admin', 'staff']:
+        return Response({'error': 'Unauthorized.'}, status=403)
+ 
     amount = float(request.data.get('amount', 0))
     note   = request.data.get('note', 'Share capital deposit')
     txn_type = request.data.get('txn_type', 'Deposit')
-
+ 
     if amount <= 0:
         return Response({'error': 'Amount must be greater than 0.'}, status=400)
-
+ 
     # ── Update share capital ──
     from .models import ShareCapitalTransaction
     old_sc = float(member.share_capital)
     member.share_capital = old_sc + amount
     member.save()
-
+ 
     # ── Save transaction record ──
     ShareCapitalTransaction.objects.create(
         member       = member,
@@ -967,14 +973,14 @@ def share_capital_deposit_view(request, pk):
         note         = note,
         recorded_by  = request.user.username,
     )
-
+ 
     log_activity(
         'member',
         f'Share capital deposit: ₱{amount:,.2f} for {member.fullname} ({member.member_id}) '
         f'| SC: ₱{old_sc:,.2f} → ₱{float(member.share_capital):,.2f} by {request.user.username}',
         request.user
     )
-
+ 
     return Response({
         'message':       f'Share capital deposit of ₱{amount:,.2f} recorded.',
         'member_id':     member.member_id,
@@ -982,7 +988,6 @@ def share_capital_deposit_view(request, pk):
         'new_sc':        float(member.share_capital),
         'max_loanable':  float(member.share_capital) * 2,
     }, status=200)
-
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

@@ -1,0 +1,44 @@
+name: leaf_mobile
+description: LEAF MPC Mobile Application
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # HTTP requests
+  http: ^1.2.0
+  
+  # Local storage
+  shared_preferences: ^2.2.3
+  
+  # Icons
+  flutter_svg: ^2.0.10+1
+  
+  # State management
+  provider: ^6.1.2
+  
+  # Image picker (for GCash screenshot)
+  image_picker: ^1.1.2
+  
+  # URL launcher (for Polygonscan)
+  url_launcher: ^6.3.0
+
+  cupertino_icons: ^1.0.8
+
+  # Charts (Admin Dashboard — Line/Bar/Doughnut)
+  fl_chart: ^0.69.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

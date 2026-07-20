@@ -84,3 +84,22 @@
   height: 16px;
   accent-color: #2e7d32;
 }
+
+/* ── Section Labels ── */
+.mp-section-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #2e7d32;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid #e8f5e9;
+  margin-bottom: 12px;
+}
+
+/* ── Card subtitle ── */
+.mp-card-sub {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 2px;
+}

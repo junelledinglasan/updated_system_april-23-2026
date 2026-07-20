@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { getMembersAPI, getMemberStatsAPI, getMemberAPI, updateMemberAPI, deleteMemberAPI, getApplicationsAPI, updateApplicationStatusAPI, convertToMemberAPI, getOnlineApplicationsAPI, convertOnlineAppAPI, registerMemberAPI, getMemberSavingsAPI } from "../../api/members";
-import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff } from "lucide-react";
+import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff, UserCheck, UserX, ShieldAlert, CheckCircle2, XCircle, Info } from "lucide-react";
 import api from "../../api/axiosInstance";
 import "./ManageMember.css";
 
@@ -55,7 +55,7 @@ function AgeGroupChart({ members }) {
   const total = members.length;
   return (
     <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8f5e9", padding:"16px 18px", marginBottom:16 }}>
-      <div style={{fontSize:13,fontWeight:700,color:"#1b5e20",marginBottom:14}}>👥 Members by Age Group</div>
+      <div style={{fontSize:13,fontWeight:700,color:"#1b5e20",marginBottom:14}}> Members by Age Group</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {Object.entries(groups).map(([label, count]) => (
           <div key={label} style={{display:"flex",alignItems:"center",gap:10}}>
@@ -470,34 +470,50 @@ function ViewEditModal({ member, onClose, onSave }) {
 
               <div className="mm-view-section-title">Personal Information</div>
               <div className="modal-grid">
-                <ModalField label="First Name"    name="first_name"    mode={mode} form={form} handle={handle}/>
-                <ModalField label="Last Name"     name="last_name"     mode={mode} form={form} handle={handle}/>
-                <ModalField label="Middle Name"   name="middle_name"   mode={mode} form={form} handle={handle}/>
-                <ModalField label="Status"        name="status"        options={form.status==="Deactivated"?["Deactivated"]:["Active"]} mode={mode} form={form} handle={handle}/>
-                <ModalField label="Birthdate"     name="birth_date"    type="date" mode={mode} form={form} handle={handle}/>
-                <ModalField label="Civil Status"  name="civil_status"  options={["Single","Married","Widowed","Separated"]} mode={mode} form={form} handle={handle}/>
-                <ModalField label="Contact No."   name="contact_number" type="tel" mode={mode} form={form} handle={handle}/>
-                <ModalField label="Email"         name="email"         type="email" mode={mode} form={form} handle={handle}/>
-                <ModalField label="Occupation"    name="occupation"    mode={mode} form={form} handle={handle}/>
-                <ModalField label="Address"       name="address"       full mode={mode} form={form} handle={handle}/>
+                <ModalField label="Last Name"      name="last_name"     mode={mode} form={form} handle={handle}/>
+                <ModalField label="First Name"     name="first_name"    mode={mode} form={form} handle={handle}/>
+                <ModalField label="Middle Name"    name="middle_name"   mode={mode} form={form} handle={handle}/>
+                <ModalField label="Status"         name="status"        options={form.status==="Deactivated"?["Deactivated"]:["Active"]} mode={mode} form={form} handle={handle}/>
+                <ModalField label="Birthdate"      name="birth_date"    type="date" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Place of Birth" name="place_of_birth" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Sex"            name="sex"           options={["Male","Female"]} mode={mode} form={form} handle={handle}/>
+                <ModalField label="Civil Status"   name="civil_status"  options={["Single","Married","Widowed","Separated"]} mode={mode} form={form} handle={handle}/>
+                <ModalField label="TIN No."        name="tin_no"        mode={mode} form={form} handle={handle}/>
+                <ModalField label="SSS/GSIS No."   name="sss_gsis_no"   mode={mode} form={form} handle={handle}/>
+                <ModalField label="Contact No."    name="contact_number" type="tel" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Email"          name="email"         type="email" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Occupation"     name="occupation"    mode={mode} form={form} handle={handle}/>
+                <ModalField label="Monthly Income (₱)" name="income"   type="number" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Religious/Social Affiliation" name="religious_social_affiliation" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Address"        name="address"       full mode={mode} form={form} handle={handle}/>
+              </div>
+
+              <div className="mm-view-section-title">Spouse & Family</div>
+              <div className="modal-grid">
+                <ModalField label="Spouse Name"        name="spouse_name"               mode={mode} form={form} handle={handle}/>
+                <ModalField label="Spouse Occupation"  name="spouse_occupation"         mode={mode} form={form} handle={handle}/>
+                <ModalField label="Spouse Income (₱)"  name="spouse_income"    type="number" mode={mode} form={form} handle={handle}/>
+                <ModalField label="No. of Dependants"  name="no_of_dependants" type="number" mode={mode} form={form} handle={handle}/>
+                <ModalField label="Beneficiary Name"   name="beneficiary_name"          mode={mode} form={form} handle={handle}/>
+                <ModalField label="Relationship"       name="beneficiary_relationship"  mode={mode} form={form} handle={handle}/>
+                <ModalField label="Credit References"  name="credit_references"         mode={mode} form={form} handle={handle} full/>
               </div>
 
               <div className="mm-view-section-title">Classification & Profile</div>
               <div className="modal-grid">
                 <ModalField label="Classification"         name="classification" options={["Student","Senior","Employed"]} mode={mode} form={form} handle={handle}/>
                 <ModalField label="Educational Attainment" name="educational_attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} mode={mode} form={form} handle={handle}/>
-                <ModalField label="Monthly Income (₱)"    name="income" type="number" mode={mode} form={form} handle={handle}/>
                 <div className="modal-field">
                   <div className="modal-field-label">Birth Certificate</div>
                   {mode==="view"
-                    ? <div className="modal-field-value">{form.birth_certificate?"✅ Submitted":"❌ Not submitted"}</div>
+                    ? <div className="modal-field-value">{form.birth_certificate?" Submitted":" Not submitted"}</div>
                     : <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}><input type="checkbox" name="birth_certificate" checked={!!form.birth_certificate} onChange={handle}/> Yes</label>
                   }
                 </div>
                 <div className="modal-field">
                   <div className="modal-field-label">Marriage Certificate</div>
                   {mode==="view"
-                    ? <div className="modal-field-value">{form.marriage_certificate?"✅ Submitted":"❌ Not submitted"}</div>
+                    ? <div className="modal-field-value">{form.marriage_certificate?" Submitted":" Not submitted"}</div>
                     : <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}><input type="checkbox" name="marriage_certificate" checked={!!form.marriage_certificate} onChange={handle}/> Yes</label>
                   }
                 </div>
@@ -616,7 +632,7 @@ function DeleteModal({ member, onClose, onConfirm }) {
       <div className="modal-box modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-header"><div className="modal-title danger-title">Delete Member</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div className="modal-body">
-          <div className="delete-warning-icon">⚠️</div>
+          <div className="delete-warning-icon">️</div>
           <p className="delete-confirm-text">Are you sure you want to delete <strong>{member.fullname||`${member.first_name} ${member.last_name}`}</strong>?</p>
           <p className="delete-sub-text">Member ID: <span className="mono">{member.member_id}</span></p>
           <p className="delete-sub-text" style={{color:"#e53935",marginTop:4}}>This action cannot be undone.</p>
@@ -746,7 +762,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
             {result?(<>
               <div className="modal-field full" style={{textAlign:"center",padding:"12px 0"}}><div style={{fontSize:36,marginBottom:8}}>🎉</div><div style={{fontSize:15,fontWeight:800,color:"#1b5e20",marginBottom:4}}>{result.member?.fullname||`${form.first_name} ${form.last_name}`} is now an official member!</div><div style={{fontSize:12,color:"#888"}}>Share the credentials below with the member.</div></div>
               <div className="modal-field full" style={{background:"#f1f8e9",borderRadius:10,padding:16}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[["Member ID",result.member_id],["Username",result.username],["Password",result.plain_password],["Status","Active"]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:"#888",fontWeight:600}}>{k}</div><div style={{fontSize:13,fontWeight:700,color:"#1b5e20",fontFamily:"monospace"}}>{v}</div></div>))}</div></div>
-              <div className="modal-field full" style={{fontSize:11,color:"#f57c00",background:"#fff8e1",padding:"10px 14px",borderRadius:8,borderLeft:"3px solid #ff9800"}}>⚠ Please save or print these credentials.</div>
+              <div className="modal-field full" style={{fontSize:11,color:"#f57c00",background:"#fff8e1",padding:"10px 14px",borderRadius:8,borderLeft:"3px solid #ff9800"}}> Please save or print these credentials.</div>
             </>):<div className="modal-field full" style={{textAlign:"center",padding:"24px 0",color:"#888"}}>Complete Personal Info and Classification tabs first, then submit.</div>}
           </div>}
         </div>
@@ -873,7 +889,7 @@ export default function ManageMember() {
         <div className="mm-card">
           <div style={{padding:"10px 16px 0",display:"flex",justifyContent:"flex-end"}}>
             <button onClick={()=>setShowAgeChart(p=>!p)} style={{fontSize:12,fontWeight:600,padding:"5px 14px",background:showAgeChart?"#e8f5e9":"#f5f5f5",color:showAgeChart?"#2e7d32":"#888",border:`1px solid ${showAgeChart?"#a5d6a7":"#e0e0e0"}`,borderRadius:20,cursor:"pointer",transition:"all 0.2s"}}>
-              {showAgeChart?"▲ Hide Age Chart":"📊 Show Age Group Chart"}
+              {showAgeChart?"▲ Hide Age Chart":" Show Age Group Chart"}
             </button>
           </div>
           {showAgeChart && <div style={{padding:"12px 16px 0"}}><AgeGroupChart members={members}/></div>}
@@ -947,7 +963,7 @@ export default function ManageMember() {
         <div className="mm-card">
           {pending.length===0 ? (
             <div className="mm-empty-pending">
-              <div style={{fontSize:36}}>✅</div>
+              <div style={{fontSize:36}}></div>
               <div style={{fontSize:14,fontWeight:700,color:"#1b5e20",marginTop:8}}>No pending applications</div>
               <div style={{fontSize:12,color:"#aaa",marginTop:4}}>All approved applicants have been processed.</div>
             </div>

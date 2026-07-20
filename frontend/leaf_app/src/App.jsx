@@ -28,6 +28,7 @@ import StaffHome           from "./components/staff/StaffHome";
 // Member components
 import MemberDashboard     from "./components/member/MemberDashboard";
 import MyLoans             from "./components/member/MyLoans";
+import MySavings           from "./components/member/MySavings";
 import Notifications       from "./components/member/Notifications";
 import MemberAnnouncements from "./components/member/MemberAnnouncements";
 import LoanApplication     from "./components/member/LoanApplication";
@@ -96,6 +97,7 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard"        element={<MemberDashboard />}     />
             <Route path="my-loans"         element={<MyLoans />}             />
+            <Route path="savings"          element={<MySavings />}           />
             <Route path="notifications"    element={<Notifications />}       />
             <Route path="announcements"    element={<MemberAnnouncements />} />
             <Route path="apply"            element={<LoanApplication />}     />

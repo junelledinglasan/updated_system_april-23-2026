@@ -4,7 +4,7 @@ import { Search, Clock, CheckCircle2, XCircle, Wallet } from "lucide-react";
 import "./LoanApproval.css";
 
 const LOAN_TYPES  = ["Regular Loan","Emergency Loan","Salary Loan","Housing Loan","Business Loan","Other Loan"];
-const STATUS_TABS = ["All","For Review","Active","Declined"];
+const STATUS_TABS = ["For Review","Declined"];
 const ROWS_PER_PAGE = 8;
 const STATUS_COLOR  = { "For Review":"status-review", "Active":"status-approved", "Declined":"status-declined", "Completed":"status-approved", "Overdue":"status-declined" };
 
@@ -66,7 +66,7 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
           </div>
 
           <div className="la-section">
-            <div className="la-section-title">📋 Loan Request</div>
+            <div className="la-section-title">Loan Request</div>
             <div className="la-detail-grid">
               <div className="la-detail-item"><span className="la-dk">Loan Type</span><span className="la-dv">{loan.loan_type}</span></div>
               <div className="la-detail-item"><span className="la-dk">Amount</span><span className="la-dv green fw">₱{amount.toLocaleString()}</span></div>
@@ -76,7 +76,7 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
           </div>
 
           <div className="la-section">
-            <div className="la-section-title">🧮 Loan Computation</div>
+            <div className="la-section-title">Loan Computation</div>
             <div className="la-compute-results">
               <div className="la-result-item">
                 <span>Interest Rate</span>
@@ -98,7 +98,7 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
           </div>
 
           <div className="la-section">
-            <div className="la-section-title">💰 Upfront Deductions (from Loan Release)</div>
+            <div className="la-section-title">Upfront Deductions (from Loan Release)</div>
             <div className="la-deduction-box">
               <div className="la-deduct-row"><span className="la-deduct-label">Loan Amount</span><span className="la-deduct-val">₱{amount.toLocaleString()}</span></div>
               <div className="la-deduct-divider"/>
@@ -121,12 +121,12 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
           </div>
 
           <div className="la-section">
-            <div className="la-section-title">{declineMode?"✗ Reason for Decline":"📝 Remarks / Notes"}</div>
+            <div className="la-section-title">{declineMode?"Reason for Decline":"Remarks / Notes"}</div>
             <textarea className={`la-textarea ${declineMode?"decline-mode":""}`} placeholder={declineMode?"State the reason for declining...":"Optional: Add remarks..."} value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3}/>
           </div>
 
-          {loan.status==="Active"    && <div className="la-notice la-notice-approved">✓ This loan has been <strong>approved & activated</strong>.</div>}
-          {loan.status==="Declined" && <div className="la-notice la-notice-declined">✗ This loan has been <strong>declined</strong>.</div>}
+          {loan.status==="Active"   && <div className="la-notice la-notice-approved">This loan has been approved and activated.</div>}
+          {loan.status==="Declined" && <div className="la-notice la-notice-declined">This loan has been declined.</div>}
         </div>
 
         <div className="la-modal-footer">
@@ -135,14 +135,14 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
               <button className="la-btn-cancel" onClick={onClose}>Close</button>
               {loan.status==="For Review" && (
                 <>
-                  <button className="la-btn-decline-soft" onClick={()=>setDeclineMode(true)}>✗ Decline</button>
-                  <button className="la-btn-approve" onClick={handleApprove} disabled={loading}>{loading?"Approving...":"✓ Approve Loan"}</button>
+                  <button className="la-btn-decline-soft" onClick={()=>setDeclineMode(true)}>Decline</button>
+                  <button className="la-btn-approve" onClick={handleApprove} disabled={loading}>{loading?"Approving...":"Approve Loan"}</button>
                 </>
               )}
             </>
           ) : (
             <>
-              <button className="la-btn-cancel" onClick={()=>setDeclineMode(false)}>← Back</button>
+              <button className="la-btn-cancel" onClick={()=>setDeclineMode(false)}>Back</button>
               <button className="la-btn-decline-confirm" onClick={handleDecline} disabled={!remarks.trim()||loading}>{loading?"Declining...":"Confirm Decline"}</button>
             </>
           )}
@@ -153,50 +153,46 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
 }
 
 export default function LoanApproval() {
-  const [loans,       setLoans]    = useState([]);
-  const [loading,     setLoading]  = useState(true);
-  const [search,      setSearch]   = useState("");
-  const [filterStatus,setFilter]   = useState("All");
-  const [filterType,  setFilterType]=useState("All");
-  const [page,        setPage]     = useState(1);
-  const [processLoan, setProcess]     = useState(null);
-  const [toast,       setToast]       = useState(null);
+  const [loans,        setLoans]     = useState([]);
+  const [loading,      setLoading]   = useState(true);
+  const [search,       setSearch]    = useState("");
+  const [filterStatus, setFilter]    = useState("For Review");
+  const [filterType,   setFilterType]= useState("All");
+  const [page,         setPage]      = useState(1);
+  const [processLoan,  setProcess]   = useState(null);
+  const [toast,        setToast]     = useState(null);
 
   const showToast = (msg,type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      const data = await getLoansAPI();
-      setLoans(data);
+      // ── Fetch ONLY For Review and Declined — exclude F2F Active loans ──
+      const [forReview, declined] = await Promise.all([
+        getLoansAPI({ status: "For Review" }),
+        getLoansAPI({ status: "Declined"   }),
+      ]);
+      setLoans([...forReview, ...declined]);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { fetchLoans(); }, []);
 
-  // ── FIX: Remove source/applied_online filter — count all loans properly ──
   const counts = {
     forReview: loans.filter(l=>l.status==="For Review").length,
-    approved:  loans.filter(l=>l.status==="Active").length,
     declined:  loans.filter(l=>l.status==="Declined").length,
-    totalAmt:  loans.filter(l=>l.status==="Active").reduce((s,l)=>s+parseFloat(l.amount||0),0),
   };
 
-  // ── FIX: Show For Review, Active, Declined, and Overdue loans ──
-  const portalLoans = loans.filter(l =>
-    ["For Review","Active","Declined","Overdue"].includes(l.status)
-  );
-
-  const filtered = portalLoans.filter(l => {
+  const filtered = loans.filter(l => {
     const matchStatus = filterStatus==="All" || l.status===filterStatus;
     const matchType   = filterType==="All"   || l.loan_type===filterType;
     const q = search.toLowerCase();
     return matchStatus && matchType && (
-      (l.loan_id||"").toLowerCase().includes(q) ||
+      (l.loan_id||"").toLowerCase().includes(q)    ||
       (l.member_name||"").toLowerCase().includes(q) ||
       (l.member_code||"").toLowerCase().includes(q) ||
-      (l.loan_type||"").toLowerCase().includes(q) ||
+      (l.loan_type||"").toLowerCase().includes(q)   ||
       (l.purpose||"").toLowerCase().includes(q)
     );
   });
@@ -233,7 +229,10 @@ export default function LoanApproval() {
       <ProcessModal loan={currentProcess} onClose={()=>setProcess(null)} onApprove={handleApprove} onDecline={handleDecline}/>
 
       <div className="la-page-header">
-        <div><div className="la-page-title">Loan Approval</div><div className="la-page-sub">Evaluate, compute, and process member loan applications.</div></div>
+        <div>
+          <div className="la-page-title">Loan Approval</div>
+          <div className="la-page-sub">Evaluate and process member loan applications submitted online.</div>
+        </div>
       </div>
 
       <div className="la-summary-grid">
@@ -241,17 +240,22 @@ export default function LoanApproval() {
           <div className="la-sum-icon" style={{background:"#fff8e1",display:"flex",alignItems:"center",justifyContent:"center"}}><Clock size={20} color="#e65100"/></div>
           <div><div className="la-sum-val orange">{counts.forReview}</div><div className="la-sum-label">For Review</div></div>
         </div>
-        <div className="la-summary-card clickable" onClick={()=>{setFilter("Active");setPage(1);}}>
-          <div className="la-sum-icon" style={{background:"#e8f5e9",display:"flex",alignItems:"center",justifyContent:"center"}}><CheckCircle2 size={20} color="#2e7d32"/></div>
-          <div><div className="la-sum-val green">{counts.approved}</div><div className="la-sum-label">Active Loans</div></div>
-        </div>
         <div className="la-summary-card clickable" onClick={()=>{setFilter("Declined");setPage(1);}}>
           <div className="la-sum-icon" style={{background:"#fce4ec",display:"flex",alignItems:"center",justifyContent:"center"}}><XCircle size={20} color="#c62828"/></div>
           <div><div className="la-sum-val red">{counts.declined}</div><div className="la-sum-label">Declined</div></div>
         </div>
         <div className="la-summary-card">
+          <div className="la-sum-icon" style={{background:"#e8f5e9",display:"flex",alignItems:"center",justifyContent:"center"}}><CheckCircle2 size={20} color="#2e7d32"/></div>
+          <div><div className="la-sum-val green">{counts.forReview + counts.declined}</div><div className="la-sum-label">Total Applications</div></div>
+        </div>
+        <div className="la-summary-card">
           <div className="la-sum-icon" style={{background:"#e3f2fd",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={20} color="#1565c0"/></div>
-          <div><div className="la-sum-val blue">₱{counts.totalAmt.toLocaleString()}</div><div className="la-sum-label">Total Approved Amount</div></div>
+          <div>
+            <div className="la-sum-val blue">
+              ₱{loans.filter(l=>l.status==="For Review").reduce((s,l)=>s+parseFloat(l.amount||0),0).toLocaleString()}
+            </div>
+            <div className="la-sum-label">Pending Amount</div>
+          </div>
         </div>
       </div>
 
@@ -270,7 +274,7 @@ export default function LoanApproval() {
             <div className="la-status-tabs">
               {STATUS_TABS.map(s=>(
                 <button key={s} className={`la-status-tab ${filterStatus===s?"active":""} ltab-${s.replace(" ","-").toLowerCase()}`} onClick={()=>{setFilter(s);setPage(1);}}>
-                  {s}{s!=="All"&&<span className="la-tab-count">{portalLoans.filter(l=>l.status===s).length}</span>}
+                  {s}<span className="la-tab-count">{loans.filter(l=>l.status===s).length}</span>
                 </button>
               ))}
             </div>
@@ -315,7 +319,10 @@ export default function LoanApproval() {
         </div>
 
         <div className="la-footer">
-          <div className="la-count">Showing {filtered.length===0?0:(safePage-1)*ROWS_PER_PAGE+1}–{Math.min(safePage*ROWS_PER_PAGE,filtered.length)} of {filtered.length}<span className="la-hint"> — click any row to process</span></div>
+          <div className="la-count">
+            Showing {filtered.length===0?0:(safePage-1)*ROWS_PER_PAGE+1}–{Math.min(safePage*ROWS_PER_PAGE,filtered.length)} of {filtered.length}
+            <span className="la-hint"> — click any row to process</span>
+          </div>
           <div className="la-pagination">
             <button className="la-page-btn" disabled={safePage===1} onClick={()=>setPage(p=>p-1)}>← Prev</button>
             {Array.from({length:totalPages},(_,i)=>i+1).filter(p=>p===1||p===totalPages||Math.abs(p-safePage)<=1).reduce((acc,p,i,arr)=>{if(i>0&&p-arr[i-1]>1)acc.push("...");acc.push(p);return acc;},[]).map((p,i)=>p==="..."?<span key={`e${i}`} className="la-ellipsis">…</span>:<button key={p} className={`la-page-btn la-page-num ${safePage===p?"active":""}`} onClick={()=>setPage(p)}>{p}</button>)}

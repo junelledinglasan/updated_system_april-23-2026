@@ -7,6 +7,8 @@ class LoanSerializer(serializers.ModelSerializer):
     member_code = serializers.CharField(source='member.member_id', read_only=True)
     member      = serializers.PrimaryKeyRelatedField(read_only=True)
 
+    is_f2f = serializers.BooleanField(required=False, default=False, write_only=True)
+
     class Meta:
         model  = Loan
         fields = '__all__'
@@ -109,11 +111,13 @@ class CreateLoanSerializer(serializers.ModelSerializer):
         balance       = amount
         interest_rate = monthly_rate * 12 * 100
 
+        is_f2f = validated_data.pop('is_f2f', False)
+
         loan = Loan.objects.create(
             **validated_data,
             monthly_due   = round(monthly_due, 2),
             balance       = round(balance, 2),
             interest_rate = round(interest_rate, 2),
-            status        = 'For Review',
+            status        = 'Active' if is_f2f else 'For Review',
         )
         return loan

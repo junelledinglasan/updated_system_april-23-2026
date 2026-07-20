@@ -60,3 +60,30 @@ class AnnouncementComment(models.Model):
     @property
     def posted_by_role(self):
         return self.posted_by.role if self.posted_by else ""
+
+
+# ── BAGO: Reactions (parang Facebook Like/Love/Haha/atbp.) ─────────────────
+class AnnouncementReaction(models.Model):
+    REACTION_CHOICES = [
+        ('Like',  'Like'),
+        ('Love',  'Love'),
+        ('Haha',  'Haha'),
+        ('Wow',   'Wow'),
+        ('Sad',   'Sad'),
+        ('Angry', 'Angry'),
+    ]
+
+    announcement   = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name='reactions')
+    user           = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ann_reactions')
+    reaction_type  = models.CharField(max_length=10, choices=REACTION_CHOICES, default='Like')
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'announcement_reactions'
+        # Isang reaction lang kada user kada post — pag nag-react ulit sila
+        # ng ibang type, papalitan lang, hindi magdadagdag ng bago.
+        unique_together = ('announcement', 'user')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user} {self.reaction_type} on {self.announcement_id}'

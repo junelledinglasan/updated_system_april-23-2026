@@ -2,19 +2,21 @@ import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getMyProfileAPI, getMyOnlineAppAPI } from "../api/members";
-import { LayoutDashboard, CreditCard, Bell, Megaphone, FileText, UserCircle, Lock } from "lucide-react";
+import { LayoutDashboard, CreditCard, Bell, Megaphone, FileText, UserCircle, Lock, PiggyBank } from "lucide-react";
 import "./MemberLayout.css";
 import logo from "../assets/logo.png";
 
 const LOCKED_ROUTES = [
   "/member/dashboard",
   "/member/my-loans",
+  "/member/savings",
   "/member/apply",
 ];
 
 const NAV_ITEMS = [
   { to: "/member/dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard",      locked: true  },
   { to: "/member/my-loans",      icon: <CreditCard      size={16}/>, label: "My Loans",       locked: true  },
+  { to: "/member/savings",       icon: <PiggyBank       size={16}/>, label: "My Savings",     locked: true  },
   { to: "/member/notifications", icon: <Bell            size={16}/>, label: "Notifications",  locked: false },
   { to: "/member/announcements", icon: <Megaphone       size={16}/>, label: "Announcements",  locked: false },
   { to: "/member/apply",         icon: <FileText        size={16}/>, label: "Apply for Loan", locked: true  },
@@ -93,10 +95,12 @@ export default function MemberLayout() {
   };
 
   const member = {
-    name:       memberData?.fullname || user?.name || "Member",
-    memberId:   memberData?.member_id || "—",
-    initials:   (memberData?.first_name?.[0] || user?.name?.[0] || "M").toUpperCase(),
-    isOfficial: isOfficial,
+    id:            memberData?.id || null,
+    name:          memberData?.fullname || user?.name || "Member",
+    memberId:      memberData?.member_id || "—",
+    initials:      (memberData?.first_name?.[0] || user?.name?.[0] || "M").toUpperCase(),
+    isOfficial:    isOfficial,
+    share_capital: memberData?.share_capital || 0,
   };
 
   return (

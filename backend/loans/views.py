@@ -37,6 +37,38 @@ def loan_list_view(request):
             f'Loan application submitted: {loan.loan_id} — {loan.member.fullname} — ₱{loan.amount:,.2f} ({loan.loan_type})',
             request.user
         )
+
+        # ── If F2F loan (created as Active by serializer), do post-approval tasks ──
+        if loan.status == 'Active':
+            import datetime
+            from decimal import Decimal
+            from members.models import Savings
+            from django.db.models import Sum
+            from dateutil.relativedelta import relativedelta
+
+            loan.approved_at   = timezone.now()
+            loan.approved_by   = request.user.username
+            loan.next_due_date = datetime.date.today() + relativedelta(months=1)
+
+            # Add 3% share capital CBU
+            share_capital_addition = loan.amount * Decimal('0.03')
+            loan.member.share_capital += share_capital_addition
+            loan.member.save()
+
+            # Add 1% savings deposit
+            savings_deposit = loan.amount * Decimal('0.01')
+            total_dep = Savings.objects.filter(member=loan.member, transaction_type='Deposit').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+            total_wdr = Savings.objects.filter(member=loan.member, transaction_type='Withdraw').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+            new_balance = (total_dep - total_wdr) + savings_deposit
+            Savings.objects.create(
+                member=loan.member, transaction_type='Deposit', amount=savings_deposit,
+                balance_after=new_balance,
+                note=f'Auto-deposit from F2F loan {loan.loan_id} (1% savings deposit)',
+                recorded_by=request.user.username,
+            )
+            loan.save()
+            log_activity('loan', f'F2F Loan created & activated: {loan.loan_id} — {loan.member.fullname}', request.user)
+
         return Response(LoanSerializer(loan).data, status=201)
 
     print(f"[LOAN CREATE ERROR] {s.errors}")

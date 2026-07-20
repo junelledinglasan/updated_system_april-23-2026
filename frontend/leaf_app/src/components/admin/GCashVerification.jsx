@@ -227,7 +227,7 @@ export default function GCashVerification() {
   };
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",flexDirection:"column",gap:20,padding:"28px 32px",maxWidth:"100%"}}>
       {toast && (
         <div style={{position:"fixed",top:20,right:20,zIndex:9999,padding:"12px 20px",borderRadius:10,background:toast.type==="success"?"#2e7d32":"#c62828",color:"#fff",fontWeight:700,fontSize:13,boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}>
           {toast.msg}
@@ -316,7 +316,7 @@ export default function GCashVerification() {
                 return (
                   <tr key={r.id} style={{background:i%2===0?"#fff":"#fafafa",borderBottom:"1px solid #f0f0f0",cursor:"pointer"}} onClick={()=>setSelected(r)}>
                     <td style={{padding:"10px 14px",color:"#888",fontSize:11}}>{r.created_at?.slice(0,10)}</td>
-                    <td style={{padding:"10px 14px"}}>
+                    <td style={{padding:"12px 18px"}}>
                       <div style={{fontWeight:600,color:"#333"}}>{r.member_name}</div>
                       <div style={{fontSize:10,color:"#aaa",fontFamily:"monospace"}}>{r.member_id}</div>
                     </td>
@@ -328,10 +328,10 @@ export default function GCashVerification() {
                         ? <a href={r.screenshot_url} target="_blank" rel="noopener noreferrer" style={{fontSize:18}} title="View proof">🖼</a>
                         : <span style={{color:"#ccc",fontSize:12}}>—</span>}
                     </td>
-                    <td style={{padding:"10px 14px"}}>
+                    <td style={{padding:"12px 18px"}}>
                       <span style={{background:sc.bg,color:sc.color,border:`1px solid ${sc.border}`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{r.status}</span>
                     </td>
-                    <td style={{padding:"10px 14px"}}>
+                    <td style={{padding:"12px 18px"}}>
                       <button onClick={e=>{e.stopPropagation();setSelected(r);}} style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",border:"1px solid #e0e0e0",borderRadius:6,background:"#f5f5f5",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         <Eye size={11}/> View
                       </button>

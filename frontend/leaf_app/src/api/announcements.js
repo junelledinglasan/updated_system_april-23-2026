@@ -22,3 +22,6 @@ export const addCommentAPI = async (annId, body) =>
 
 export const deleteCommentAPI = async (annId, cId) =>
   (await api.delete(`/announcements/${annId}/comments/${cId}/`)).data;
+
+export const reactToAnnouncementAPI = (postId, reactionType) =>
+  api.post(`/announcements/${postId}/react/`, { reaction_type: reactionType }).then(r => r.data);
