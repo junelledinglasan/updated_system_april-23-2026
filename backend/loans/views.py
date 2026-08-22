@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from notifications.email_utils import send_loan_approved_email, send_gcash_verified_email, send_gcash_rejected_email
+from notifications.email_utils import send_loan_approved_email, send_gcash_verified_email, send_gcash_rejected_email, send_loan_declined_email
 from dateutil.relativedelta import relativedelta
 
 from activity_log.utils import log_activity
@@ -142,6 +142,19 @@ def loan_detail_view(request, pk):
             loan.status         = 'Declined'
             loan.decline_reason = request.data.get('decline_reason', '')
             log_activity('loan', f'Loan declined: {loan.loan_id} — {loan.member.fullname}', request.user)
+
+            try:
+                pm = getattr(loan.member, 'pre_member', None)
+                email_addr = (pm.email if pm else None) or getattr(loan.member.user, 'email', None)
+                if email_addr:
+                    send_loan_declined_email(
+                        email=email_addr, fullname=loan.member.fullname,
+                        member_id=loan.member.member_id, loan_id=loan.loan_id,
+                        loan_type=loan.loan_type, amount=loan.amount,
+                        decline_reason=loan.decline_reason,
+                    )
+            except Exception as e:
+                print(f"[EMAIL ERROR] Loan declined email failed: {e}")
         else:
             loan.status = new_status
 

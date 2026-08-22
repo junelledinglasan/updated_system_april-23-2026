@@ -8,7 +8,7 @@ def send_email(to_email, subject, html_body):
     if not to_email:
         return False
     try:
-        send_mail( 
+        send_mail(
             subject=subject,
             message="",
             from_email=settings.DEFAULT_FROM_EMAIL,
@@ -67,8 +67,12 @@ def _base(content):
 """
 
 
+# ══════════════════════════════════════════════════════════════════
+#  MEMBERSHIP
+# ══════════════════════════════════════════════════════════════════
+
 def send_member_approved_email(email, fullname, member_id, username, plain_password, membership_date):
-    """Send email when applicant becomes an official member."""
+    """Send email when an ONLINE APPLICATION is converted to official member."""
     content = f"""
     <p>Dear <strong>{fullname}</strong>,</p>
     <p>Congratulations! You are now an official member of <strong>LEAF Multi-Purpose Cooperative</strong>.
@@ -98,137 +102,8 @@ def send_member_approved_email(email, fullname, member_id, username, plain_passw
     )
 
 
-def send_loan_approved_email(email, fullname, member_id, loan_id, loan_type, amount, monthly_due, term_months, next_due_date):
-    """Send email when loan is approved."""
-    content = f"""
-    <p>Dear <strong>{fullname}</strong>,</p>
-    <p>Great news! Your loan application has been <strong>approved</strong> by LEAF MPC.
-    Please review your loan details below.</p>
-
-    <div class="info-box">
-      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
-      <div class="info-row"><span class="info-label">Loan Amount</span><span class="info-value">₱{float(amount):,.2f}</span></div>
-      <div class="info-row"><span class="info-label">Monthly Due</span><span class="info-value">₱{float(monthly_due):,.2f}</span></div>
-      <div class="info-row"><span class="info-label">Term</span><span class="info-value">{term_months} months</span></div>
-      <div class="info-row"><span class="info-label">First Due Date</span><span class="info-value">{next_due_date}</span></div>
-    </div>
-
-    <div class="alert-box">
-      <strong>Reminder:</strong> Please pay your monthly due of
-      <strong>₱{float(monthly_due):,.2f}</strong> on or before <strong>{next_due_date}</strong>
-      to avoid penalties.
-    </div>
-
-    <p>Please visit the LEAF MPC office to sign the necessary loan documents.
-    You can track your loan status and payment history in the LEAF MPC system.</p>
-    """
-    return send_email(
-        email,
-        f"Loan Approved — {loan_id} · ₱{float(amount):,.2f}",
-        _base(content)
-    )
-
-
-def send_due_date_reminder_email(email, fullname, member_id, loan_id, loan_type, monthly_due, due_date, balance):
-    """Send email 3 days before payment due date."""
-    content = f"""
-    <p>Dear <strong>{fullname}</strong>,</p>
-    <p>This is a friendly reminder that your loan payment is due in <strong>3 days</strong>.
-    Please make sure to pay on time to avoid penalties.</p>
-
-    <div class="info-box">
-      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
-      <div class="info-row"><span class="info-label">Amount Due</span><span class="info-value" style="color:#c62828;font-size:16px;">₱{float(monthly_due):,.2f}</span></div>
-      <div class="info-row"><span class="info-label">Due Date</span><span class="info-value" style="color:#e65100;">⚠ {due_date}</span></div>
-      <div class="info-row"><span class="info-label">Remaining Balance</span><span class="info-value">₱{float(balance):,.2f}</span></div>
-    </div>
-
-    <div class="alert-box">
-      💳 <strong>How to pay:</strong> Visit the LEAF MPC office to pay your monthly due.
-      Bring your Member ID for reference.
-    </div>
-
-    <p>If you have already paid, please disregard this message.
-    Thank you for being a responsible member of LEAF MPC!</p>
-    """
-    return send_email(
-        email,
-        f"⚠️ Payment Reminder — {loan_id} due on {due_date}",
-        _base(content)
-    )
-
-def send_gcash_verified_email(email, fullname, member_id, loan_id, reference_number, amount, new_balance):
-    """Send email when GCash payment is verified by admin."""
-    content = f"""
-    <p>Dear <strong>{fullname}</strong>,</p>
-    <p>Good news! Your GCash payment has been <strong>verified and recorded</strong> by LEAF MPC.</p>
-
-    <div class="info-box">
-      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
-      <div class="info-row"><span class="info-label">GCash Reference No.</span><span class="info-value">{reference_number}</span></div>
-      <div class="info-row"><span class="info-label">Amount Paid</span><span class="info-value" style="color:#2e7d32;font-size:16px;">₱{float(amount):,.2f}</span></div>
-      <div class="info-row"><span class="info-label">Remaining Balance</span><span class="info-value">₱{float(new_balance):,.2f}</span></div>
-    </div>
-
-    {"<div class='alert-box'>🎉 <strong>Congratulations!</strong> Your loan is now fully paid!</div>" if float(new_balance) == 0 else ""}
-
-    <p>Your payment has been recorded in the LEAF MPC system. You can view your updated
-    payment history by logging in to the LEAF MPC member portal.</p>
-    <p>Thank you for your payment!</p>
-    """
-    return send_email(
-        email,
-        f"✅ GCash Payment Verified — {loan_id} · Ref: {reference_number}",
-        _base(content)
-    )
-
-
-def send_gcash_rejected_email(email, fullname, member_id, loan_id, reference_number, amount, reject_reason):
-    """Send email when GCash payment is rejected by admin."""
-    content = f"""
-    <p>Dear <strong>{fullname}</strong>,</p>
-    <p>We were unable to verify your GCash payment for loan <strong>{loan_id}</strong>.
-    Please review the details below and resubmit with the correct information.</p>
-
-    <div class="info-box">
-      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
-      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
-      <div class="info-row"><span class="info-label">Reference No. Submitted</span><span class="info-value">{reference_number}</span></div>
-      <div class="info-row"><span class="info-label">Amount</span><span class="info-value">₱{float(amount):,.2f}</span></div>
-      <div class="info-row"><span class="info-label">Status</span><span class="info-value" style="color:#c62828;">❌ Not Verified</span></div>
-    </div>
-
-    <div class="alert-box">
-      ⚠️ <strong>Reason:</strong> {reject_reason}
-    </div>
-
-    <p>To resubmit your payment:</p>
-    <ol style="color:#444;font-size:14px;line-height:2;">
-      <li>Log in to the LEAF MPC member portal</li>
-      <li>Go to <strong>My Loans</strong></li>
-      <li>Click <strong>Pay via GCash</strong> on your active loan</li>
-      <li>Enter the correct GCash reference number</li>
-    </ol>
-
-    <p>If you believe this is an error, please contact the LEAF MPC office directly.</p>
-    """
-    return send_email(
-        email,
-        f"❌ GCash Payment Not Verified — {loan_id} · Ref: {reference_number}",
-        _base(content)
-    )
-
-
-# ── REPLACE send_member_approved_email in backend/notifications/email_utils.py ─
-# Also APPEND send_application_approved_email at the bottom
-
-def send_member_approved_email(email, fullname, member_id, username, plain_password, membership_date):
-    """Send email when admin registers a member F2F — credentials only, no requirements."""
+def send_member_registered_email(email, fullname, member_id, username, plain_password, membership_date):
+    """Send email when admin registers a member F2F (walk-in) — credentials only."""
     content = f"""
     <p>Dear <strong>{fullname}</strong>,</p>
     <p>Congratulations! You are now an official member of <strong>LEAF Multi-Purpose Cooperative</strong>.
@@ -304,5 +179,192 @@ def send_application_approved_email(email, fullname, app_id):
     return send_email(
         email,
         f"Membership Application Approved — {app_id} | Please Visit the Office",
+        _base(content)
+    )
+
+
+def send_application_rejected_email(email, fullname, app_id, reject_reason):
+    """Send email when an online membership application is rejected."""
+    content = f"""
+    <h2 style="color:#c62828;">Membership Application Update</h2>
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>Thank you for your interest in becoming a LEAF MPC member. After careful review, we regret to inform you
+    that your application has <strong>not been approved</strong> at this time.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Application ID</span><span class="info-value">{app_id}</span></div>
+    </div>
+
+    <div class="alert-box">
+      <strong>Reason:</strong> {reject_reason or 'Please visit the LEAF MPC office for more details.'}
+    </div>
+
+    <p>You are welcome to re-apply once the noted concerns have been addressed, or visit our office for assistance.</p>
+    """
+    return send_email(
+        email,
+        f"LEAF MPC — Membership Application Update ({app_id})",
+        _base(content)
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
+#  LOANS
+# ══════════════════════════════════════════════════════════════════
+
+def send_loan_approved_email(email, fullname, member_id, loan_id, loan_type, amount, monthly_due, term_months, next_due_date):
+    """Send email when loan is approved."""
+    content = f"""
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>Great news! Your loan application has been <strong>approved</strong> by LEAF MPC.
+    Please review your loan details below.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount</span><span class="info-value">₱{float(amount):,.2f}</span></div>
+      <div class="info-row"><span class="info-label">Monthly Due</span><span class="info-value">₱{float(monthly_due):,.2f}</span></div>
+      <div class="info-row"><span class="info-label">Term</span><span class="info-value">{term_months} months</span></div>
+      <div class="info-row"><span class="info-label">First Due Date</span><span class="info-value">{next_due_date}</span></div>
+    </div>
+
+    <div class="alert-box">
+      <strong>Reminder:</strong> Please pay your monthly due of
+      <strong>₱{float(monthly_due):,.2f}</strong> on or before <strong>{next_due_date}</strong>
+      to avoid penalties.
+    </div>
+
+    <p>Please visit the LEAF MPC office to sign the necessary loan documents.
+    You can track your loan status and payment history in the LEAF MPC system.</p>
+    """
+    return send_email(
+        email,
+        f"Loan Approved — {loan_id} · ₱{float(amount):,.2f}",
+        _base(content)
+    )
+
+
+def send_loan_declined_email(email, fullname, member_id, loan_id, loan_type, amount, decline_reason):
+    """Send email when a loan application is declined."""
+    content = f"""
+    <h2 style="color:#c62828;">Loan Application Update</h2>
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>We regret to inform you that your loan application has <strong>not been approved</strong> at this time.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
+      <div class="info-row"><span class="info-label">Amount Requested</span><span class="info-value">₱{float(amount):,.2f}</span></div>
+    </div>
+
+    <div class="alert-box">
+      <strong>Reason:</strong> {decline_reason or 'Please visit the LEAF MPC office for more details.'}
+    </div>
+
+    <p>You may re-apply once the noted concerns have been addressed, or visit our office for assistance.</p>
+    """
+    return send_email(
+        email,
+        f"LEAF MPC — Loan Application Update ({loan_id})",
+        _base(content)
+    )
+
+
+def send_due_date_reminder_email(email, fullname, member_id, loan_id, loan_type, monthly_due, due_date, balance):
+    """Send email 3 days before payment due date."""
+    content = f"""
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>This is a friendly reminder that your loan payment is due in <strong>3 days</strong>.
+    Please make sure to pay on time to avoid penalties.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
+      <div class="info-row"><span class="info-label">Amount Due</span><span class="info-value" style="color:#c62828;font-size:16px;">₱{float(monthly_due):,.2f}</span></div>
+      <div class="info-row"><span class="info-label">Due Date</span><span class="info-value" style="color:#e65100;">⚠ {due_date}</span></div>
+      <div class="info-row"><span class="info-label">Remaining Balance</span><span class="info-value">₱{float(balance):,.2f}</span></div>
+    </div>
+
+    <div class="alert-box">
+      💳 <strong>How to pay:</strong> Visit the LEAF MPC office to pay your monthly due.
+      Bring your Member ID for reference.
+    </div>
+
+    <p>If you have already paid, please disregard this message.
+    Thank you for being a responsible member of LEAF MPC!</p>
+    """
+    return send_email(
+        email,
+        f"⚠️ Payment Reminder — {loan_id} due on {due_date}",
+        _base(content)
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
+#  GCASH PAYMENTS
+# ══════════════════════════════════════════════════════════════════
+
+def send_gcash_verified_email(email, fullname, member_id, loan_id, reference_number, amount, new_balance):
+    """Send email when GCash payment is verified by admin."""
+    content = f"""
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>Good news! Your GCash payment has been <strong>verified and recorded</strong> by LEAF MPC.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">GCash Reference No.</span><span class="info-value">{reference_number}</span></div>
+      <div class="info-row"><span class="info-label">Amount Paid</span><span class="info-value" style="color:#2e7d32;font-size:16px;">₱{float(amount):,.2f}</span></div>
+      <div class="info-row"><span class="info-label">Remaining Balance</span><span class="info-value">₱{float(new_balance):,.2f}</span></div>
+    </div>
+
+    {"<div class='alert-box'>🎉 <strong>Congratulations!</strong> Your loan is now fully paid!</div>" if float(new_balance) == 0 else ""}
+
+    <p>Your payment has been recorded in the LEAF MPC system. You can view your updated
+    payment history by logging in to the LEAF MPC member portal.</p>
+    <p>Thank you for your payment!</p>
+    """
+    return send_email(
+        email,
+        f"✅ GCash Payment Verified — {loan_id} · Ref: {reference_number}",
+        _base(content)
+    )
+
+
+def send_gcash_rejected_email(email, fullname, member_id, loan_id, reference_number, amount, reject_reason):
+    """Send email when GCash payment is rejected by admin."""
+    content = f"""
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>We were unable to verify your GCash payment for loan <strong>{loan_id}</strong>.
+    Please review the details below and resubmit with the correct information.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">Reference No. Submitted</span><span class="info-value">{reference_number}</span></div>
+      <div class="info-row"><span class="info-label">Amount</span><span class="info-value">₱{float(amount):,.2f}</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" style="color:#c62828;">❌ Not Verified</span></div>
+    </div>
+
+    <div class="alert-box">
+      ⚠️ <strong>Reason:</strong> {reject_reason}
+    </div>
+
+    <p>To resubmit your payment:</p>
+    <ol style="color:#444;font-size:14px;line-height:2;">
+      <li>Log in to the LEAF MPC member portal</li>
+      <li>Go to <strong>My Loans</strong></li>
+      <li>Click <strong>Pay via GCash</strong> on your active loan</li>
+      <li>Enter the correct GCash reference number</li>
+    </ol>
+
+    <p>If you believe this is an error, please contact the LEAF MPC office directly.</p>
+    """
+    return send_email(
+        email,
+        f"❌ GCash Payment Not Verified — {loan_id} · Ref: {reference_number}",
         _base(content)
     )

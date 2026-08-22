@@ -24,28 +24,42 @@ class LeafMemberInfo(models.Model):
         ('Employed', 'Employed'),
     ]
 
-    user                   = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='leaf_info')
-    app_id                 = models.CharField(max_length=20, unique=True, blank=True)
-    first_name             = models.CharField(max_length=100)
-    last_name              = models.CharField(max_length=100)
-    middle_name            = models.CharField(max_length=100, blank=True)
-    birth_date             = models.DateField(null=True, blank=True)
-    civil_status           = models.CharField(max_length=20, choices=CIVIL_STATUS_CHOICES, default='Single')
-    educational_attainment = models.CharField(max_length=100, blank=True)
-    occupation             = models.CharField(max_length=100, blank=True)
-    income                 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    contact_number         = models.CharField(max_length=20, blank=True)
-    email                  = models.EmailField(max_length=100, blank=True)
-    address                = models.TextField(blank=True)
-    classification         = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, default='Employed')
-    birth_certificate      = models.BooleanField(default=False)
-    marriage_certificate   = models.BooleanField(default=False)
-    application_status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-    reviewed_at            = models.DateTimeField(null=True, blank=True)
-    reviewed_by            = models.CharField(max_length=100, blank=True)
-    reject_reason          = models.TextField(blank=True)
-    is_f2f                 = models.BooleanField(default=False)
-    created_at             = models.DateTimeField(auto_now_add=True)
+    user                          = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='leaf_info')
+    app_id                        = models.CharField(max_length=20, unique=True, blank=True)
+    first_name                    = models.CharField(max_length=100)
+    last_name                     = models.CharField(max_length=100)
+    middle_name                   = models.CharField(max_length=100, blank=True)
+    birth_date                    = models.DateField(null=True, blank=True)
+    place_of_birth                = models.CharField(max_length=200, blank=True)
+    sex                           = models.CharField(max_length=50, blank=True)
+    civil_status                  = models.CharField(max_length=20, choices=CIVIL_STATUS_CHOICES, default='Single')
+    educational_attainment        = models.CharField(max_length=100, blank=True)
+    occupation                    = models.CharField(max_length=100, blank=True)
+    income                        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    contact_number                = models.CharField(max_length=20, blank=True)
+    email                         = models.EmailField(max_length=100, blank=True)
+    address                       = models.TextField(blank=True)
+    tin_no                        = models.CharField(max_length=50, blank=True)
+    sss_gsis_no                   = models.CharField(max_length=50, blank=True)
+    religious_social_affiliation  = models.CharField(max_length=200, blank=True)
+    # Spouse & Family
+    spouse_name                   = models.CharField(max_length=200, blank=True)
+    spouse_occupation             = models.CharField(max_length=100, blank=True)
+    spouse_income                 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    no_of_dependants              = models.IntegerField(default=0)
+    beneficiary_name              = models.CharField(max_length=200, blank=True)
+    beneficiary_relationship      = models.CharField(max_length=100, blank=True)
+    credit_references             = models.TextField(blank=True)
+    # Classification
+    classification                = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, default='Employed')
+    birth_certificate             = models.BooleanField(default=False)
+    marriage_certificate          = models.BooleanField(default=False)
+    application_status            = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    reviewed_at                   = models.DateTimeField(null=True, blank=True)
+    reviewed_by                   = models.CharField(max_length=100, blank=True)
+    reject_reason                 = models.TextField(blank=True)
+    is_f2f                        = models.BooleanField(default=False)
+    created_at                    = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'leaf_members_info'
@@ -84,8 +98,6 @@ class LeafMemberInfo(models.Model):
 
 # ══════════════════════════════════════════════════════════════════
 # TABLE NEW: online_applications
-# Separate table para sa mga nag-online apply
-# Kapag na-approve at na-convert → nananatili dito as Approved, hindi nadi-delete
 # ══════════════════════════════════════════════════════════════════
 class OnlineApplication(models.Model):
     CIVIL_STATUS_CHOICES = [
@@ -105,30 +117,44 @@ class OnlineApplication(models.Model):
         ('Employed', 'Employed'),
     ]
 
-    user                   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='online_application')
-    app_id                 = models.CharField(max_length=20, unique=True, blank=True)
-    first_name             = models.CharField(max_length=100)
-    last_name              = models.CharField(max_length=100)
-    middle_name            = models.CharField(max_length=100, blank=True)
-    birth_date             = models.DateField(null=True, blank=True)
-    civil_status           = models.CharField(max_length=20, choices=CIVIL_STATUS_CHOICES, default='Single')
-    educational_attainment = models.CharField(max_length=100, blank=True)
-    occupation             = models.CharField(max_length=100, blank=True)
-    income                 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    contact_number         = models.CharField(max_length=20, blank=True)
-    email                  = models.EmailField(max_length=100, blank=True)
-    address                = models.TextField(blank=True)
-    classification         = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, default='Employed')
-    birth_certificate      = models.BooleanField(default=False)
-    marriage_certificate   = models.BooleanField(default=False)
-    application_status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-    reviewed_at            = models.DateTimeField(null=True, blank=True)
-    reviewed_by            = models.CharField(max_length=100, blank=True)
-    reject_reason          = models.TextField(blank=True)
-    plain_password         = models.CharField(max_length=100, blank=True)  # ── para makita ng admin
-    id_front_url           = models.URLField(max_length=500, blank=True)   # ── Valid ID front
-    id_back_url            = models.URLField(max_length=500, blank=True)   # ── Valid ID back
-    created_at             = models.DateTimeField(auto_now_add=True)
+    user                          = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='online_application')
+    app_id                        = models.CharField(max_length=20, unique=True, blank=True)
+    first_name                    = models.CharField(max_length=100)
+    last_name                     = models.CharField(max_length=100)
+    middle_name                   = models.CharField(max_length=100, blank=True)
+    birth_date                    = models.DateField(null=True, blank=True)
+    place_of_birth                = models.CharField(max_length=200, blank=True)
+    sex                           = models.CharField(max_length=50, blank=True)
+    civil_status                  = models.CharField(max_length=20, choices=CIVIL_STATUS_CHOICES, default='Single')
+    educational_attainment        = models.CharField(max_length=100, blank=True)
+    occupation                    = models.CharField(max_length=100, blank=True)
+    income                        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    contact_number                = models.CharField(max_length=20, blank=True)
+    email                         = models.EmailField(max_length=100, blank=True)
+    address                       = models.TextField(blank=True)
+    tin_no                        = models.CharField(max_length=50, blank=True)
+    sss_gsis_no                   = models.CharField(max_length=50, blank=True)
+    religious_social_affiliation  = models.CharField(max_length=200, blank=True)
+    # Spouse & Family
+    spouse_name                   = models.CharField(max_length=200, blank=True)
+    spouse_occupation             = models.CharField(max_length=100, blank=True)
+    spouse_income                 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    no_of_dependants              = models.IntegerField(default=0)
+    beneficiary_name              = models.CharField(max_length=200, blank=True)
+    beneficiary_relationship      = models.CharField(max_length=100, blank=True)
+    credit_references             = models.TextField(blank=True)
+    # Classification
+    classification                = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, default='Employed')
+    birth_certificate             = models.BooleanField(default=False)
+    marriage_certificate          = models.BooleanField(default=False)
+    application_status            = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    reviewed_at                   = models.DateTimeField(null=True, blank=True)
+    reviewed_by                   = models.CharField(max_length=100, blank=True)
+    reject_reason                 = models.TextField(blank=True)
+    plain_password                = models.CharField(max_length=100, blank=True)
+    id_front_url                  = models.URLField(max_length=500, blank=True)
+    id_back_url                   = models.URLField(max_length=500, blank=True)
+    created_at                    = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'online_applications'
@@ -170,9 +196,10 @@ class OnlineApplication(models.Model):
 # ══════════════════════════════════════════════════════════════════
 class Member(models.Model):
     STATUS_CHOICES = [
-        ('Active',    'Active'),
-        ('Inactive',  'Inactive'),
-        ('Suspended', 'Suspended'),
+        ('Active',      'Active'),
+        ('Inactive',    'Inactive'),
+        ('Suspended',   'Suspended'),
+        ('Deactivated', 'Deactivated'),
     ]
 
     user              = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='member')
@@ -334,22 +361,21 @@ class Savings(models.Model):
 
 # ══════════════════════════════════════════════════════════════════
 # TABLE 7: share_capital_transactions
-# Records every change in share capital (deposit, CBU from loan, initial)
 # ══════════════════════════════════════════════════════════════════
 class ShareCapitalTransaction(models.Model):
     TYPE_CHOICES = [
-        ('Initial',  'Initial Deposit'),   # kapag nag-register
-        ('Deposit',  'Manual Deposit'),    # manual na dagdag
-        ('CBU',      'CBU from Loan'),     # 3% sa bawat loan
+        ('Initial',  'Initial Deposit'),
+        ('Deposit',  'Manual Deposit'),
+        ('CBU',      'CBU from Loan'),
     ]
 
-    member      = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='share_capital_transactions')
-    txn_type    = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Deposit')
-    amount      = models.DecimalField(max_digits=12, decimal_places=2)
+    member        = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='share_capital_transactions')
+    txn_type      = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Deposit')
+    amount        = models.DecimalField(max_digits=12, decimal_places=2)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    note        = models.CharField(max_length=200, blank=True)
-    recorded_by = models.CharField(max_length=100, blank=True)
-    created_at  = models.DateTimeField(auto_now_add=True)
+    note          = models.CharField(max_length=200, blank=True)
+    recorded_by   = models.CharField(max_length=100, blank=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'share_capital_transactions'

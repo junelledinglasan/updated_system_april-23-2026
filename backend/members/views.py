@@ -6,8 +6,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from notifications.email_utils import (
     send_member_approved_email,
+    send_member_registered_email,
     send_loan_approved_email,
     send_application_approved_email,
+    send_application_rejected_email,
 )
 
 from auth_app.models import User
@@ -280,16 +282,28 @@ def member_list_view(request):
             last_name              = lname,
             middle_name            = data.get('middle_name', data.get('middlename', '')),
             birth_date             = data.get('birth_date',  data.get('birthdate')) or None,
+            place_of_birth         = data.get('place_of_birth', ''),
+            sex                    = data.get('sex', ''),
             civil_status           = data.get('civil_status', 'Single'),
+            tin_no                 = data.get('tin_no', ''),
+            sss_gsis_no            = data.get('sss_gsis_no', ''),
             educational_attainment = data.get('educational_attainment', ''),
             occupation             = data.get('occupation', ''),
             income                 = data.get('income', 0) or 0,
             contact_number         = data.get('contact_number', data.get('contact', '')),
             email                  = data.get('email', ''),
             address                = data.get('address', ''),
+            religious_social_affiliation = data.get('religious_social_affiliation', ''),
             classification         = data.get('classification', 'Employed'),
             birth_certificate      = data.get('birth_certificate', False),
             marriage_certificate   = data.get('marriage_certificate', False),
+            spouse_name               = data.get('spouse_name', ''),
+            spouse_occupation         = data.get('spouse_occupation', ''),
+            spouse_income             = data.get('spouse_income', 0) or 0,
+            no_of_dependants          = data.get('no_of_dependants', 0) or 0,
+            beneficiary_name          = data.get('beneficiary_name', ''),
+            beneficiary_relationship  = data.get('beneficiary_relationship', ''),
+            credit_references         = data.get('credit_references', ''),
             application_status     = 'Approved',
             is_f2f                 = True,
         )
@@ -319,6 +333,18 @@ def member_list_view(request):
         f'— Paid: ₱{paid_amount:,.2f} → Share Capital: ₱{share_capital:,.2f}',
         request.user)
 
+    try:
+        email_addr = data.get('email', '')
+        if email_addr:
+            send_member_registered_email(
+                email=email_addr, fullname=member.fullname,
+                member_id=member.member_id, username=uname,
+                plain_password=plain_pw,
+                membership_date=str(getattr(member, 'date_registered', ''))[:10],
+            )
+    except Exception as e:
+        print(f"[EMAIL ERROR] F2F member registered email failed: {e}")
+
     return Response({
         'message':        f'{member.fullname} is now an official member!',
         'member_id':      member.member_id,
@@ -347,14 +373,36 @@ def member_detail_view(request, pk):
 
         if member.pre_member:
             info = member.pre_member
+            # ── Numeric fields — kailangang i-convert nang maayos, dahil
+            # kapag ipinasa ang blangkong "" mula sa form, hindi ito
+            # kayang gawing number ni Django, at bumabagsak ang save
+            # (500 Internal Server Error). ─────────────────────────────
+            numeric_fields = {'income', 'spouse_income', 'no_of_dependants'}
+
             for field in [
                 'first_name', 'last_name', 'middle_name', 'birth_date',
-                'civil_status', 'educational_attainment', 'occupation',
+                'place_of_birth', 'sex', 'civil_status', 'tin_no', 'sss_gsis_no',
+                'educational_attainment', 'occupation',
                 'income', 'contact_number', 'email', 'address',
+                'religious_social_affiliation',
                 'birth_certificate', 'marriage_certificate',
+                'spouse_name', 'spouse_occupation', 'spouse_income', 'no_of_dependants',
+                'beneficiary_name', 'beneficiary_relationship', 'credit_references',
             ]:
                 if field in data:
-                    setattr(info, field, data[field])
+                    value = data[field]
+                    if field in numeric_fields:
+                        # Blangko/None → 0 imbes na sirain ang save
+                        if value in ('', None):
+                            value = 0
+                        else:
+                            try:
+                                value = float(value) if field != 'no_of_dependants' else int(float(value))
+                            except (ValueError, TypeError):
+                                value = 0
+                    elif field == 'birth_date' and value in ('', None):
+                        value = None
+                    setattr(info, field, value)
             info.save()
 
         if new_pw := data.get('plain_password', ''):
@@ -378,6 +426,14 @@ def member_detail_view(request, pk):
     if request.method == 'DELETE':
         if request.user.role != 'admin':
             return Response({'error': 'Unauthorized.'}, status=403)
+
+        # ── BAGO: kailangan ng sariling password ng nag-de-delete
+        # (admin) bago tuluyang matanggal ang member — double security
+        # para hindi basta-basta makapag-delete kahit admin mismo. ──
+        password = request.data.get('password', '')
+        if not password or not request.user.check_password(password):
+            return Response({'error': 'Incorrect password.'}, status=403)
+
         name     = member.fullname
         mid      = member.member_id
         user     = member.user
@@ -674,16 +730,28 @@ def online_application_list_view(request):
                 'last_name':              a.last_name,
                 'middle_name':            a.middle_name,
                 'birth_date':             str(a.birth_date) if a.birth_date else '',
+                'place_of_birth':         a.place_of_birth,
+                'sex':                    a.sex,
                 'civil_status':           a.civil_status,
+                'tin_no':                 a.tin_no,
+                'sss_gsis_no':            a.sss_gsis_no,
                 'educational_attainment': a.educational_attainment,
                 'occupation':             a.occupation,
                 'income':                 str(a.income),
                 'contact_number':         a.contact_number,
                 'email':                  a.email,
                 'address':                a.address,
+                'religious_social_affiliation': a.religious_social_affiliation,
                 'classification':         a.classification,
                 'birth_certificate':      a.birth_certificate,
                 'marriage_certificate':   a.marriage_certificate,
+                'spouse_name':            a.spouse_name,
+                'spouse_occupation':      a.spouse_occupation,
+                'spouse_income':          str(a.spouse_income),
+                'no_of_dependants':       a.no_of_dependants,
+                'beneficiary_name':          a.beneficiary_name,
+                'beneficiary_relationship':  a.beneficiary_relationship,
+                'credit_references':         a.credit_references,
                 'id_front_url':           a.id_front_url or '',
                 'id_back_url':            a.id_back_url  or '',
                 'application_status':     a.application_status,
@@ -716,16 +784,28 @@ def online_application_list_view(request):
             last_name              = data.get('last_name', ''),
             middle_name            = data.get('middle_name', ''),
             birth_date             = data.get('birth_date') or None,
+            place_of_birth         = data.get('place_of_birth', ''),
+            sex                    = data.get('sex', ''),
             civil_status           = data.get('civil_status', 'Single'),
+            tin_no                 = data.get('tin_no', ''),
+            sss_gsis_no            = data.get('sss_gsis_no', ''),
             educational_attainment = data.get('educational_attainment', ''),
             occupation             = data.get('occupation', ''),
             income                 = data.get('income', 0) or 0,
             contact_number         = data.get('contact_number', ''),
             email                  = data.get('email', ''),
             address                = data.get('address', ''),
+            religious_social_affiliation = data.get('religious_social_affiliation', ''),
             classification         = data.get('classification', 'Employed'),
             birth_certificate      = data.get('birth_certificate', False),
             marriage_certificate   = data.get('marriage_certificate', False),
+            spouse_name               = data.get('spouse_name', ''),
+            spouse_occupation         = data.get('spouse_occupation', ''),
+            spouse_income             = data.get('spouse_income', 0) or 0,
+            no_of_dependants          = data.get('no_of_dependants', 0) or 0,
+            beneficiary_name          = data.get('beneficiary_name', ''),
+            beneficiary_relationship  = data.get('beneficiary_relationship', ''),
+            credit_references         = data.get('credit_references', ''),
             id_front_url           = data.get('id_front_url', ''),
             id_back_url            = data.get('id_back_url', ''),
         )
@@ -762,16 +842,28 @@ def online_application_detail_view(request, pk):
             'last_name':              app.last_name,
             'middle_name':            app.middle_name,
             'birth_date':             str(app.birth_date) if app.birth_date else '',
+            'place_of_birth':         app.place_of_birth,
+            'sex':                    app.sex,
             'civil_status':           app.civil_status,
+            'tin_no':                 app.tin_no,
+            'sss_gsis_no':            app.sss_gsis_no,
             'educational_attainment': app.educational_attainment,
             'occupation':             app.occupation,
             'income':                 str(app.income),
             'contact_number':         app.contact_number,
             'email':                  app.email,
             'address':                app.address,
+            'religious_social_affiliation': app.religious_social_affiliation,
             'classification':         app.classification,
             'birth_certificate':      app.birth_certificate,
             'marriage_certificate':   app.marriage_certificate,
+            'spouse_name':            app.spouse_name,
+            'spouse_occupation':      app.spouse_occupation,
+            'spouse_income':          str(app.spouse_income),
+            'no_of_dependants':       app.no_of_dependants,
+            'beneficiary_name':          app.beneficiary_name,
+            'beneficiary_relationship':  app.beneficiary_relationship,
+            'credit_references':         app.credit_references,
             'id_front_url':           app.id_front_url or '',
             'id_back_url':            app.id_back_url  or '',
             'application_status':     app.application_status,
@@ -798,7 +890,7 @@ def online_application_detail_view(request, pk):
             f'Online application {app.app_id} ({app.fullname}) {new_status.lower()} by {request.user.name}',
             request.user)
 
-        # ── Send approval email with requirements ──
+        # ── Send approval/rejection email ──
         if new_status == 'Approved':
             try:
                 email_addr = app.email or (app.user.email if app.user else None)
@@ -810,6 +902,19 @@ def online_application_detail_view(request, pk):
                     )
             except Exception as e:
                 print(f"[EMAIL ERROR] Application approved email failed: {e}")
+
+        elif new_status == 'Rejected':
+            try:
+                email_addr = app.email or (app.user.email if app.user else None)
+                if email_addr:
+                    send_application_rejected_email(
+                        email          = email_addr,
+                        fullname       = app.fullname,
+                        app_id         = app.app_id,
+                        reject_reason  = app.reject_reason,
+                    )
+            except Exception as e:
+                print(f"[EMAIL ERROR] Application rejected email failed: {e}")
 
     return Response({'application_status': app.application_status})
 
@@ -845,16 +950,28 @@ def convert_online_application_view(request, pk):
         last_name              = online_app.last_name,
         middle_name            = online_app.middle_name,
         birth_date             = online_app.birth_date,
+        place_of_birth         = online_app.place_of_birth,
+        sex                    = online_app.sex,
         civil_status           = online_app.civil_status,
+        tin_no                 = online_app.tin_no,
+        sss_gsis_no            = online_app.sss_gsis_no,
         educational_attainment = online_app.educational_attainment,
         occupation             = online_app.occupation,
         income                 = online_app.income,
         contact_number         = online_app.contact_number,
         email                  = online_app.email,
         address                = online_app.address,
+        religious_social_affiliation = online_app.religious_social_affiliation,
         classification         = online_app.classification,
         birth_certificate      = online_app.birth_certificate,
         marriage_certificate   = online_app.marriage_certificate,
+        spouse_name               = online_app.spouse_name,
+        spouse_occupation         = online_app.spouse_occupation,
+        spouse_income             = online_app.spouse_income,
+        no_of_dependants          = online_app.no_of_dependants,
+        beneficiary_name          = online_app.beneficiary_name,
+        beneficiary_relationship  = online_app.beneficiary_relationship,
+        credit_references         = online_app.credit_references,
         application_status     = 'Approved',
         reviewed_by            = request.user.username,
         reviewed_at            = timezone.now(),
