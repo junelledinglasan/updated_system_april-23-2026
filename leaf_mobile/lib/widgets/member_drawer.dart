@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/settings_service.dart';
 import '../providers/member_provider.dart';
 
 // Colors matched 1:1 to MemberLayout.css — HALATANG magkaiba ang green
@@ -131,15 +132,29 @@ class MemberDrawer extends StatelessWidget {
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _MLColors.border))),
               child: SizedBox(
                 height: 35,
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.centerLeft,
-                  errorBuilder: (_, __, ___) => Row(children: const [
-                    Icon(Icons.eco, color: _MLColors.green, size: 24),
-                    SizedBox(width: 8),
-                    Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _MLColors.green)),
-                  ]),
+                child: FutureBuilder<String?>(
+                  future: SettingsService.getLogoUrl(),
+                  builder: (context, snapshot) {
+                    final customUrl = snapshot.data;
+                    if (customUrl != null && customUrl.isNotEmpty) {
+                      return Image.network(
+                        customUrl,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
+                        errorBuilder: (_, __, ___) => Image.asset('assets/images/logo.png', fit: BoxFit.contain, alignment: Alignment.centerLeft),
+                      );
+                    }
+                    return Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                      alignment: Alignment.centerLeft,
+                      errorBuilder: (_, __, ___) => Row(children: const [
+                        Icon(Icons.eco, color: _MLColors.green, size: 24),
+                        SizedBox(width: 8),
+                        Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _MLColors.green)),
+                      ]),
+                    );
+                  },
                 ),
               ),
             ),

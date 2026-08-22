@@ -533,17 +533,6 @@ class _NonOfficialWelcome extends StatelessWidget {
                     child: const Text('Apply for Official Membership', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: _MDColors.dark, side: const BorderSide(color: _MDColors.border), padding: const EdgeInsets.symmetric(vertical: 12)),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('My Profile — coming soon.')));
-                    },
-                    child: const Text('Complete My Profile', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  ),
-                ),
               ],
             ),
           ),

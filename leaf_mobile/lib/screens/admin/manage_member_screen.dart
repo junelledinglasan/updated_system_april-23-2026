@@ -127,15 +127,17 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
   }
 
   Future<void> _handleDelete(dynamic member) async {
-    final confirmed = await showDialog<bool>(
+    final password = await showDialog<String>(
       context: context,
       builder: (context) => _DeleteDialog(member: member),
     );
-    if (confirmed != true) return;
+    if (password == null || password.isEmpty) return;
     try {
-      await MembersService.deleteMember(member['id']);
+      await MembersService.deleteMember(member['id'], password);
       _showToast('Member deleted.', isError: true);
       _fetchData(silent: true);
+    } on WrongPasswordException {
+      _showToast('Incorrect password. Member was not deleted.', isError: true);
     } catch (_) {
       _showToast('Failed to delete member.', isError: true);
     }
@@ -768,12 +770,28 @@ class _BulletLine extends StatelessWidget {
   }
 }
 
-class _DeleteDialog extends StatelessWidget {
+class _DeleteDialog extends StatefulWidget {
   final dynamic member;
   const _DeleteDialog({required this.member});
 
   @override
+  State<_DeleteDialog> createState() => _DeleteDialogState();
+}
+
+class _DeleteDialogState extends State<_DeleteDialog> {
+  final _passwordCtrl = TextEditingController();
+  bool _obscure = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final member = widget.member;
     final fullname = member['fullname'] ?? '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}';
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -798,13 +816,46 @@ class _DeleteDialog extends StatelessWidget {
           Text('Member ID: ${member['member_id'] ?? ''}', style: const TextStyle(fontSize: 11, color: _MMColors.sub, fontFamily: 'monospace')),
           const SizedBox(height: 4),
           const Text('This action cannot be undone.', style: TextStyle(fontSize: 11, color: _MMColors.red, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          // ── BAGO: kailangan ng sariling password bago matuloy — para
+          // hindi basta-basta sinuman ang makakapag-delete ────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(8)),
+            child: const Text('Para sa seguridad, i-type ang sarili mong password para kumpirmahin.', style: TextStyle(fontSize: 10.5, color: Color(0xFFE65100))),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _passwordCtrl,
+            obscureText: _obscure,
+            autofocus: true,
+            onChanged: (_) => setState(() => _error = null),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Your password',
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              errorText: _error,
+              suffixIcon: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, size: 18),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+          ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: _MMColors.red, foregroundColor: Colors.white),
-          onPressed: () => Navigator.pop(context, true),
+          onPressed: () {
+            if (_passwordCtrl.text.trim().isEmpty) {
+              setState(() => _error = 'Required');
+              return;
+            }
+            Navigator.pop(context, _passwordCtrl.text);
+          },
           child: const Text('Yes, Delete'),
         ),
       ],

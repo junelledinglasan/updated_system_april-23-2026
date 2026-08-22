@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/member_provider.dart';
 import '../admin_drawer.dart';
+import '../../screens/admin/admin_settings_screen.dart';
 
 class _ScaffoldColors {
   static const pageBg   = Color(0xFFD8E8CC);
@@ -107,6 +108,10 @@ class AdminScreenScaffold extends StatelessWidget {
             offset: const Offset(0, 44),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) async {
+              if (value == 'settings') {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminSettingsScreen()));
+                return;
+              }
               if (value == 'logout') {
                 await context.read<AuthProvider>().logout();
                 context.read<MemberProvider>().reset();
@@ -130,6 +135,16 @@ class AdminScreenScaffold extends StatelessWidget {
                 child: Text('Admin', style: TextStyle(fontSize: 11, color: Color(0xFF9A9070))),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined, size: 16, color: Color(0xFF555555)),
+                    SizedBox(width: 8),
+                    Text('Settings', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(

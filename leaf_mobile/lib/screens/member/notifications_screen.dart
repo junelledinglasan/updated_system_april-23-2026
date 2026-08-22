@@ -34,11 +34,12 @@ const Map<String, _NotifMeta> _typeMeta = {
   'gcash':      _NotifMeta(Icons.smartphone, 'GCash Payment', Color(0xFFE3F2FD), Color(0xFF90CAF9), Color(0xFF007BFF)),
   'payment':    _NotifMeta(Icons.credit_card, 'Payment Recorded', Color(0xFFE8F5E9), Color(0xFFA5D6A7), Color(0xFF2E7D32)),
   'savings':    _NotifMeta(Icons.savings_outlined, 'Savings', Color(0xFFFFF8E1), Color(0xFFFFE082), Color(0xFFE65100)),
+  'sharecap':   _NotifMeta(Icons.account_balance_wallet_outlined, 'Share Capital', Color(0xFFF3E5F5), Color(0xFFCE93D8), Color(0xFF6A1B9A)),
   'loan':       _NotifMeta(Icons.description_outlined, 'Loan', Color(0xFFE3F2FD), Color(0xFF90CAF9), Color(0xFF1565C0)),
   'completed':  _NotifMeta(Icons.done_all, 'Loan Completed', Color(0xFFE3F2FD), Color(0xFF90CAF9), Color(0xFF1565C0)),
 };
 
-const List<String> _filters = ['All', 'Unread', 'Loans', 'Payments', 'GCash', 'Savings', 'Announcements', 'Membership', 'System'];
+const List<String> _filters = ['All', 'Unread', 'Loans', 'Payments', 'GCash', 'Savings', 'Share Capital', 'Announcements', 'Membership', 'System'];
 const String _storageKey = 'leaf_read_notifs';
 
 class NotifItem {
@@ -50,7 +51,11 @@ class NotifItem {
   bool read;
   final String? route;
   final String? actionLabel;
-  NotifItem({required this.id, required this.type, required this.title, required this.msg, this.date, required this.read, this.route, this.actionLabel});
+  // ── BAGO: structured content para sa mas maayos na detail view ──────────
+  final List<String>? requirements;
+  final String? highlight;
+  final List<List<String>>? details; // [[key, value], ...]
+  NotifItem({required this.id, required this.type, required this.title, required this.msg, this.date, required this.read, this.route, this.actionLabel, this.requirements, this.highlight, this.details});
 
   String get timeAgo {
     if (date == null) return '';
@@ -134,7 +139,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           hasApplication = true;
           built.add(NotifItem(
             id: 'membership-approved', type: 'membership', title: 'Membership Application Approved',
-            msg: "Congratulations! Your application (${app['app_id']}) has been approved! Please visit the LEAF MPC office to complete your membership. Requirements to bring: (1) 2 pieces 2x2 ID picture, white background (2) Photocopy of Birth Certificate (3) Photocopy of Marriage Certificate, if married (4) Valid Government-issued ID (5) Initial Share Capital Payment, minimum ₱4,000. Office hours: Mon–Fri, 8:00 AM – 5:00 PM.",
+            msg: "Congratulations! Your application (${app['app_id']}) has been approved! Please visit the LEAF MPC office to complete your membership.",
+            requirements: const [
+              '2 pieces 2x2 ID picture, white background',
+              'Photocopy of Birth Certificate (PSA copy preferred)',
+              'Photocopy of Marriage Certificate — if married, optional',
+              'Valid Government-issued ID',
+              'Initial Share Capital Payment, minimum ₱4,000',
+            ],
+            highlight: 'Office Hours: Mon–Fri, 8:00 AM – 5:00 PM · LEAF MPC Office, Lucban, Quezon',
             date: _parseDate(app['reviewed_at'] ?? app['created_at']), read: false, route: 'apply-membership', actionLabel: 'View Requirements',
           ));
         } else if (status == 'Rejected') {
@@ -218,8 +231,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final txs = (savings['transactions'] as List?) ?? [];
           for (final tx in txs.take(3)) {
             final amt = double.tryParse('${tx['amount'] ?? 0}') ?? 0;
-            built.add(NotifItem(id: 'savings-${tx['id']}', type: 'savings', title: 'Savings ${tx['transaction_type']} — ₱${amt.toStringAsFixed(0)}', msg: "A ${'${tx['transaction_type']}'.toLowerCase()} of ₱${amt.toStringAsFixed(0)} was recorded to your savings.${tx['note'] != null ? ' Note: ${tx['note']}' : ''} New balance: ₱${(double.tryParse('${tx['balance_after'] ?? 0}') ?? 0).toStringAsFixed(0)}.", date: _parseDate(tx['created_at']), read: true, route: 'dashboard', actionLabel: 'View Dashboard'));
+            final bal = double.tryParse('${tx['balance_after'] ?? 0}') ?? 0;
+            built.add(NotifItem(
+              id: 'savings-${tx['id']}', type: 'savings',
+              title: 'Savings ${tx['transaction_type']} — ₱${amt.toStringAsFixed(0)}',
+              msg: "A ${'${tx['transaction_type']}'.toLowerCase()} was recorded to your savings account.",
+              details: [
+                ['Amount', '₱${amt.toStringAsFixed(0)}'],
+                ['New Balance', '₱${bal.toStringAsFixed(0)}'],
+                if (tx['note'] != null && '${tx['note']}'.isNotEmpty) ['Note', '${tx['note']}'],
+              ],
+              date: _parseDate(tx['created_at']), read: true, route: 'dashboard', actionLabel: 'View Dashboard',
+            ));
           }
+
+          // ── 8. SHARE CAPITAL — BAGO ──────────────────────────────────
+          try {
+            final scHistory = await MembersService.getShareCapitalHistory(myId is int ? myId : int.tryParse('$myId') ?? 0);
+            for (final t in (scHistory as List).take(3)) {
+              final amt = double.tryParse('${t['amount'] ?? 0}') ?? 0;
+              final bal = double.tryParse('${t['balance_after'] ?? 0}') ?? 0;
+              final txnType = '${t['txn_type'] ?? 'Deposit'}';
+              built.add(NotifItem(
+                id: 'sharecap-${t['id']}', type: 'sharecap',
+                title: 'Share Capital $txnType — ₱${amt.toStringAsFixed(0)}',
+                msg: "A ${txnType.toLowerCase()} was recorded to your share capital.",
+                details: [
+                  ['Amount', '₱${amt.toStringAsFixed(0)}'],
+                  ['New Balance', '₱${bal.toStringAsFixed(0)}'],
+                  ['Max Loanable', '₱${(bal * 2).toStringAsFixed(0)}'],
+                  if (t['note'] != null && '${t['note']}'.isNotEmpty) ['Note', '${t['note']}'],
+                ],
+                date: _parseDate(t['created_at']), read: true, route: 'dashboard', actionLabel: 'View Dashboard',
+              ));
+            }
+          } catch (_) {}
         }
       } catch (_) {}
     }
@@ -274,62 +320,178 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(width: 48, height: 48, decoration: BoxDecoration(color: meta.bg, borderRadius: BorderRadius.circular(12)), child: Icon(meta.icon, color: meta.text, size: 22)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3), decoration: BoxDecoration(color: meta.bg, borderRadius: BorderRadius.circular(20), border: Border.all(color: meta.border)), child: Text(meta.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: meta.text))),
-                      const SizedBox(height: 4),
-                      Text(n.timeAgo, style: const TextStyle(fontSize: 11, color: _NFColors.sub)),
-                    ],
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Drag handle ──
+                  Center(
+                    child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 18), decoration: BoxDecoration(color: const Color(0xFFE0E0E0), borderRadius: BorderRadius.circular(10))),
                   ),
-                ),
-                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
-              ]),
-              const SizedBox(height: 16),
-              Text(n.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
-              const SizedBox(height: 8),
-              Text(n.msg, style: const TextStyle(fontSize: 13, color: Color(0xFF555555), height: 1.6)),
-              const SizedBox(height: 20),
-              Row(children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))),
-                if (n.route != null) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        if (n.route == 'my-loans') {
-                          Navigator.pushReplacementNamed(context, '/member/my-loans');
-                        } else if (n.route == 'dashboard') {
-                          Navigator.pushReplacementNamed(context, '/member/dashboard');
-                        } else if (n.route == 'apply-membership') {
-                          Navigator.pushReplacementNamed(context, '/member/apply-membership');
-                        } else if (n.route == 'announcements') {
-                          Navigator.pushReplacementNamed(context, '/member/announcements');
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"${n.route}" screen — coming soon.')));
-                        }
-                      },
-                      child: Text('${n.actionLabel ?? "View Details"} →'),
+
+                  // ── Icon + badge + close ──
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(color: meta.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: meta.border)),
+                      child: Icon(meta.icon, color: meta.text, size: 24),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: meta.bg, borderRadius: BorderRadius.circular(20), border: Border.all(color: meta.border)),
+                            child: Text(meta.label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: meta.text)),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            const Icon(Icons.access_time_rounded, size: 12, color: _NFColors.sub),
+                            const SizedBox(width: 4),
+                            Text(n.timeAgo, style: const TextStyle(fontSize: 11.5, color: _NFColors.sub, fontWeight: FontWeight.w500)),
+                          ]),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFFF5F5F5), shape: BoxShape.circle), child: const Icon(Icons.close, size: 16, color: Color(0xFF888888))),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 20),
+
+                  // ── Title ──
+                  Text(n.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A), height: 1.3)),
+
+                  const SizedBox(height: 14),
+
+                  // ── Message card ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: const Color(0xFFFAFAFA), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF0F0F0))),
+                    child: Text(n.msg, style: const TextStyle(fontSize: 13.5, color: Color(0xFF4A4A4A), height: 1.7)),
                   ),
+
+                  // ── BAGO: Requirements checklist ──
+                  if (n.requirements != null && n.requirements!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: const Color(0xFFF9FEF9), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0EEE0))),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('REQUIREMENTS TO BRING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _NFColors.dark, letterSpacing: 0.4)),
+                          const SizedBox(height: 8),
+                          ...n.requirements!.map((r) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 5),
+                                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Container(width: 17, height: 17, margin: const EdgeInsets.only(top: 1), decoration: const BoxDecoration(color: Color(0xFF2E7D32), shape: BoxShape.circle), child: const Icon(Icons.check, size: 11, color: Colors.white)),
+                                  const SizedBox(width: 9),
+                                  Expanded(child: Text(r, style: const TextStyle(fontSize: 12.5, color: Color(0xFF444444), height: 1.4))),
+                                ]),
+                              )),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── BAGO: Highlight box (office hours, location, atbp.) ──
+                  if (n.highlight != null && n.highlight!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFBBDEFB))),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF1565C0)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(n.highlight!, style: const TextStyle(fontSize: 12, color: Color(0xFF1565C0), fontWeight: FontWeight.w600, height: 1.5))),
+                      ]),
+                    ),
+                  ],
+
+                  // ── BAGO: Key-value details table ──
+                  if (n.details != null && n.details!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(color: const Color(0xFFFAFAFA), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFF0F0F0))),
+                      child: Column(
+                        children: n.details!.map((kv) {
+                          final isLast = kv == n.details!.last;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            decoration: BoxDecoration(border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFEEEEEE)))),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                              Text(kv[0], style: const TextStyle(fontSize: 11.5, color: Color(0xFF888888), fontWeight: FontWeight.w600)),
+                              Text(kv[1], style: const TextStyle(fontSize: 12.5, color: Color(0xFF222222), fontWeight: FontWeight.w700)),
+                            ]),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // ── Actions ──
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 13), side: const BorderSide(color: Color(0xFFE0E0E0)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close', style: TextStyle(color: Color(0xFF555555), fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    if (n.route != null) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            if (n.route == 'my-loans') {
+                              Navigator.pushReplacementNamed(context, '/member/my-loans');
+                            } else if (n.route == 'dashboard') {
+                              Navigator.pushReplacementNamed(context, '/member/dashboard');
+                            } else if (n.route == 'apply-membership') {
+                              Navigator.pushReplacementNamed(context, '/member/apply-membership');
+                            } else if (n.route == 'announcements') {
+                              Navigator.pushReplacementNamed(context, '/member/announcements');
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"${n.route}" screen — coming soon.')));
+                            }
+                          },
+                          child: Text('${n.actionLabel ?? "View Details"}  →', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  ]),
                 ],
-              ]),
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -345,6 +507,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         case 'Payments': return n.type == 'payment';
         case 'GCash': return n.type == 'gcash';
         case 'Savings': return n.type == 'savings';
+        case 'Share Capital': return n.type == 'sharecap';
         case 'Announcements': return n.type == 'notice';
         case 'Membership': return ['membership', 'rejected'].contains(n.type);
         case 'System': return n.type == 'system';

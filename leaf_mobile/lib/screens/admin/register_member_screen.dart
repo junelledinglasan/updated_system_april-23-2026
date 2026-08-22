@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/members_service.dart';
+import '../../widgets/ph_address_picker.dart';
 
 class _RMColors {
   static const green  = Color(0xFF2E7D32);
@@ -32,6 +33,7 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
     'contact_number': '', 'email': '', 'address': '',
     'occupation': '', 'income': '', 'tin_no': '', 'sss_gsis_no': '',
     'religious_social_affiliation': '', 'share_capital': '',
+    'sex_other': '',
     'birth_certificate': false, 'marriage_certificate': false,
     // Spouse & Family
     'spouse_name': '', 'spouse_occupation': '', 'spouse_income': '',
@@ -58,8 +60,15 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
     if ('${_form['first_name']}'.trim().isEmpty) e['first_name'] = 'Required';
     if ('${_form['last_name']}'.trim().isEmpty) e['last_name'] = 'Required';
     if ('${_form['birth_date']}'.trim().isEmpty) e['birth_date'] = 'Required';
+    if ('${_form['place_of_birth']}'.trim().isEmpty) e['place_of_birth'] = 'Required';
+    if (_form['sex'] == 'Other' && '${_form['sex_other']}'.trim().isEmpty) e['sex_other'] = 'Please specify';
+    if ('${_form['religious_social_affiliation']}'.trim().isEmpty) e['religious_social_affiliation'] = 'Required';
     if ('${_form['contact_number']}'.trim().isEmpty) e['contact_number'] = 'Required';
-    if ('${_form['address']}'.trim().isEmpty) e['address'] = 'Required';
+    if ('${_form['email']}'.trim().isEmpty) e['email'] = 'Required';
+    if ('${_form['address']}'.trim().isEmpty) e['address'] = 'Please complete the address dropdowns above.';
+    if ('${_form['occupation']}'.trim().isEmpty) e['occupation'] = 'Required';
+    if ('${_form['income']}'.trim().isEmpty) e['income'] = 'Required';
+    if ('${_form['share_capital']}'.trim().isEmpty) e['share_capital'] = 'Required';
     if (_form['classification'] == 'Student') {
       if ('${_form['school_name']}'.trim().isEmpty) e['school_name'] = 'Required';
       if ('${_form['year_level']}'.trim().isEmpty) e['year_level'] = 'Required';
@@ -80,7 +89,7 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
       setState(() => _errors
         ..clear()
         ..addAll(errs));
-      final personalFields = ['first_name', 'last_name', 'birth_date', 'contact_number', 'address'];
+      final personalFields = ['first_name', 'last_name', 'birth_date', 'place_of_birth', 'sex_other', 'religious_social_affiliation', 'contact_number', 'email', 'address', 'occupation', 'income', 'share_capital'];
       final classFields = ['school_name', 'year_level'];
       if (personalFields.any(errs.containsKey)) {
         setState(() => _tabIndex = 0);
@@ -97,7 +106,7 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
         'middle_name': _form['middle_name'],
         'birth_date': _form['birth_date'],
         'place_of_birth': _form['place_of_birth'],
-        'sex': _form['sex'],
+        'sex': _form['sex'] == 'Other' ? _form['sex_other'] : _form['sex'],
         'civil_status': _form['civil_status'],
         'educational_attainment': _form['educational_attainment'],
         'contact_number': _form['contact_number'],
@@ -172,10 +181,11 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _RMColors.green, width: 1.5)),
       );
 
-  Widget _textField(String key, String label, {bool required = false, TextInputType? type, bool full = false}) {
+  Widget _textField(String key, String label, {bool required = false, bool optional = false, TextInputType? type, bool full = false}) {
     return _FieldBox(
       label: label,
       required: required,
+      optional: optional,
       full: full,
       child: TextField(
         controller: _ctrl(key),
@@ -291,11 +301,12 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
         spacing: 10,
         runSpacing: 10,
         children: [
-          const _SectionHeader(icon: Icons.badge_outlined, label: 'PERSONAL DETAILS'),
+          const _SectionHeader(icon: Icons.badge_outlined, label: 'FULL NAME'),
           _textField('last_name', 'Surname', required: true),
           _textField('first_name', 'First Name', required: true),
-          _textField('middle_name', 'Middle Name'),
-          _textField('address', 'Address', required: true, full: true),
+          _textField('middle_name', 'Middle Name', optional: true),
+
+          const _SectionHeader(icon: Icons.cake_outlined, label: 'BIRTH INFORMATION'),
           _FieldBox(
             label: 'Date of Birth',
             required: true,
@@ -307,19 +318,39 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
               ),
             ),
           ),
-          _textField('place_of_birth', 'Place of Birth'),
-          _selectField('sex', 'Sex', const ['Male', 'Female']),
+          _textField('place_of_birth', 'Place of Birth', required: true),
+
+          const _SectionHeader(icon: Icons.person_outline, label: 'PERSONAL DETAILS'),
+          _selectField('sex', 'Sex', const ['Male', 'Female', 'Non-binary', 'Prefer not to say', 'Other']),
+          if (_form['sex'] == 'Other')
+            _textField('sex_other', 'Please specify', required: true),
           _selectField('civil_status', 'Civil Status', const ['Single', 'Married', 'Widowed', 'Separated']),
-          _textField('tin_no', 'TIN No.'),
-          _textField('sss_gsis_no', 'SSS/GSIS No.'),
-          _textField('occupation', 'Occupation'),
-          _textField('income', 'Monthly Income (₱)', type: TextInputType.number),
-          _textField('contact_number', 'Tel. No. / CP No.', required: true, type: TextInputType.phone),
-          _textField('email', 'Email Address', type: TextInputType.emailAddress),
           _selectField('educational_attainment', 'Educational Attainment', const ['Elementary', 'High School', 'Vocational', 'College', 'Post Graduate']),
-          _textField('religious_social_affiliation', 'Religious/Social Affiliation'),
+          _textField('religious_social_affiliation', 'Religious/Social Affiliation', required: true),
+          _textField('tin_no', 'TIN No.', optional: true),
+          _textField('sss_gsis_no', 'SSS/GSIS No.', optional: true),
+
+          const _SectionHeader(icon: Icons.location_on_outlined, label: 'ADDRESS'),
+          PhAddressPicker(
+            errorRegion: _errors['address'],
+            onAddressChanged: (addr) => setState(() {
+              _form['address'] = addr;
+              _errors.remove('address');
+            }),
+          ),
+
+          const _SectionHeader(icon: Icons.call_outlined, label: 'CONTACT INFORMATION'),
+          _textField('contact_number', 'Tel. No. / CP No.', required: true, type: TextInputType.phone),
+          _textField('email', 'Email Address', required: true, type: TextInputType.emailAddress),
+
+          const _SectionHeader(icon: Icons.work_outline, label: 'EMPLOYMENT'),
+          _textField('occupation', 'Occupation', required: true),
+          _textField('income', 'Monthly Income (₱)', required: true, type: TextInputType.number),
+
+          const _SectionHeader(icon: Icons.payments_outlined, label: 'MEMBERSHIP PAYMENT'),
           _FieldBox(
             label: 'Amount Paid for Membership (₱)',
+            required: true,
             child: TextField(
               controller: _ctrl('share_capital'),
               keyboardType: TextInputType.number,
@@ -532,8 +563,9 @@ class _FieldBox extends StatelessWidget {
   final String label;
   final Widget child;
   final bool required;
+  final bool optional;
   final bool full;
-  const _FieldBox({required this.label, required this.child, this.required = false, this.full = false});
+  const _FieldBox({required this.label, required this.child, this.required = false, this.optional = false, this.full = false});
 
   @override
   Widget build(BuildContext context) {
@@ -547,6 +579,7 @@ class _FieldBox extends StatelessWidget {
           Text.rich(
             TextSpan(text: label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _RMColors.label), children: [
               if (required) const TextSpan(text: ' *', style: TextStyle(color: _RMColors.red)),
+              if (optional) const TextSpan(text: ' (optional)', style: TextStyle(fontSize: 10, color: Color(0xFFAAAAAA), fontStyle: FontStyle.italic, fontWeight: FontWeight.w500)),
             ]),
           ),
           const SizedBox(height: 4),

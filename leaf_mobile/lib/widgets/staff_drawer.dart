@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/member_provider.dart';
+import '../services/settings_service.dart';
 
 // Colors matched sa StaffLayout.css
 class _SLColors {
@@ -17,32 +18,24 @@ class StaffNavItem {
   final IconData icon;
   final String label;
   final String routeKey;
-  const StaffNavItem({required this.icon, required this.label, required this.routeKey});
+  final String? featureKey; // null = "Home", laging kasama
+  const StaffNavItem({required this.icon, required this.label, required this.routeKey, this.featureKey});
 }
 
-// ── Nav items per staff role — parehong logic sa NAV_BY_ROLE sa web ────────
-const Map<String, List<StaffNavItem>> kStaffNavByRole = {
-  'cashier': [
-    StaffNavItem(icon: Icons.home_outlined, label: 'Home', routeKey: 'home'),
-    StaffNavItem(icon: Icons.credit_card_outlined, label: 'Loan Payment', routeKey: 'loan-payment'),
-  ],
-  'collector': [
-    StaffNavItem(icon: Icons.home_outlined, label: 'Home', routeKey: 'home'),
-    StaffNavItem(icon: Icons.credit_card_outlined, label: 'Loan Payment', routeKey: 'loan-payment'),
-  ],
-  'bookkeeper': [
-    StaffNavItem(icon: Icons.home_outlined, label: 'Home', routeKey: 'home'),
-    StaffNavItem(icon: Icons.bar_chart_outlined, label: 'Reports', routeKey: 'reports'),
-  ],
-  'admin_clerk': [
-    StaffNavItem(icon: Icons.home_outlined, label: 'Home', routeKey: 'home'),
-    StaffNavItem(icon: Icons.people_outline, label: 'Manage Members', routeKey: 'members'),
-    StaffNavItem(icon: Icons.checklist_outlined, label: 'Loan Approval', routeKey: 'loan-approval'),
-    StaffNavItem(icon: Icons.description_outlined, label: 'Online Application', routeKey: 'applications'),
-    StaffNavItem(icon: Icons.bar_chart_outlined, label: 'Reports', routeKey: 'reports'),
-    StaffNavItem(icon: Icons.campaign_outlined, label: 'Announcement', routeKey: 'announcement'),
-  ],
-};
+// ── Master list ng LAHAT ng possible staff nav items — ang "featureKey"
+// ay tinutugma sa AVAILABLE_FEATURES sa backend (settings_app). "Home"
+// ay laging kasama, hindi na kailangan i-toggle. Dating naka-hardcode
+// ito bilang NAV_BY_ROLE (per staff_role), ngayon dynamic na base sa
+// Staff Feature Permissions na na-set ng Admin sa Settings. ──────────
+const List<StaffNavItem> kAllStaffNav = [
+  StaffNavItem(icon: Icons.home_outlined, label: 'Home', routeKey: 'home', featureKey: null),
+  StaffNavItem(icon: Icons.people_outline, label: 'Manage Members', routeKey: 'members', featureKey: 'members'),
+  StaffNavItem(icon: Icons.description_outlined, label: 'Online Application', routeKey: 'applications', featureKey: 'applications'),
+  StaffNavItem(icon: Icons.credit_card_outlined, label: 'Loan Payment', routeKey: 'loan-payment', featureKey: 'loan-payment'),
+  StaffNavItem(icon: Icons.checklist_outlined, label: 'Loan Approval', routeKey: 'loan-approval', featureKey: 'loan-approval'),
+  StaffNavItem(icon: Icons.campaign_outlined, label: 'Announcement', routeKey: 'announcement', featureKey: 'announcement'),
+  StaffNavItem(icon: Icons.bar_chart_outlined, label: 'Reports', routeKey: 'reports', featureKey: 'reports'),
+];
 
 const Map<String, String> kStaffRoleLabels = {
   'cashier': 'Cashier',
@@ -51,17 +44,45 @@ const Map<String, String> kStaffRoleLabels = {
   'admin_clerk': 'Administrative Clerk',
 };
 
-class StaffDrawer extends StatelessWidget {
+class StaffDrawer extends StatefulWidget {
   final String activeRouteKey;
   final void Function(String routeKey) onNavTap;
 
   const StaffDrawer({super.key, required this.activeRouteKey, required this.onNavTap});
 
   @override
+  State<StaffDrawer> createState() => _StaffDrawerState();
+}
+
+class _StaffDrawerState extends State<StaffDrawer> {
+  List<String>? _allowedFeatures; // null = loading pa
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPermissions());
+  }
+
+  Future<void> _loadPermissions() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.id == null) return;
+    try {
+      final features = await SettingsService.getStaffPermissions(auth.id!);
+      if (mounted) setState(() => _allowedFeatures = features);
+    } catch (_) {
+      if (mounted) setState(() => _allowedFeatures = []);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final staffRole = auth.staffRole ?? '';
-    final navItems = kStaffNavByRole[staffRole] ?? [];
+    // Habang naglo-load, "Home" muna ang ipapakita; pagkatapos, i-filter
+    // ang master list base sa AllowedFeatures mula sa Settings.
+    final navItems = _allowedFeatures == null
+        ? [kAllStaffNav.first]
+        : kAllStaffNav.where((item) => item.featureKey == null || _allowedFeatures!.contains(item.featureKey)).toList();
+
     final now = DateTime.now();
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     const mons = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -78,22 +99,38 @@ class StaffDrawer extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 15, 16, 13),
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _SLColors.border))),
               alignment: Alignment.center,
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 40,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.eco, color: _SLColors.green, size: 28),
-                  SizedBox(width: 8),
-                  Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _SLColors.dark)),
-                ]),
+              child: FutureBuilder<String?>(
+                future: SettingsService.getLogoUrl(),
+                builder: (context, snapshot) {
+                  final customUrl = snapshot.data;
+                  if (customUrl != null && customUrl.isNotEmpty) {
+                    return Image.network(
+                      customUrl,
+                      height: 40,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Image.asset('assets/images/logo.png', height: 40, fit: BoxFit.contain),
+                    );
+                  }
+                  return Image.asset(
+                    'assets/images/logo.png',
+                    height: 40,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.eco, color: _SLColors.green, size: 28),
+                      SizedBox(width: 8),
+                      Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _SLColors.dark)),
+                    ]),
+                  );
+                },
               ),
             ),
+            if (_allowedFeatures == null)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                 children: navItems.map((item) {
-                  final isActive = item.routeKey == activeRouteKey;
+                  final isActive = item.routeKey == widget.activeRouteKey;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 2),
                     child: Material(
@@ -101,7 +138,7 @@ class StaffDrawer extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: () { Navigator.pop(context); onNavTap(item.routeKey); },
+                        onTap: () { Navigator.pop(context); widget.onNavTap(item.routeKey); },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           child: Row(children: [

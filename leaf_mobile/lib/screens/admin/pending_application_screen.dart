@@ -147,16 +147,91 @@ class _PendingApplicationScreenState extends State<PendingApplicationScreen> {
               spacing: 12,
               runSpacing: 10,
               children: [
+                _InfoField('Middle Name', app['middle_name']),
                 _InfoField('Birthdate', app['birth_date']),
+                _InfoField('Place of Birth', app['place_of_birth']),
+                _InfoField('Sex', app['sex']),
                 _InfoField('Civil Status', app['civil_status']),
-                _InfoField('Contact', app['contact_number']),
+                _InfoField('TIN No.', app['tin_no']),
+                _InfoField('SSS/GSIS No.', app['sss_gsis_no']),
+                _InfoField('Educational Attainment', app['educational_attainment']),
+                _InfoField('Contact No.', app['contact_number']),
                 _InfoField('Email', app['email']),
                 _InfoField('Occupation', app['occupation']),
+                _InfoField('Monthly Income (₱)', app['income'] != null && '${app['income']}'.isNotEmpty ? '₱${double.tryParse('${app['income']}')?.toStringAsFixed(0) ?? app['income']}' : null),
                 _InfoField('Classification', app['classification']),
+                _InfoField('Religious/Social Affiliation', app['religious_social_affiliation']),
               ],
             ),
             const SizedBox(height: 10),
             _InfoField('Address', app['address'], full: true),
+
+            if (('${app['spouse_name'] ?? ''}'.isNotEmpty) || ('${app['beneficiary_name'] ?? ''}'.isNotEmpty)) ...[
+              const SizedBox(height: 18),
+              const Text('SPOUSE & FAMILY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _PAColors.sub, letterSpacing: 0.6)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                children: [
+                  _InfoField('Spouse Name', app['spouse_name']),
+                  _InfoField('Spouse Occupation', app['spouse_occupation']),
+                  _InfoField('Spouse Income (₱)', app['spouse_income']),
+                  _InfoField('No. of Dependants', app['no_of_dependants']),
+                  _InfoField('Beneficiary', app['beneficiary_name']),
+                  _InfoField('Relationship', app['beneficiary_relationship']),
+                ],
+              ),
+              if ('${app['credit_references'] ?? ''}'.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _InfoField('Credit References', app['credit_references'], full: true),
+              ],
+            ],
+
+            const SizedBox(height: 18),
+            const Text('DOCUMENTS SUBMITTED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _PAColors.sub, letterSpacing: 0.6)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                _InfoField('Birth Certificate', app['birth_certificate'] == true ? '✅ Submitted' : '❌ Not submitted'),
+                _InfoField('Marriage Certificate', app['marriage_certificate'] == true ? '✅ Submitted' : '❌ Not submitted'),
+              ],
+            ),
+
+            if (('${app['id_front_url'] ?? ''}'.isNotEmpty) || ('${app['id_back_url'] ?? ''}'.isNotEmpty)) ...[
+              const SizedBox(height: 18),
+              const Text('VALID ID', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _PAColors.sub, letterSpacing: 0.6)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if ('${app['id_front_url'] ?? ''}'.isNotEmpty)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Front', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _PAColors.sub)),
+                          const SizedBox(height: 6),
+                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(app['id_front_url'], height: 140, width: double.infinity, fit: BoxFit.cover)),
+                        ],
+                      ),
+                    ),
+                  if (('${app['id_front_url'] ?? ''}'.isNotEmpty) && ('${app['id_back_url'] ?? ''}'.isNotEmpty)) const SizedBox(width: 10),
+                  if ('${app['id_back_url'] ?? ''}'.isNotEmpty)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Back', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _PAColors.sub)),
+                          const SizedBox(height: 6),
+                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(app['id_back_url'], height: 140, width: double.infinity, fit: BoxFit.cover)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

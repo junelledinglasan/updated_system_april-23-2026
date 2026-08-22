@@ -10,7 +10,7 @@
 // I-copy yung parehong values dito sa ibaba.
 
 class SupabaseConfig {
-  static const String url = ''; // hal. https://xxxxx.supabase.co
-  static const String anonKey = '';
-  static const String bucket = ''; // katulad ng ginamit sa web
+  static const String url = 'https://vmicqkrguocawwntvizm.supabase.co'; // hal. https://xxxxx.supabase.co
+  static const String anonKey = 'sb_publishable_4QMHgheOqvWrQbAJYzdCEQ_Ky3gqwh9';
+  static const String bucket = 'member-documents'; // katulad ng ginamit sa web
 }

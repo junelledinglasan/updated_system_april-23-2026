@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/member_provider.dart';
+import '../services/settings_service.dart';
 
 // ─── Colors matched to AdminLayout.css ───────────────────────────────────────
 class _AdminColors {
@@ -93,17 +94,31 @@ class _AdminDrawerState extends State<AdminDrawer> {
               decoration: const BoxDecoration(
                 border: Border(bottom: BorderSide(color: _AdminColors.sidebarBorder)),
               ),
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 40,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Row(
-                  children: [
-                    Icon(Icons.eco, color: Color(0xFF2E7D32), size: 28),
-                    SizedBox(width: 8),
-                    Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                  ],
-                ),
+              child: FutureBuilder<String?>(
+                future: SettingsService.getLogoUrl(),
+                builder: (context, snapshot) {
+                  final customUrl = snapshot.data;
+                  if (customUrl != null && customUrl.isNotEmpty) {
+                    return Image.network(
+                      customUrl,
+                      height: 40,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Image.asset('assets/images/logo.png', height: 40, fit: BoxFit.contain),
+                    );
+                  }
+                  return Image.asset(
+                    'assets/images/logo.png',
+                    height: 40,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Row(
+                      children: [
+                        Icon(Icons.eco, color: Color(0xFF2E7D32), size: 28),
+                        SizedBox(width: 8),
+                        Text('LEAF MPC', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
 

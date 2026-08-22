@@ -6,6 +6,7 @@ import '../../providers/member_provider.dart';
 import '../../services/members_service.dart';
 import '../../services/supabase_storage_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
+import '../../widgets/ph_address_picker.dart';
 
 class _AMColors {
   static const green  = Color(0xFF2E7D32);
@@ -35,7 +36,7 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
 
   final Map<String, dynamic> _form = {
     'first_name': '', 'last_name': '', 'middle_name': '',
-    'birth_date': '', 'place_of_birth': '', 'sex': 'Male',
+    'birth_date': '', 'place_of_birth': '', 'sex': '', 'sex_other': '',
     'civil_status': 'Single', 'educational_attainment': '',
     'contact_number': '', 'email': '', 'address': '',
     'occupation': '', 'income': '', 'tin_no': '', 'sss_gsis_no': '',
@@ -126,8 +127,16 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
     if ('${_form['first_name']}'.trim().isEmpty) e['first_name'] = 'Required';
     if ('${_form['last_name']}'.trim().isEmpty) e['last_name'] = 'Required';
     if ('${_form['birth_date']}'.trim().isEmpty) e['birth_date'] = 'Required';
+    if ('${_form['place_of_birth']}'.trim().isEmpty) e['place_of_birth'] = 'Required';
+    if ('${_form['sex']}'.trim().isEmpty) e['sex'] = 'Required';
     if ('${_form['contact_number']}'.trim().isEmpty) e['contact_number'] = 'Required';
-    if ('${_form['address']}'.trim().isEmpty) e['address'] = 'Required';
+    if ('${_form['email']}'.trim().isEmpty) {
+      e['email'] = 'Required';
+    } else if (!RegExp(r'^\S+@\S+\.\S+$').hasMatch('${_form['email']}'.trim())) {
+      e['email'] = 'Please enter a valid email address.';
+    }
+    if ('${_form['address']}'.trim().isEmpty) e['address'] = 'Please complete the address dropdowns above.';
+    if (_form['sex'] == 'Other' && '${_form['sex_other']}'.trim().isEmpty) e['sex_other'] = 'Please specify';
     if ('${_form['occupation']}'.trim().isEmpty) e['occupation'] = 'Required';
     if (_form['classification'] == 'Student') {
       if ('${_form['school_name']}'.trim().isEmpty) e['school_name'] = 'Required';
@@ -143,7 +152,7 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
     final errs = _validate();
     if (errs.isNotEmpty) {
       setState(() => _errors..clear()..addAll(errs));
-      const personalFields = ['first_name', 'last_name', 'birth_date', 'contact_number', 'address', 'occupation'];
+      const personalFields = ['first_name', 'last_name', 'birth_date', 'place_of_birth', 'sex', 'sex_other', 'contact_number', 'email', 'address', 'occupation'];
       const classFields = ['school_name', 'year_level'];
       const idFields = ['id_front', 'id_back'];
       if (personalFields.any(errs.containsKey)) {
@@ -167,7 +176,7 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
 
       await MembersService.submitApplication({
         'first_name': _form['first_name'], 'last_name': _form['last_name'], 'middle_name': _form['middle_name'],
-        'birth_date': _form['birth_date'], 'place_of_birth': _form['place_of_birth'], 'sex': _form['sex'],
+        'birth_date': _form['birth_date'], 'place_of_birth': _form['place_of_birth'], 'sex': _form['sex'] == 'Other' ? _form['sex_other'] : _form['sex'],
         'civil_status': _form['civil_status'], 'educational_attainment': _form['educational_attainment'],
         'contact_number': _form['contact_number'], 'email': _form['email'], 'address': _form['address'],
         'occupation': _form['occupation'], 'income': _form['income'].toString().isEmpty ? 0 : _form['income'],
@@ -217,14 +226,15 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
     );
   }
 
-  Widget _selectField(String key, String label, List<String> options, {bool full = false}) {
+  Widget _selectField(String key, String label, List<String> options, {bool full = false, bool required = false}) {
     return _FieldBox(
-      label: label, full: full,
+      label: label, full: full, required: required,
       child: DropdownButtonFormField<String>(
-        value: options.contains(_form[key]) ? _form[key] : options.first,
+        value: options.contains(_form[key]) ? _form[key] : null,
         items: options.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12.5)))).toList(),
-        onChanged: (v) => setState(() => _form[key] = v),
-        decoration: _dec(),
+        onChanged: (v) => setState(() { _form[key] = v; _errors.remove(key); }),
+        decoration: _dec(error: _errors[key]),
+        hint: const Text('Select...', style: TextStyle(fontSize: 12, color: Color(0xFFBBBBBB))),
       ),
     );
   }
@@ -438,20 +448,28 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
         _textField('last_name', 'Surname', required: true),
         _textField('first_name', 'First Name', required: true),
         _textField('middle_name', 'Middle Name'),
-        _textField('address', 'Address', required: true, full: true),
+        PhAddressPicker(
+          errorRegion: _errors['address'],
+          onAddressChanged: (addr) => setState(() {
+            _form['address'] = addr;
+            _errors.remove('address');
+          }),
+        ),
         _FieldBox(
           label: 'Date of Birth', required: true,
           child: InkWell(onTap: _pickDate, child: InputDecorator(decoration: _dec(error: _errors['birth_date']), child: Text('${_form['birth_date']}'.isEmpty ? 'Select date' : '${_form['birth_date']}', style: const TextStyle(fontSize: 12.5)))),
         ),
-        _textField('place_of_birth', 'Place of Birth'),
-        _selectField('sex', 'Sex', const ['Male', 'Female']),
+        _textField('place_of_birth', 'Place of Birth', required: true),
+        _selectField('sex', 'Sex', const ['Male', 'Female', 'Non-binary', 'Prefer not to say', 'Other'], required: true),
+        if (_form['sex'] == 'Other')
+          _textField('sex_other', 'Please specify', required: true),
         _selectField('civil_status', 'Civil Status', const ['Single', 'Married', 'Widowed', 'Separated']),
         _textField('tin_no', 'TIN No.'),
         _textField('sss_gsis_no', 'SSS/GSIS No.'),
         _textField('occupation', 'Occupation', required: true),
         _textField('income', 'Monthly Income (₱)', type: TextInputType.number),
         _textField('contact_number', 'Tel. No. / CP No.', required: true, type: TextInputType.phone),
-        _textField('email', 'Email Address', type: TextInputType.emailAddress),
+        _textField('email', 'Email Address', required: true, type: TextInputType.emailAddress),
         _selectField('educational_attainment', 'Educational Attainment', const ['Elementary', 'High School', 'Vocational', 'College', 'Post Graduate']),
         _textField('religious_social_affiliation', 'Religious/Social Affiliation'),
         SizedBox(

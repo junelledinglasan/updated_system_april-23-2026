@@ -151,12 +151,12 @@ class ApiClient {
   }
 
   // ── DELETE ─────────────────────────────────────────────────────────────────
-  static Future<dynamic> delete(String endpoint) async {
+  static Future<dynamic> delete(String endpoint, {Map<String, dynamic>? body}) async {
     final uri = Uri.parse('${AppConstants.baseUrl}$endpoint');
-    var res = await http.delete(uri, headers: await _headers());
+    var res = await http.delete(uri, headers: await _headers(), body: body != null ? jsonEncode(body) : null);
     if (res.statusCode == 401) {
       if (await _refreshToken()) {
-        res = await http.delete(uri, headers: await _headers());
+        res = await http.delete(uri, headers: await _headers(), body: body != null ? jsonEncode(body) : null);
       } else {
         await _forceLogout();
         throw ApiException(401, 'Session expired.');

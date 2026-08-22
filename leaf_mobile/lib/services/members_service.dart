@@ -3,6 +3,13 @@
 
 import 'api_client.dart';
 
+// BAGO: itinatapon ito kapag mali ang na-type na password sa Delete
+// Member confirmation — para makilala ito nang hiwalay sa ibang error.
+class WrongPasswordException implements Exception {
+  @override
+  String toString() => 'Incorrect password.';
+}
+
 class MembersService {
   static Future<List<dynamic>> getMembers({Map<String, String>? params}) async =>
       await ApiClient.get('/members/', params: params);
@@ -19,8 +26,16 @@ class MembersService {
   static Future<Map<String, dynamic>> updateMember(int id, Map<String, dynamic> data) async =>
       await ApiClient.put('/members/$id/', body: data);
 
-  static Future<void> deleteMember(int id) async =>
-      await ApiClient.delete('/members/$id/');
+  // BAGO: kailangan na ngayon ng password ng admin/staff na kasalukuyang
+  // naka-login — double security para hindi basta-basta makapag-delete.
+  static Future<void> deleteMember(int id, String password) async {
+    try {
+      await ApiClient.delete('/members/$id/', body: {'password': password});
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) throw WrongPasswordException();
+      rethrow;
+    }
+  }
 
   static Future<Map<String, dynamic>> updateMemberStatus(int id, Map<String, dynamic> data) async =>
       await ApiClient.patch('/members/$id/status/', body: data);
