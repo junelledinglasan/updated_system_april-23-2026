@@ -92,7 +92,7 @@ function ModalField({ label, name, type="text", options=null, full=false, mode, 
 }
 
 function RegisterField({ label, name, type="text", options=null, full=false, form, handle, errors }) {
-  const required = ["first_name","last_name","birth_date","contact_number","address"].includes(name);
+  const required = ["first_name","last_name","birth_date","contact_number","address","sex_other"].includes(name);
   return (
     <div className={`modal-field${full?" full":""}`}>
       <div className="modal-field-label">
@@ -362,10 +362,14 @@ function ViewEditModal({ member, onClose, onSave }) {
 
   const [form, setForm] = useState({
     first_name:"",last_name:"",middle_name:"",status:"Active",
-    birth_date:"",civil_status:"",contact_number:"",email:"",
+    birth_date:"",place_of_birth:"",sex:"",civil_status:"",
+    tin_no:"",sss_gsis_no:"",contact_number:"",email:"",
     address:"",occupation:"",share_capital:0,classification:"",
-    educational_attainment:"",income:"",birth_certificate:false,
-    marriage_certificate:false,school_name:"",year_level:"",allowance:"",
+    educational_attainment:"",income:"",religious_social_affiliation:"",
+    birth_certificate:false,marriage_certificate:false,
+    spouse_name:"",spouse_occupation:"",spouse_income:"",
+    no_of_dependants:"",beneficiary_name:"",beneficiary_relationship:"",
+    credit_references:"",school_name:"",year_level:"",allowance:"",
     pension_income:"",job_type:"",monthly_income:"",plain_password:"",
   });
 
@@ -381,7 +385,11 @@ function ViewEditModal({ member, onClose, onSave }) {
           middle_name: pm.middle_name||"",
           status:      data.status||"Active",
           birth_date:  pm.birth_date||"",
+          place_of_birth: pm.place_of_birth||"",
+          sex:         pm.sex||"",
           civil_status: pm.civil_status||"Single",
+          tin_no:      pm.tin_no||"",
+          sss_gsis_no: pm.sss_gsis_no||"",
           contact_number: pm.contact_number||data.contact||"",
           email:       pm.email||data.email||"",
           address:     pm.address||"",
@@ -390,8 +398,16 @@ function ViewEditModal({ member, onClose, onSave }) {
           classification: pm.classification||data.classification||"",
           educational_attainment: pm.educational_attainment||"",
           income:      pm.income||"",
+          religious_social_affiliation: pm.religious_social_affiliation||"",
           birth_certificate:    pm.birth_certificate||false,
           marriage_certificate: pm.marriage_certificate||false,
+          spouse_name:       pm.spouse_name||"",
+          spouse_occupation: pm.spouse_occupation||"",
+          spouse_income:     pm.spouse_income||"",
+          no_of_dependants:  pm.no_of_dependants||"",
+          beneficiary_name:         pm.beneficiary_name||"",
+          beneficiary_relationship: pm.beneficiary_relationship||"",
+          credit_references:        pm.credit_references||"",
           school_name:  sp.school_name||"",
           year_level:   sp.year_level||"",
           allowance:    sp.allowance||"",
@@ -532,6 +548,24 @@ function ViewEditModal({ member, onClose, onSave }) {
                 <ModalField label="Monthly Income (₱)" name="monthly_income" type="number" mode={mode} form={form} handle={handle}/>
               </div>}
 
+              {mode==="view" && (detail?.id_front_url || detail?.id_back_url) && (<>
+                <div className="mm-view-section-title">Valid ID</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                  {detail?.id_front_url && (
+                    <div>
+                      <div className="modal-field-label" style={{marginBottom:6}}>Front</div>
+                      <img src={detail.id_front_url} alt="Valid ID — Front" style={{width:"100%",borderRadius:8,border:"1px solid #e0e0e0",objectFit:"cover",maxHeight:180}}/>
+                    </div>
+                  )}
+                  {detail?.id_back_url && (
+                    <div>
+                      <div className="modal-field-label" style={{marginBottom:6}}>Back</div>
+                      <img src={detail.id_back_url} alt="Valid ID — Back" style={{width:"100%",borderRadius:8,border:"1px solid #e0e0e0",objectFit:"cover",maxHeight:180}}/>
+                    </div>
+                  )}
+                </div>
+              </>)}
+
               <div className="mm-view-section-title">Account</div>
               <div className="modal-grid">
                 <div className="modal-field full"><div className="modal-field-label">Member ID</div><input className="modal-input disabled" value={memberId} disabled /></div>
@@ -624,9 +658,28 @@ function DeactivateModal({ member, onClose, onConfirm }) {
 
 
 function DeleteModal({ member, onClose, onConfirm }) {
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [password, setPassword] = useState("");
+  const [showPw,   setShowPw]   = useState(false);
+  const [error,    setError]    = useState("");
+
+  useEffect(() => { setPassword(""); setError(""); setShowPw(false); }, [member]);
+
   if (!member) return null;
-  const handleConfirm = async () => { setLoading(true); await onConfirm(member.id); setLoading(false); };
+
+  const handleConfirm = async () => {
+    if (!password.trim()) { setError("Please enter your password to confirm."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await onConfirm(member.id, password);
+    } catch (err) {
+      setError(err?.response?.data?.error || "Incorrect password. Member was not deleted.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-sm" onClick={e => e.stopPropagation()}>
@@ -636,6 +689,37 @@ function DeleteModal({ member, onClose, onConfirm }) {
           <p className="delete-confirm-text">Are you sure you want to delete <strong>{member.fullname||`${member.first_name} ${member.last_name}`}</strong>?</p>
           <p className="delete-sub-text">Member ID: <span className="mono">{member.member_id}</span></p>
           <p className="delete-sub-text" style={{color:"#e53935",marginTop:4}}>This action cannot be undone.</p>
+
+          {/* ── BAGO: kailangan ng sariling password bago matuloy — para
+              hindi basta-basta sinuman ang makakapag-delete. ──────────── */}
+          <div style={{background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"10px 12px",marginTop:14,fontSize:11.5,color:"#e65100"}}>
+            Para sa seguridad, i-type ang sarili mong password para kumpirmahin.
+          </div>
+          <div style={{marginTop:8}}>
+            <div style={{position:"relative"}}>
+              <input
+                type={showPw ? "text" : "password"}
+                autoFocus
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(""); }}
+                onKeyDown={e => { if (e.key === "Enter") handleConfirm(); }}
+                placeholder="Your password"
+                style={{
+                  width:"100%", boxSizing:"border-box", padding:"9px 40px 9px 12px",
+                  border:`1px solid ${error ? "#e53935" : "#ddd"}`, borderRadius:8,
+                  fontSize:13, outline:"none", fontFamily:"inherit",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(p => !p)}
+                style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:12, color:"#888" }}
+              >
+                {showPw ? "Hide" : "Show"}
+              </button>
+            </div>
+            {error && <div style={{fontSize:11.5, color:"#e53935", marginTop:5, fontWeight:600}}>{error}</div>}
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn-modal-close" onClick={onClose}>Cancel</button>
@@ -676,11 +760,45 @@ function PendingModal({ app, onClose, onConvert }) {
           </div>
           <div className="mm-view-section-title">Personal Information</div>
           <div className="modal-grid">
-            {[["Birthdate",app.birth_date],["Civil Status",app.civil_status],["Contact",app.contact_number],["Email",app.email],["Occupation",app.occupation],["Classification",app.classification]].map(([k,v]) => (
+            {[
+              ["Middle Name", app.middle_name],
+              ["Birthdate", app.birth_date],
+              ["Civil Status", app.civil_status],
+              ["Educational Attainment", app.educational_attainment],
+              ["Contact No.", app.contact_number],
+              ["Email", app.email],
+              ["Occupation", app.occupation],
+              ["Monthly Income (₱)", app.income ? `₱${Number(app.income).toLocaleString()}` : ""],
+              ["Classification", app.classification],
+            ].map(([k,v]) => (
               <div key={k} className="modal-field"><div className="modal-field-label">{k}</div><div className="modal-field-value">{v||"—"}</div></div>
             ))}
             <div className="modal-field full"><div className="modal-field-label">Address</div><div className="modal-field-value">{app.address||"—"}</div></div>
           </div>
+
+          <div className="mm-view-section-title">Documents Submitted</div>
+          <div className="modal-grid">
+            <div className="modal-field"><div className="modal-field-label">Birth Certificate</div><div className="modal-field-value">{app.birth_certificate ? "✅ Submitted" : "❌ Not submitted"}</div></div>
+            <div className="modal-field"><div className="modal-field-label">Marriage Certificate</div><div className="modal-field-value">{app.marriage_certificate ? "✅ Submitted" : "❌ Not submitted"}</div></div>
+          </div>
+
+          {(app.id_front_url || app.id_back_url) && (<>
+            <div className="mm-view-section-title">Valid ID</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {app.id_front_url && (
+                <div>
+                  <div className="modal-field-label" style={{marginBottom:6}}>Front</div>
+                  <img src={app.id_front_url} alt="Valid ID — Front" style={{width:"100%",borderRadius:8,border:"1px solid #e0e0e0",objectFit:"cover",maxHeight:180}}/>
+                </div>
+              )}
+              {app.id_back_url && (
+                <div>
+                  <div className="modal-field-label" style={{marginBottom:6}}>Back</div>
+                  <img src={app.id_back_url} alt="Valid ID — Back" style={{width:"100%",borderRadius:8,border:"1px solid #e0e0e0",objectFit:"cover",maxHeight:180}}/>
+                </div>
+              )}
+            </div>
+          </>)}
         </div>
         <div className="modal-footer">
           <button className="btn-modal-close" onClick={onClose}>Close</button>
@@ -696,24 +814,48 @@ function RegisterMemberModal({ onClose, onSuccess }) {
   const [loading,setLoading]=useState(false);
   const [errors,setErrors]=useState({});
   const [result,setResult]=useState(null);
-  const TABS=[{key:"personal",label:"👤 Personal Info"},{key:"classification",label:"📋 Classification"},{key:"account",label:"🔐 Account Info"}];
+  const TABS=[{key:"personal",label:"👤 Personal Info"},{key:"spouse",label:"👪 Spouse & Family"},{key:"classification",label:"📋 Classification"},{key:"account",label:"🔐 Account Info"}];
   const [form,setForm]=useState({
-    first_name:"",last_name:"",middle_name:"",birth_date:"",civil_status:"Single",
+    first_name:"",last_name:"",middle_name:"",birth_date:"",place_of_birth:"",
+    sex:"Male",sex_other:"",civil_status:"Single",tin_no:"",sss_gsis_no:"",
     educational_attainment:"",occupation:"",income:"",contact_number:"",email:"",address:"",
-    birth_certificate:false,marriage_certificate:false,share_capital:"",
+    religious_social_affiliation:"",birth_certificate:false,marriage_certificate:false,share_capital:"",
+    spouse_name:"",spouse_occupation:"",spouse_income:"",no_of_dependants:"",
+    beneficiary_name:"",beneficiary_relationship:"",credit_references:"",
     classification:"Employed",school_name:"",year_level:"",allowance:"",
     pension_income:"",job_type:"Employed",monthly_income:"",
   });
   const handle=e=>{const val=e.target.type==="checkbox"?e.target.checked:e.target.value;setForm(p=>({...p,[e.target.name]:val}));setErrors(p=>({...p,[e.target.name]:""}));};
-  const validate=()=>{const e={};if(!form.first_name.trim())e.first_name="Required";if(!form.last_name.trim())e.last_name="Required";if(!form.birth_date)e.birth_date="Required";if(!form.contact_number.trim())e.contact_number="Required";if(!form.address.trim())e.address="Required";if(form.classification==="Student"&&!form.school_name.trim())e.school_name="Required";if(form.classification==="Student"&&!form.year_level.trim())e.year_level="Required";return e;};
-  const handleSubmit=async()=>{const e=validate();if(Object.keys(e).length){setErrors(e);const pf=["first_name","last_name","birth_date","contact_number","address"];const cf=["school_name","year_level"];if(pf.some(f=>e[f])){setTab("personal");return;}if(cf.some(f=>e[f])){setTab("classification");return;}return;}
-    setLoading(true);try{const res=await registerMemberAPI({first_name:form.first_name,last_name:form.last_name,middle_name:form.middle_name,birth_date:form.birth_date,civil_status:form.civil_status,educational_attainment:form.educational_attainment,occupation:form.occupation,income:form.income||0,contact_number:form.contact_number,email:form.email||"",address:form.address,birth_certificate:form.birth_certificate,marriage_certificate:form.marriage_certificate,classification:form.classification,share_capital:form.share_capital||0,school_name:form.school_name,year_level:form.year_level,allowance:form.allowance||0,pension_income:form.pension_income||0,job_type:form.job_type,monthly_income:form.monthly_income||0});
+  const validate=()=>{const e={};if(!form.first_name.trim())e.first_name="Required";if(!form.last_name.trim())e.last_name="Required";if(!form.birth_date)e.birth_date="Required";if(!form.contact_number.trim())e.contact_number="Required";if(!form.address.trim())e.address="Required";if(form.sex==="Other"&&!form.sex_other.trim())e.sex_other="Please specify";if(form.classification==="Student"&&!form.school_name.trim())e.school_name="Required";if(form.classification==="Student"&&!form.year_level.trim())e.year_level="Required";return e;};
+  const handleSubmit=async()=>{const e=validate();if(Object.keys(e).length){setErrors(e);const pf=["first_name","last_name","birth_date","contact_number","address","sex_other"];const cf=["school_name","year_level"];if(pf.some(f=>e[f])){setTab("personal");return;}if(cf.some(f=>e[f])){setTab("classification");return;}return;}
+    setLoading(true);try{
+      const payload = {
+      first_name:form.first_name,last_name:form.last_name,middle_name:form.middle_name,
+      birth_date:form.birth_date,place_of_birth:form.place_of_birth,
+      sex:form.sex==="Other"?form.sex_other:form.sex,civil_status:form.civil_status,
+      tin_no:form.tin_no,sss_gsis_no:form.sss_gsis_no,
+      educational_attainment:form.educational_attainment,occupation:form.occupation,income:form.income||0,
+      contact_number:form.contact_number,email:form.email||"",address:form.address,
+      religious_social_affiliation:form.religious_social_affiliation,
+      birth_certificate:form.birth_certificate,marriage_certificate:form.marriage_certificate,
+      classification:form.classification,share_capital:form.share_capital||0,
+      spouse_name:form.spouse_name,spouse_occupation:form.spouse_occupation,
+      spouse_income:form.spouse_income||0,no_of_dependants:form.no_of_dependants||0,
+      beneficiary_name:form.beneficiary_name,beneficiary_relationship:form.beneficiary_relationship,
+      credit_references:form.credit_references,
+      school_name:form.school_name,year_level:form.year_level,allowance:form.allowance||0,
+      pension_income:form.pension_income||0,job_type:form.job_type,monthly_income:form.monthly_income||0,
+      };
+      // ── PANSAMANTALANG DEBUG LOG — para makita kung ano talaga ang
+      // ipinapadala. Puwede mong i-delete ito pagkatapos ma-ayos. ──────
+      console.log("🚀 REGISTER PAYLOAD BEING SENT:", payload);
+      const res=await registerMemberAPI(payload);
       await onSuccess(res.member || res);setResult(res);setTab("account");
     }catch(err){const msg=err.response?.data?.error||"Failed to register member.";setErrors({first_name:msg});setTab("personal");}finally{setLoading(false);}};
   return(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box mm-view-modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-header"><div className="modal-title">Register New Member</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-header"><div className="modal-title">Register New Member (v2)</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div style={{fontSize:12,color:"#888",padding:"6px 20px",background:"#f9fbe7",borderBottom:"1px solid #eee"}}>Walk-in / F2F member registration at the office</div>
         <div style={{display:"flex",borderBottom:"2px solid #e8f5e9"}}>
           {TABS.map((t,i)=>(<button key={t.key} onClick={()=>!result&&setTab(t.key)} style={{flex:1,padding:"10px 8px",fontSize:12,fontWeight:600,color:tab===t.key?"#2e7d32":"#888",background:tab===t.key?"#f9fef9":"none",border:"none",borderBottom:tab===t.key?"2px solid #2e7d32":"none",marginBottom:tab===t.key?-2:0,cursor:result?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span style={{width:20,height:20,borderRadius:"50%",fontSize:11,background:tab===t.key?"#2e7d32":"#e0e0e0",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>{t.label}</button>))}
@@ -724,12 +866,18 @@ function RegisterMemberModal({ onClose, onSuccess }) {
             <RegisterField label="First Name" name="first_name" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Middle Name" name="middle_name" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Birthdate" name="birth_date" type="date" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Place of Birth" name="place_of_birth" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Sex" name="sex" options={["Male","Female","Non-binary","Prefer not to say","Other"]} form={form} handle={handle} errors={errors}/>
+            {form.sex==="Other" && <RegisterField label="Please specify" name="sex_other" form={form} handle={handle} errors={errors}/>}
             <RegisterField label="Civil Status" name="civil_status" options={["Single","Married","Widowed","Separated"]} form={form} handle={handle} errors={errors}/>
+            <RegisterField label="TIN No." name="tin_no" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="SSS/GSIS No." name="sss_gsis_no" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Educational Attainment" name="educational_attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} form={form} handle={handle} errors={errors}/>
             <RegisterField label="Contact No." name="contact_number" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Email" name="email" type="email" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Occupation" name="occupation" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Monthly Income (₱)" name="income" type="number" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Religious/Social Affiliation" name="religious_social_affiliation" form={form} handle={handle} errors={errors}/>
             <div className="modal-field">
               <div className="modal-field-label">Amount Paid for Membership (₱)</div>
               <div className="al-amount-wrap" style={{border:"1px solid #ddd",borderRadius:8,overflow:"hidden"}}>
@@ -743,6 +891,24 @@ function RegisterMemberModal({ onClose, onSuccess }) {
             <RegisterField label="Complete Address" name="address" full form={form} handle={handle} errors={errors}/>
             <RegisterField label="Birth Certificate Submitted" name="birth_certificate" type="checkbox" form={form} handle={handle} errors={errors}/>
             <RegisterField label="Marriage Certificate Submitted" name="marriage_certificate" type="checkbox" form={form} handle={handle} errors={errors}/>
+          </div>}
+          {tab==="spouse"&&<div className="modal-grid">
+            <div className="modal-field full" style={{background:"#f9fef9",border:"1px solid #e8f5e9",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#555"}}>
+              Fill in spouse information if married. Leave blank if not applicable.
+            </div>
+            <RegisterField label="Spouse Name" name="spouse_name" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Spouse Occupation" name="spouse_occupation" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Spouse Monthly Income (₱)" name="spouse_income" type="number" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="No. of Dependants" name="no_of_dependants" type="number" form={form} handle={handle} errors={errors}/>
+            <div className="modal-field full" style={{borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1}}>Beneficiary Information</div>
+            </div>
+            <RegisterField label="Beneficiary Name" name="beneficiary_name" form={form} handle={handle} errors={errors}/>
+            <RegisterField label="Relationship to Applicant" name="beneficiary_relationship" form={form} handle={handle} errors={errors}/>
+            <div className="modal-field full" style={{borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1}}>Credit References</div>
+            </div>
+            <RegisterField label="Credit References" name="credit_references" full form={form} handle={handle} errors={errors}/>
           </div>}
           {tab==="classification"&&<div className="modal-grid">
             <div className="modal-field full">
@@ -846,7 +1012,24 @@ export default function ManageMember() {
     }
   };
   const handleSaveEdit = async (id,form) => { try{await updateMemberAPI(id,form);showToast("Member updated successfully.");fetchData(true);}catch{showToast("Failed to update member.","danger");} };
-  const handleDelete   = async (id)      => { try{await deleteMemberAPI(id);setDeleteMember(null);showToast("Member deleted.","danger");fetchData(true);}catch{showToast("Failed to delete member.","danger");} };
+
+  // ── BAGO: kailangan na ng password ng currently-logged-in na admin
+  // bago tuluyang matanggal ang member — double security. Kung mali
+  // ang password (403 mula sa backend), itinatapon ang error pabalik
+  // sa DeleteModal para maipakita ang tamang message doon. ──────────
+  const handleDelete = async (id, password) => {
+    try {
+      await deleteMemberAPI(id, password);
+      setDeleteMember(null);
+      showToast("Member deleted.", "danger");
+      fetchData(true);
+    } catch (err) {
+      // Ipasa pabalik sa DeleteModal para doon ipakita ang error
+      // (hindi natin ito tina-toast dito para manatiling bukas ang modal).
+      throw err;
+    }
+  };
+
   const handleConvert  = async (app, sharePaid=0) => { try{const r=await convertOnlineAppAPI(app.id, { share_capital: sharePaid });
     setPending(prev=>prev.filter(p=>p.id!==app.id));setViewPending(null);showToast(`✓ ${app.first_name} ${app.last_name} is now an official member! ID: ${r.member_id}`,"success");fetchData(false);}catch(err){showToast(err.response?.data?.error||"Failed to convert member.","danger");} };
 

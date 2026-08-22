@@ -9,6 +9,9 @@ import {
 import { getLoansAPI, createLoanAPI, updateLoanStatusAPI, getGCashRequestsAPI } from "../api/loans";
 import { getMembersAPI, registerMemberAPI, recordSavingsAPI, getMemberSavingsAPI } from "../api/members";
 import { recordPaymentAPI } from "../api/payments";
+import { getSystemLogoAPI } from "../api/settings";
+import SettingsModal from "../components/admin/SettingsModal";
+import { Settings as SettingsIcon, LogOut, ChevronDown } from "lucide-react";
 import "./AdminLayout.css";
 import logo from '../assets/logo.png';
 
@@ -570,19 +573,79 @@ function SavingsModal({ onClose }) {
   );
 }
 
-// ─── FormField ────────────────────────────────────────────────────────────────
-function RegField({ name, label, type="text", options=null, required=false, form, errors, handle, clearErr }) {
+// ─── Philippine Address Hook ──────────────────────────────────────────────────
+function usePhAddress() {
+  const [regions,    setRegions]    = useState([]);
+  const [provinces,  setProvinces]  = useState([]);
+  const [cities,     setCities]     = useState([]);
+  const [barangays,  setBarangays]  = useState([]);
+  const [loadingProv, setLoadProv]  = useState(false);
+  const [loadingCity, setLoadCity]  = useState(false);
+  const [loadingBrgy, setLoadBrgy]  = useState(false);
+
+  useEffect(() => {
+    fetch("https://psgc.gitlab.io/api/regions/")
+      .then(r => r.json())
+      .then(d => setRegions(d.sort((a,b) => a.name.localeCompare(b.name))))
+      .catch(() => {});
+  }, []);
+
+  const loadProvinces = async (regionCode) => {
+    if (!regionCode) { setProvinces([]); setCities([]); setBarangays([]); return; }
+    setLoadProv(true);
+    try {
+      const r = await fetch(`https://psgc.gitlab.io/api/regions/${regionCode}/provinces/`);
+      const d = await r.json();
+      setProvinces(d.sort((a,b) => a.name.localeCompare(b.name)));
+      setCities([]); setBarangays([]);
+    } catch {} finally { setLoadProv(false); }
+  };
+
+  const loadCities = async (provinceCode) => {
+    if (!provinceCode) { setCities([]); setBarangays([]); return; }
+    setLoadCity(true);
+    try {
+      const r = await fetch(`https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities/`);
+      const d = await r.json();
+      setCities(d.sort((a,b) => a.name.localeCompare(b.name)));
+      setBarangays([]);
+    } catch {} finally { setLoadCity(false); }
+  };
+
+  const loadBarangays = async (cityCode) => {
+    if (!cityCode) { setBarangays([]); return; }
+    setLoadBrgy(true);
+    try {
+      const r = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`);
+      const d = await r.json();
+      setBarangays(d.sort((a,b) => a.name.localeCompare(b.name)));
+    } catch {} finally { setLoadBrgy(false); }
+  };
+
+  return { regions, provinces, cities, barangays, loadProvinces, loadCities, loadBarangays, loadingProv, loadingCity, loadingBrgy };
+}
+
+// ─── FormField Component ──────────────────────────────────────────────────────
+function RegField({ name, label, type="text", options=null, required=false, optional=false, form, errors, handle, clearErr, full=false, placeholder="" }) {
   return (
-    <div className="al-field">
-      <label className="al-label">{label}{required && <span className="al-req"> *</span>}</label>
+    <div className={`al-field ${full ? "al-full" : ""}`}>
+      <label className="al-label">
+        {label}
+        {required && <span className="al-req"> *</span>}
+        {optional && <span className="al-opt"> (optional)</span>}
+      </label>
       {options ? (
         <select className={`al-input ${errors[name] ? "al-input-err" : ""}`} name={name} value={form[name]||""} onChange={handle}>
-          {options.map(o => <option key={o}>{o}</option>)}
+          {options.map(o => typeof o === "object"
+            ? <option key={o.value} value={o.value}>{o.label}</option>
+            : <option key={o}>{o}</option>
+          )}
         </select>
       ) : (
         <input
           className={`al-input ${errors[name] ? "al-input-err" : ""}`}
           type={type} name={name} value={form[name]||""}
+          placeholder={placeholder}
           onChange={e => { handle(e); if(clearErr) clearErr(name); }}
         />
       )}
@@ -601,21 +664,21 @@ function RegisterModal({ onClose }) {
   ];
 
   const [form, setForm] = useState({
-    // Personal
     last_name: "", first_name: "", middle_name: "",
-    birth_date: "", place_of_birth: "", sex: "Male",
+    birth_date: "", place_of_birth: "", sex: "Male", sex_other: "",
     civil_status: "Single", educational_attainment: "",
-    contact_number: "", email: "", address: "",
+    contact_number: "", email: "", 
+    // Address fields
+    region: "", province: "", city: "", barangay: "", street: "",
+    address: "",
     occupation: "", income: "", tin_no: "", sss_gsis_no: "",
     religious_social_affiliation: "",
     share_capital: "",
     birth_certificate: false, marriage_certificate: false,
-    // Spouse & Family
     spouse_name: "", spouse_occupation: "", spouse_income: "",
     no_of_dependants: "",
     beneficiary_name: "", beneficiary_relationship: "",
     credit_references: "",
-    // Classification
     classification: "Employed",
     school_name: "", year_level: "", allowance: "",
     pension_income: "", job_type: "Employed", monthly_income: "",
@@ -628,11 +691,27 @@ function RegisterModal({ onClose }) {
   const [loading, setLoading] = useState(false);
   const [creds,   setCreds]   = useState({ memberId: "", username: "", password: "" });
 
+  // Philippine address
+  const ph = usePhAddress();
+
+  // Address selections
+  const [selRegion,   setSelRegion]   = useState(null);
+  const [selProvince, setSelProvince] = useState(null);
+  const [selCity,     setSelCity]     = useState(null);
+
   const handle = e => {
     const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setForm(p => ({ ...p, [e.target.name]: val }));
     setErrors(p => ({ ...p, [e.target.name]: "" }));
   };
+
+  // Build full address string whenever components change
+  useEffect(() => {
+    const parts = [form.street, form.barangay, form.city, form.province, form.region].filter(Boolean);
+    setForm(p => ({ ...p, address: parts.join(", ") }));
+  }, [form.street, form.barangay, form.city, form.province, form.region]);
+
+  const SEX_OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"];
 
   const validate = () => {
     const e = {};
@@ -641,6 +720,7 @@ function RegisterModal({ onClose }) {
     if (!form.birth_date)            e.birth_date     = "Required";
     if (!form.contact_number.trim()) e.contact_number = "Required";
     if (!form.address.trim())        e.address        = "Required";
+    if (form.sex === "Other" && !form.sex_other.trim()) e.sex_other = "Please specify";
     if (form.classification === "Student" && !form.school_name.trim()) e.school_name = "Required";
     if (form.classification === "Student" && !form.year_level.trim())  e.year_level  = "Required";
     return e;
@@ -650,7 +730,7 @@ function RegisterModal({ onClose }) {
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
-      const personalFields = ["first_name","last_name","birth_date","contact_number","address"];
+      const personalFields = ["first_name","last_name","birth_date","contact_number","address","sex_other"];
       const classFields    = ["school_name","year_level"];
       if (personalFields.some(f => e[f])) { setTab("personal");      return; }
       if (classFields.some(f => e[f]))    { setTab("classification"); return; }
@@ -658,13 +738,14 @@ function RegisterModal({ onClose }) {
     }
     setLoading(true);
     try {
+      const finalSex = form.sex === "Other" ? form.sex_other : form.sex;
       const result = await registerMemberAPI({
         first_name:                   form.first_name,
         last_name:                    form.last_name,
         middle_name:                  form.middle_name,
         birth_date:                   form.birth_date,
         place_of_birth:               form.place_of_birth,
-        sex:                          form.sex,
+        sex:                          finalSex,
         civil_status:                 form.civil_status,
         educational_attainment:       form.educational_attainment,
         contact_number:               form.contact_number,
@@ -712,6 +793,8 @@ function RegisterModal({ onClose }) {
   return (
     <div className="al-overlay" onClick={onClose}>
       <div className="al-modal al-modal-lg" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div className="al-modal-header">
           <div>
             <div className="al-modal-title">Register New Member</div>
@@ -720,6 +803,7 @@ function RegisterModal({ onClose }) {
           <button className="al-modal-close" onClick={onClose}>✕</button>
         </div>
 
+        {/* Tabs */}
         <div className="al-reg-tabs">
           {TABS.map((t, i) => (
             <button key={t.key} className={`al-reg-tab ${tab === t.key ? "active" : ""}`}
@@ -735,45 +819,149 @@ function RegisterModal({ onClose }) {
           {/* ── TAB 1: Personal Info ── */}
           {tab === "personal" && (
             <div className="al-form-grid">
-              {/* Name */}
+
+              {/* Section: Name */}
+              <div className="al-full" style={{gridColumn:"1/-1"}}>
+                <div className="al-section-header">Full Name</div>
+              </div>
               <RegField name="last_name"   label="Surname"     required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
               <RegField name="first_name"  label="First Name"  required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="middle_name" label="Middle Name"          form={form} errors={errors} handle={handle}/>
+              <RegField name="middle_name" label="Middle Name"  optional form={form} errors={errors} handle={handle}/>
 
-              {/* Address */}
-              <div className="al-field al-full">
-                <label className="al-label">Address <span className="al-req">*</span></label>
-                <input className={`al-input ${errors.address?"al-input-err":""}`} name="address" value={form.address} onChange={handle} placeholder="Complete address"/>
-                {errors.address && <div className="al-field-err">{errors.address}</div>}
+              {/* Section: Birth */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Birth Information</div>
+              </div>
+              <RegField name="birth_date"     label="Date of Birth"  required type="date" form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+              <RegField name="place_of_birth" label="Place of Birth"  required form={form} errors={errors} handle={handle} placeholder="e.g. Lucban, Quezon"/>
+
+              {/* Section: Personal Details */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Personal Details</div>
               </div>
 
-              {/* Birth */}
-              <RegField name="birth_date"     label="Date of Birth"   required type="date" form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="place_of_birth" label="Place of Birth"           form={form} errors={errors} handle={handle}/>
-
-              {/* Sex & Civil Status */}
-              <RegField name="sex" label="Sex" options={["Male","Female"]} form={form} errors={errors} handle={handle}/>
-              <RegField name="civil_status" label="Civil Status" options={["Single","Married","Widowed","Separated"]} form={form} errors={errors} handle={handle}/>
-
-              {/* IDs */}
-              <RegField name="tin_no"      label="TIN No."      form={form} errors={errors} handle={handle}/>
-              <RegField name="sss_gsis_no" label="SSS/GSIS No." form={form} errors={errors} handle={handle}/>
-
-              {/* Occupation & Income */}
-              <RegField name="occupation" label="Occupation"        form={form} errors={errors} handle={handle}/>
-              <RegField name="income"     label="Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
-
-              {/* Contact */}
-              <RegField name="contact_number" label="Tel. No. / CP No." required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
-              <RegField name="email"          label="Email Address"             type="email" form={form} errors={errors} handle={handle}/>
-
-              {/* Education & Affiliation */}
-              <RegField name="educational_attainment"       label="Educational Attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} form={form} errors={errors} handle={handle}/>
-              <RegField name="religious_social_affiliation" label="Religious/Social Affiliation" form={form} errors={errors} handle={handle}/>
-
-              {/* Share Capital */}
+              {/* Sex */}
               <div className="al-field">
-                <label className="al-label">Amount Paid for Membership (₱)</label>
+                <label className="al-label">Sex <span className="al-req"> *</span></label>
+                <select className="al-input" name="sex" value={form.sex} onChange={handle}>
+                  {SEX_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              {form.sex === "Other" && (
+                <div className="al-field">
+                  <label className="al-label">Please specify <span className="al-req"> *</span></label>
+                  <input
+                    className={`al-input ${errors.sex_other ? "al-input-err" : ""}`}
+                    name="sex_other" value={form.sex_other} onChange={handle}
+                    placeholder="Enter your gender identity"/>
+                  {errors.sex_other && <div className="al-field-err">{errors.sex_other}</div>}
+                </div>
+              )}
+
+              <RegField name="civil_status" label="Civil Status" required options={["Single","Married","Widowed","Separated"]} form={form} errors={errors} handle={handle}/>
+              <RegField name="educational_attainment" label="Educational Attainment" required options={["","Elementary","High School","Vocational","College","Post Graduate"]} form={form} errors={errors} handle={handle}/>
+              <RegField name="religious_social_affiliation" label="Religious/Social Affiliation" required form={form} errors={errors} handle={handle} placeholder="e.g. Roman Catholic, INC"/>
+              <RegField name="tin_no"      label="TIN No."       optional form={form} errors={errors} handle={handle} placeholder="000-000-000"/>
+              <RegField name="sss_gsis_no" label="SSS/GSIS No."  optional form={form} errors={errors} handle={handle} placeholder="00-0000000-0"/>
+
+              {/* Section: Address */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Address <span className="al-req"> *</span></div>
+                <div style={{fontSize:11,color:"#888",marginTop:2,marginBottom:8}}>Select from dropdowns to auto-fill address, or type street/sitio manually.</div>
+              </div>
+
+              {/* Region */}
+              <div className="al-field">
+                <label className="al-label">Region <span className="al-req"> *</span></label>
+                <select className="al-input" value={selRegion?.code||""} onChange={e => {
+                  const r = ph.regions.find(x=>x.code===e.target.value);
+                  setSelRegion(r||null); setSelProvince(null); setSelCity(null);
+                  setForm(p=>({...p, region: r?.name||"", province:"", city:"", barangay:""}));
+                  if (r) ph.loadProvinces(r.code);
+                }}>
+                  <option value="">— Select Region —</option>
+                  {ph.regions.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                </select>
+              </div>
+
+              {/* Province */}
+              <div className="al-field">
+                <label className="al-label">Province <span className="al-req"> *</span></label>
+                <select className="al-input" value={selProvince?.code||""} disabled={!selRegion||ph.loadingProv}
+                  onChange={e => {
+                    const p = ph.provinces.find(x=>x.code===e.target.value);
+                    setSelProvince(p||null); setSelCity(null);
+                    setForm(prev=>({...prev, province: p?.name||"", city:"", barangay:""}));
+                    if (p) ph.loadCities(p.code);
+                  }}>
+                  <option value="">{ph.loadingProv ? "Loading..." : "— Select Province —"}</option>
+                  {ph.provinces.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                </select>
+              </div>
+
+              {/* City/Municipality */}
+              <div className="al-field">
+                <label className="al-label">City / Municipality <span className="al-req"> *</span></label>
+                <select className="al-input" value={selCity?.code||""} disabled={!selProvince||ph.loadingCity}
+                  onChange={e => {
+                    const c = ph.cities.find(x=>x.code===e.target.value);
+                    setSelCity(c||null);
+                    setForm(prev=>({...prev, city: c?.name||"", barangay:""}));
+                    if (c) ph.loadBarangays(c.code);
+                  }}>
+                  <option value="">{ph.loadingCity ? "Loading..." : "— Select City/Municipality —"}</option>
+                  {ph.cities.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </div>
+
+              {/* Barangay */}
+              <div className="al-field">
+                <label className="al-label">Barangay <span className="al-req"> *</span></label>
+                <select className="al-input" value={form.barangay} disabled={!selCity||ph.loadingBrgy}
+                  onChange={e => setForm(p=>({...p, barangay: e.target.value}))}>
+                  <option value="">{ph.loadingBrgy ? "Loading..." : "— Select Barangay —"}</option>
+                  {ph.barangays.map(b => <option key={b.code} value={b.name}>{b.name}</option>)}
+                </select>
+              </div>
+
+              {/* Street/Sitio */}
+              <div className="al-field al-full">
+                <label className="al-label">House No. / Street / Sitio <span className="al-opt"> (optional)</span></label>
+                <input className="al-input" name="street" value={form.street} onChange={handle}
+                  placeholder="e.g. 12 Rizal St., Sitio Maligaya"/>
+              </div>
+
+              {/* Full address preview */}
+              {form.address && (
+                <div className="al-full" style={{gridColumn:"1/-1"}}>
+                  <div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1b5e20",display:"flex",gap:8,alignItems:"flex-start"}}>
+                    <span style={{fontWeight:700,flexShrink:0}}>Full address:</span>
+                    <span>{form.address}</span>
+                  </div>
+                </div>
+              )}
+              {errors.address && <div className="al-field-err al-full" style={{gridColumn:"1/-1"}}>{errors.address}</div>}
+
+              {/* Section: Contact */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Contact Information</div>
+              </div>
+              <RegField name="contact_number" label="Tel. No. / CP No."  required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) } placeholder="09XXXXXXXXX"/>
+              <RegField name="email"          label="Email Address"       required type="email" form={form} errors={errors} handle={handle} placeholder="email@example.com"/>
+
+              {/* Section: Employment */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Employment</div>
+              </div>
+              <RegField name="occupation" label="Occupation"          required form={form} errors={errors} handle={handle} placeholder="e.g. Teacher, Farmer"/>
+              <RegField name="income"     label="Monthly Income (₱)"  required type="number" form={form} errors={errors} handle={handle}/>
+
+              {/* Section: Membership */}
+              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                <div className="al-section-header">Membership Payment</div>
+              </div>
+              <div className="al-field">
+                <label className="al-label">Amount Paid (₱) <span className="al-req"> *</span></label>
                 <div className="al-amount-wrap">
                   <span className="al-peso">₱</span>
                   <input className="al-amount-in" type="number" name="share_capital"
@@ -781,22 +969,22 @@ function RegisterModal({ onClose }) {
                 </div>
                 {form.share_capital > 0 && (
                   <div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-                    Share Capital = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (paid × 2) · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
+                    Share Capital = ₱{(parseFloat(form.share_capital||0)).toLocaleString()} · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
                   </div>
                 )}
               </div>
 
               {/* Documents */}
               <div className="al-field">
-                <label className="al-label">Birth Certificate Submitted</label>
+                <label className="al-label">Birth Certificate <span className="al-opt"> (optional)</span></label>
                 <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}>
-                  <input type="checkbox" name="birth_certificate" checked={form.birth_certificate} onChange={handle}/> Yes
+                  <input type="checkbox" name="birth_certificate" checked={form.birth_certificate} onChange={handle}/> Submitted
                 </label>
               </div>
               <div className="al-field">
-                <label className="al-label">Marriage Certificate Submitted</label>
+                <label className="al-label">Marriage Certificate <span className="al-opt"> (optional)</span></label>
                 <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}>
-                  <input type="checkbox" name="marriage_certificate" checked={form.marriage_certificate} onChange={handle}/> Yes (if married)
+                  <input type="checkbox" name="marriage_certificate" checked={form.marriage_certificate} onChange={handle}/> Submitted (if married)
                 </label>
               </div>
             </div>
@@ -806,30 +994,21 @@ function RegisterModal({ onClose }) {
           {tab === "spouse" && (
             <div className="al-form-grid">
               <div style={{gridColumn:"1/-1",background:"#f9fef9",border:"1px solid #e8f5e9",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#555",marginBottom:4}}>
-                Fill in spouse information if married. Leave blank if not applicable.
+                Fill in if married. All fields in this tab are optional.
               </div>
+              <div style={{gridColumn:"1/-1"}}><div className="al-section-header">Spouse Information</div></div>
+              <RegField name="spouse_name"       label="Spouse Name"               optional form={form} errors={errors} handle={handle}/>
+              <RegField name="spouse_occupation" label="Spouse Occupation"          optional form={form} errors={errors} handle={handle}/>
+              <RegField name="spouse_income"     label="Spouse Monthly Income (₱)"  optional type="number" form={form} errors={errors} handle={handle}/>
+              <RegField name="no_of_dependants"  label="No. of Dependants"           optional type="number" form={form} errors={errors} handle={handle}/>
 
-              {/* Spouse */}
-              <RegField name="spouse_name"       label="Spouse Name"             form={form} errors={errors} handle={handle}/>
-              <RegField name="spouse_occupation" label="Spouse Occupation"       form={form} errors={errors} handle={handle}/>
-              <RegField name="spouse_income"     label="Spouse Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
-              <RegField name="no_of_dependants"  label="No. of Dependants"       type="number" form={form} errors={errors} handle={handle}/>
+              <div style={{gridColumn:"1/-1",marginTop:4}}><div className="al-section-header">Beneficiary Information</div></div>
+              <RegField name="beneficiary_name"         label="Beneficiary Name"         optional form={form} errors={errors} handle={handle}/>
+              <RegField name="beneficiary_relationship" label="Relationship to Member"    optional form={form} errors={errors} handle={handle}/>
 
-              {/* Divider */}
-              <div style={{gridColumn:"1/-1",borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
-                <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Beneficiary Information</div>
-              </div>
-
-              <RegField name="beneficiary_name"         label="Beneficiary Name"         form={form} errors={errors} handle={handle}/>
-              <RegField name="beneficiary_relationship" label="Relationship to Member"   form={form} errors={errors} handle={handle}/>
-
-              {/* Divider */}
-              <div style={{gridColumn:"1/-1",borderTop:"1px solid #e8f5e9",paddingTop:12,marginTop:4}}>
-                <div style={{fontSize:11,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Credit References</div>
-              </div>
-
+              <div style={{gridColumn:"1/-1",marginTop:4}}><div className="al-section-header">Credit References</div></div>
               <div className="al-field al-full">
-                <label className="al-label">Credit References</label>
+                <label className="al-label">Credit References <span className="al-opt"> (optional)</span></label>
                 <textarea className="al-input" name="credit_references" rows={3}
                   value={form.credit_references} onChange={handle}
                   placeholder="Names and contact details of credit references..."
@@ -842,7 +1021,7 @@ function RegisterModal({ onClose }) {
           {tab === "classification" && (
             <div className="al-form-grid">
               <div className="al-field al-full">
-                <label className="al-label">Member Classification <span className="al-req">*</span></label>
+                <label className="al-label">Member Classification <span className="al-req"> *</span></label>
                 <div style={{display:"flex",gap:12,marginTop:8}}>
                   {CLASS_OPTIONS.map(c => (
                     <div key={c.key} onClick={() => setForm(p => ({...p, classification: c.key}))}
@@ -858,23 +1037,23 @@ function RegisterModal({ onClose }) {
                 </div>
               </div>
               {form.classification === "Student" && (<>
-                <RegField name="school_name" label="School Name" required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
-                <RegField name="year_level"  label="Year Level"  required form={form} errors={errors} handle={handle}
-                  options={["Grade 7","Grade 8","Grade 9","Grade 10","Grade 11","Grade 12","1st Year","2nd Year","3rd Year","4th Year","5th Year","Graduate"]}/>
-                <RegField name="allowance" label="Monthly Allowance (₱)" type="number" form={form} errors={errors} handle={handle}/>
+                <RegField name="school_name" label="School Name"    required form={form} errors={errors} handle={handle} clearErr={n=>setErrors(p=>({...p,[n]:""})) }/>
+                <RegField name="year_level"  label="Year Level"     required form={form} errors={errors} handle={handle}
+                  options={["","Grade 7","Grade 8","Grade 9","Grade 10","Grade 11","Grade 12","1st Year","2nd Year","3rd Year","4th Year","5th Year","Graduate"]}/>
+                <RegField name="allowance"   label="Monthly Allowance (₱)" required type="number" form={form} errors={errors} handle={handle}/>
               </>)}
               {form.classification === "Senior" && (<>
-                <RegField name="educational_attainment" label="Educational Attainment"
-                  options={["Elementary","High School","Vocational","College","Post Graduate"]}
+                <RegField name="educational_attainment" label="Educational Attainment" required
+                  options={["","Elementary","High School","Vocational","College","Post Graduate"]}
                   form={form} errors={errors} handle={handle}/>
-                <RegField name="pension_income" label="Monthly Pension Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
+                <RegField name="pension_income" label="Monthly Pension Income (₱)" required type="number" form={form} errors={errors} handle={handle}/>
               </>)}
               {form.classification === "Employed" && (<>
-                <RegField name="occupation"     label="Occupation/Job Title" form={form} errors={errors} handle={handle}/>
-                <RegField name="job_type"       label="Employment Type"
+                <RegField name="occupation"     label="Occupation/Job Title" required form={form} errors={errors} handle={handle}/>
+                <RegField name="job_type"       label="Employment Type"     required
                   options={["Employed","Self-Employed","Business","Freelance","Other"]}
                   form={form} errors={errors} handle={handle}/>
-                <RegField name="monthly_income" label="Monthly Income (₱)" type="number" form={form} errors={errors} handle={handle}/>
+                <RegField name="monthly_income" label="Monthly Income (₱)"  required type="number" form={form} errors={errors} handle={handle}/>
               </>)}
             </div>
           )}
@@ -945,6 +1124,7 @@ function RegisterModal({ onClose }) {
   );
 }
 
+
 // ─── New F2F Loan Application Modal ──────────────────────────────────────────
 const LOAN_TYPES_LIST = ["Regular Loan","Emergency Loan","Salary Loan","Housing Loan","Business Loan"];
 const MAX_TERM = { "Regular Loan":24,"Emergency Loan":12,"Salary Loan":12,"Housing Loan":48,"Business Loan":36 };
@@ -957,7 +1137,6 @@ function NewLoanModal({ onClose }) {
   const [errors,        setErrors]        = useState({});
   const [done,          setDone]          = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [showConfirm,   setShowConfirm]   = useState(false);
   const [refNo,         setRefNo]         = useState("");
   const [monthlyResult, setMonthlyResult] = useState(0);
   const [members,       setMembers]       = useState([]);
@@ -1011,7 +1190,6 @@ function NewLoanModal({ onClose }) {
     if (Object.keys(e).length) { setErrors(e); return; }
     setLoadingSubmit(true);
     try {
-      // F2F loan — create with is_f2f flag then immediately approve
       const result = await createLoanAPI({
         member:      selMember.id,
         loan_type:   form.loanType,
@@ -1019,12 +1197,8 @@ function NewLoanModal({ onClose }) {
         term_months: parseInt(form.term),
         purpose:     form.purpose,
         collateral:  form.collateral,
-        is_f2f:      true,
       });
-      // Approve immediately — F2F loans skip the approval queue
-      if (result.status !== 'Active') {
-        await updateLoanStatusAPI(result.id, 'Approved');
-      }
+      await updateLoanStatusAPI(result.id, "Approved");
       setRefNo(result.loan_id);
       setMonthlyResult(result.monthly_due);
       setDone(true);
@@ -1056,38 +1230,6 @@ function NewLoanModal({ onClose }) {
         </div>
         <div className="al-modal-footer">
           <button className="al-btn-save" onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Confirmation Modal ──
-  if (showConfirm) return (
-    <div className="al-overlay" onClick={() => setShowConfirm(false)}>
-      <div className="al-modal al-modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="al-modal-header">
-          <div className="al-modal-title">Confirm Loan Application</div>
-          <button className="al-modal-close" onClick={() => setShowConfirm(false)}>✕</button>
-        </div>
-        <div className="al-modal-body" style={{gap:14}}>
-          <div style={{background:"#e8f5e9",borderRadius:10,padding:"14px 16px",fontSize:13,color:"#1b5e20",lineHeight:1.7}}>
-            <strong>Please confirm the following loan details:</strong>
-            <br/><br/>
-            <strong>Member:</strong> {selMember?.fullname}<br/>
-            <strong>Loan Type:</strong> {form.loanType}<br/>
-            <strong>Amount:</strong> ₱{parseFloat(form.amount||0).toLocaleString()}<br/>
-            <strong>Term:</strong> {form.term} months<br/>
-            <strong>Purpose:</strong> {form.purpose}
-          </div>
-          <div style={{fontSize:12,color:"#f57c00",background:"#fff8e1",borderRadius:8,padding:"10px 14px",border:"1px solid #ffe082"}}>
-            ⚠ This will immediately activate the loan. Please double-check all details before confirming.
-          </div>
-        </div>
-        <div className="al-modal-footer">
-          <button className="al-btn-cancel" onClick={() => setShowConfirm(false)}>Go Back</button>
-          <button className="al-btn-save" onClick={() => { setShowConfirm(false); handleSubmit(); }} disabled={loadingSubmit}>
-            {loadingSubmit ? "Processing..." : "Yes, Confirm & Approve"}
-          </button>
         </div>
       </div>
     </div>
@@ -1257,7 +1399,7 @@ function NewLoanModal({ onClose }) {
             </div>
             <div className="al-modal-footer">
               <button className="al-btn-cancel" onClick={() => setStep(1)}>← Back</button>
-              <button className="al-btn-save" onClick={() => setShowConfirm(true)}>Submit Application</button>
+              <button className="al-btn-save" onClick={handleSubmit}>Submit Application</button>
             </div>
           </>
         )}
@@ -1578,11 +1720,21 @@ export default function AdminLayout() {
   const [showShareCap,  setShareCap]     = useState(false);
   const [sidebarOpen,   setSidebar]      = useState(false);
   const [gcashPending,  setGcashPending] = useState(0);
+  const [logoUrl,       setLogoUrl]      = useState(null);
+  const [showSettings,  setShowSettings] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate                  = useNavigate();
   const location                  = useLocation();
   const { logout, user }          = useAuth();
 
   useEffect(() => { setSidebar(false); }, [location.pathname]);
+
+  useEffect(() => {
+      getSystemLogoAPI()
+        .then(data => setLogoUrl(data.logo_url))
+        .catch(() => {});
+    }, []);
+
 
   const config = PAGE_CONFIG[location.pathname] || DEFAULT_CONFIG;
 
@@ -1634,7 +1786,7 @@ export default function AdminLayout() {
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-logo">
           <div className="logo-icon">
-            <img src={logo} alt="LEAF MPC Logo" style={{ height: "35px", width: "300px", objectFit: "contain" }} />
+            <img src={logoUrl || logo} alt="LEAF MPC Logo" style={{ height: "35px", width: "300px", objectFit: "contain" }} />
           </div>
         </div>
         <nav className="sidebar-nav">
@@ -1677,15 +1829,43 @@ export default function AdminLayout() {
                 {action.label}
               </button>
             ))}
-            <div className="user-chip">
-              <div className="user-avatar">{user?.initials?.[0] || "A"}</div>
-              <div>
-                <span className="user-name">{user?.name || "Admin"}</span>
-                <span className="user-role">Admin</span>
+            <div className="al-profile-dropdown-wrap">
+              <div className="user-chip" style={{cursor:"pointer"}} onClick={() => setShowProfileMenu(p => !p)}>
+                <div className="user-avatar">{user?.initials?.[0] || "A"}</div>
+                <div>
+                  <span className="user-name">{user?.name || "Admin"}</span>
+                  <span className="user-role">Admin</span>
+                </div>
+                <ChevronDown size={14} color="#999" style={{marginLeft:4}}/>
               </div>
+              {showProfileMenu && (
+                <>
+                  <div style={{position:"fixed",inset:0,zIndex:190}} onClick={() => setShowProfileMenu(false)}/>
+                  <div className="al-profile-dropdown">
+                    <div className="al-profile-dropdown-header">
+                      <div className="al-profile-dropdown-name">{user?.name || "Admin"}</div>
+                      <div className="al-profile-dropdown-role">Administrator</div>
+                    </div>
+                    <button className="al-profile-dropdown-item" onClick={() => { setShowProfileMenu(false); setShowSettings(true); }}>
+                      <SettingsIcon size={14}/> Settings
+                    </button>
+                    <button className="al-profile-dropdown-item danger" onClick={handleLogout}>
+                      <LogOut size={14}/> Logout
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
+ 
+        {showSettings && (
+          <SettingsModal
+            onClose={() => setShowSettings(false)}
+            logoUrl={logoUrl}
+            onLogoUpdated={setLogoUrl}
+          />
+        )}
         <main className="page-content">
           <Outlet />
         </main>

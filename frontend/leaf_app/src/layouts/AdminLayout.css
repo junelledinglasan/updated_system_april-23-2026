@@ -410,3 +410,24 @@
 .al-deduct-net .al-deduct-label { font-weight:700; color:#1b5e20; font-size:13px; }
 .al-net-val { font-size:16px; font-weight:800; color:#1b5e20; }
 .al-deduct-notice { margin-top:8px; background:#e8f5e9; border:1px solid #c8e6c9; border-radius:8px; padding:8px 12px; font-size:11px; color:#2e7d32; line-height:1.5; }
+
+.al-section-header {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #2e7d32;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid #e8f5e9;
+  margin-bottom: 10px;
+  grid-column: 1 / -1;
+}
+
+.al-opt {
+  font-size: 10px;
+  font-weight: 500;
+  color: #aaa;
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+}

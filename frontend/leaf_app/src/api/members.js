@@ -5,7 +5,11 @@ export const getMemberStatsAPI          = async ()       => (await api.get("/mem
 export const getMemberAPI               = async (id)     => (await api.get(`/members/${id}/`)).data;
 export const registerMemberAPI          = async (data)   => (await api.post("/members/", data)).data;
 export const updateMemberAPI            = async (id, data) => (await api.put(`/members/${id}/`, data)).data;
-export const deleteMemberAPI            = async (id)     => (await api.delete(`/members/${id}/`)).data;
+// BAGO: kailangan na ngayon ng password ng currently-logged-in na
+// admin — double security para hindi basta-basta makapag-delete.
+// Axios DELETE requests ay kailangang gamitin ang `data` key sa loob
+// ng config object para makapagpadala ng request body.
+export const deleteMemberAPI            = async (id, password) => (await api.delete(`/members/${id}/`, { data: { password } })).data;
 export const updateMemberStatusAPI      = async (id, data) => (await api.patch(`/members/${id}/status/`, data)).data;
 export const getApplicationsAPI         = async (params) => (await api.get("/members/applications/", { params })).data;
 export const getApplicationAPI          = async (id)     => (await api.get(`/members/applications/${id}/`)).data;
@@ -26,3 +30,6 @@ export const getMyOnlineAppAPI          = async ()       => (await api.get("/mem
 export const getSavingsAPI              = async (memberId) => (await api.get(`/members/savings/?member=${memberId}`)).data;
 export const recordSavingsAPI           = async (data)     => (await api.post('/members/savings/', data)).data;
 export const getMemberSavingsAPI        = async (memberId) => (await api.get(`/members/${memberId}/savings-summary/`)).data;
+
+// ── Share Capital (member-facing history) ──────────────────────────────────
+export const getMemberShareCapitalAPI   = async (memberId) => (await api.get(`/members/${memberId}/share-capital-deposit/`)).data;

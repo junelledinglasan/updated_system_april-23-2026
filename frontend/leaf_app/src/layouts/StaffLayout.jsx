@@ -6,31 +6,22 @@ import {
   FileText, BarChart2, Megaphone, LogOut,
 } from "lucide-react";
 import logo from "../assets/logo.png";
+import { getStaffPermissionsAPI } from "../api/settings";
 import "./StaffLayout.css";
 
 // ─── Nav items per staff role ─────────────────────────────────────────────────
-const NAV_BY_ROLE = {
-  cashier: [
-    { to: "/staff",              icon: <Home size={15} />,        label: "Home",              end: true  },
-    { to: "/staff/loan-payment", icon: <CreditCard size={15} />,  label: "Loan Payment",      end: false },
-  ],
-  collector: [
-    { to: "/staff",              icon: <Home size={15} />,        label: "Home",              end: true  },
-    { to: "/staff/loan-payment", icon: <CreditCard size={15} />,  label: "Loan Payment",      end: false },
-  ],
-  bookkeeper: [
-    { to: "/staff",         icon: <Home size={15} />,      label: "Home",    end: true  },
-    { to: "/staff/reports", icon: <BarChart2 size={15} />, label: "Reports", end: false },
-  ],
-  admin_clerk: [
-    { to: "/staff",               icon: <Home size={15} />,           label: "Home",               end: true  },
-    { to: "/staff/members",       icon: <Users size={15} />,          label: "Manage Members",     end: false },
-    { to: "/staff/loan-approval", icon: <ClipboardCheck size={15} />, label: "Loan Approval",      end: false },
-    { to: "/staff/applications",  icon: <FileText size={15} />,       label: "Online Application", end: false },
-    { to: "/staff/reports",       icon: <BarChart2 size={15} />,      label: "Reports",            end: false },
-    { to: "/staff/announcement",  icon: <Megaphone size={15} />,      label: "Announcement",       end: false },
-  ],
-};
+// Master list ng LAHAT ng possible staff nav items — ang "featureKey"
+// ay tinutugma sa AVAILABLE_FEATURES sa backend (settings_app).
+// "Home" ay laging kasama, hindi na kailangan i-toggle.
+const ALL_STAFF_NAV = [
+  { to: "/staff",               icon: <Home size={15} />,           label: "Home",               end: true,  featureKey: null              },
+  { to: "/staff/members",       icon: <Users size={15} />,          label: "Manage Members",     end: false, featureKey: "members"          },
+  { to: "/staff/applications",  icon: <FileText size={15} />,       label: "Online Application", end: false, featureKey: "applications"     },
+  { to: "/staff/loan-payment",  icon: <CreditCard size={15} />,     label: "Loan Payment",       end: false, featureKey: "loan-payment"     },
+  { to: "/staff/loan-approval", icon: <ClipboardCheck size={15} />, label: "Loan Approval",      end: false, featureKey: "loan-approval"    },
+  { to: "/staff/announcement",  icon: <Megaphone size={15} />,      label: "Announcement",       end: false, featureKey: "announcement"     },
+  { to: "/staff/reports",       icon: <BarChart2 size={15} />,      label: "Reports",            end: false, featureKey: "reports"          },
+];
 
 // ─── Topbar actions per page per role ────────────────────────────────────────
 const PAGE_ACTIONS = {
@@ -69,9 +60,22 @@ export default function StaffLayout() {
   const navigate         = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [clock,       setClock]       = useState("");
-
-  const navItems  = NAV_BY_ROLE[user?.staff_role] ?? [];
+  const [allowedFeatures, setAllowedFeatures] = useState(null); // null = loading pa
+ 
+  useEffect(() => {
+    if (!user?.id) return;
+    getStaffPermissionsAPI(user.id)
+      .then(data => setAllowedFeatures(data.features || []))
+      .catch(() => setAllowedFeatures([]));
+  }, [user?.id]);
+ 
+  // "Home" laging kasama; ang iba ay depende sa AllowedFeatures
+  // na na-set ng Admin sa Settings — hindi na sa hardcoded staff_role.
+  const navItems = allowedFeatures === null
+    ? [ALL_STAFF_NAV[0]] // habang naglo-load, "Home" muna ang ipakita
+    : ALL_STAFF_NAV.filter(item => item.featureKey === null || allowedFeatures.includes(item.featureKey));
   const roleLabel = STAFF_ROLE_LABELS[user?.staff_role] ?? "Staff";
+
 
   // Topbar actions based on current page + role
   const roleActions  = PAGE_ACTIONS[user?.staff_role] ?? {};

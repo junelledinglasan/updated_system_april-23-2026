@@ -54,10 +54,8 @@ function NonOfficialWelcome({ member, navigate }) {
             <div className="md-access-item open">My Profile</div>
           </div>
         </div>
-        <div className="md-profile-notice">💡 Please complete your profile information first before applying for official membership.</div>
         <div className="md-unofficial-actions">
-          <button className="md-cta-primary"   onClick={() => navigate("/member/apply-membership")}>Apply for Official Membership</button>
-          <button className="md-cta-secondary" onClick={() => navigate("/member/profile")}>Complete My Profile</button>
+          <button className="md-cta-primary" onClick={() => navigate("/member/apply-membership")}>Apply for Official Membership</button>
         </div>
       </div>
     </div>

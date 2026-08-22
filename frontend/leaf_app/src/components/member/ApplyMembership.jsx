@@ -63,6 +63,126 @@ function IDUploadField({ label, required, file, preview, onSelect, onClear, erro
   );
 }
 
+// ─── Philippine Address Auto-complete (Region → Province → City → Barangay) ──
+// Parehong PSGC API na ginamit sa AdminLayout's RegisterModal.
+const PSGC_BASE = "https://psgc.gitlab.io/api";
+
+function PhAddressPicker({ onAddressChange, error }) {
+  const [regions,    setRegions]    = useState([]);
+  const [provinces,  setProvinces]  = useState([]);
+  const [cities,     setCities]     = useState([]);
+  const [barangays,  setBarangays]  = useState([]);
+  const [selRegion,   setSelRegion]   = useState(null);
+  const [selProvince, setSelProvince] = useState(null);
+  const [selCity,     setSelCity]     = useState(null);
+  const [selBarangay, setSelBarangay] = useState(null);
+  const [street, setStreet] = useState("");
+  const [loadingLevel, setLoadingLevel] = useState(null);
+
+  useEffect(() => {
+    fetch(`${PSGC_BASE}/regions/`).then(r=>r.json()).then(d=>setRegions(Array.isArray(d)?d.sort((a,b)=>a.name.localeCompare(b.name)):[])).catch(()=>{});
+  }, []);
+
+  const emit = (r, p, c, b, st) => {
+    const parts = [st, b?`Brgy. ${b.name}`:null, c?.name, p?.name, r?.name].filter(Boolean);
+    onAddressChange(parts.join(", "));
+  };
+
+  const handleRegion = async (code) => {
+    const r = regions.find(x => x.code === code) || null;
+    setSelRegion(r); setSelProvince(null); setSelCity(null); setSelBarangay(null);
+    setProvinces([]); setCities([]); setBarangays([]);
+    emit(r, null, null, null, street);
+    if (!r) return;
+    setLoadingLevel("province");
+    const d = await fetch(`${PSGC_BASE}/regions/${code}/provinces/`).then(r=>r.json()).catch(()=>[]);
+    setProvinces(Array.isArray(d)?d.sort((a,b)=>a.name.localeCompare(b.name)):[]);
+    setLoadingLevel(null);
+  };
+
+  const handleProvince = async (code) => {
+    const p = provinces.find(x => x.code === code) || null;
+    setSelProvince(p); setSelCity(null); setSelBarangay(null);
+    setCities([]); setBarangays([]);
+    emit(selRegion, p, null, null, street);
+    if (!p) return;
+    setLoadingLevel("city");
+    const d = await fetch(`${PSGC_BASE}/provinces/${code}/cities-municipalities/`).then(r=>r.json()).catch(()=>[]);
+    setCities(Array.isArray(d)?d.sort((a,b)=>a.name.localeCompare(b.name)):[]);
+    setLoadingLevel(null);
+  };
+
+  const handleCity = async (code) => {
+    const c = cities.find(x => x.code === code) || null;
+    setSelCity(c); setSelBarangay(null);
+    setBarangays([]);
+    emit(selRegion, selProvince, c, null, street);
+    if (!c) return;
+    setLoadingLevel("barangay");
+    const d = await fetch(`${PSGC_BASE}/cities-municipalities/${code}/barangays/`).then(r=>r.json()).catch(()=>[]);
+    setBarangays(Array.isArray(d)?d.sort((a,b)=>a.name.localeCompare(b.name)):[]);
+    setLoadingLevel(null);
+  };
+
+  const handleBarangay = (code) => {
+    const b = barangays.find(x => x.code === code) || null;
+    setSelBarangay(b);
+    emit(selRegion, selProvince, selCity, b, street);
+  };
+
+  const handleStreet = (val) => {
+    setStreet(val);
+    emit(selRegion, selProvince, selCity, selBarangay, val);
+  };
+
+  const preview = [street, selBarangay?`Brgy. ${selBarangay.name}`:null, selCity?.name, selProvince?.name, selRegion?.name].filter(Boolean).join(", ");
+
+  return (
+    <div className="am-field am-full">
+      <div className="am-form-grid" style={{gridColumn:"1/-1"}}>
+        <div className="am-field">
+          <label className="am-label">Region<span className="am-req"> *</span></label>
+          <select className={`am-input ${error?"am-input-err":""}`} value={selRegion?.code||""} onChange={e=>handleRegion(e.target.value)}>
+            <option value="">Select...</option>
+            {regions.map(r=><option key={r.code} value={r.code}>{r.name}</option>)}
+          </select>
+        </div>
+        <div className="am-field">
+          <label className="am-label">Province<span className="am-req"> *</span></label>
+          <select className="am-input" value={selProvince?.code||""} onChange={e=>handleProvince(e.target.value)} disabled={!selRegion}>
+            <option value="">{loadingLevel==="province"?"Loading...":"Select..."}</option>
+            {provinces.map(p=><option key={p.code} value={p.code}>{p.name}</option>)}
+          </select>
+        </div>
+        <div className="am-field">
+          <label className="am-label">City / Municipality<span className="am-req"> *</span></label>
+          <select className="am-input" value={selCity?.code||""} onChange={e=>handleCity(e.target.value)} disabled={!selProvince}>
+            <option value="">{loadingLevel==="city"?"Loading...":"Select..."}</option>
+            {cities.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="am-field">
+          <label className="am-label">Barangay<span className="am-req"> *</span></label>
+          <select className="am-input" value={selBarangay?.code||""} onChange={e=>handleBarangay(e.target.value)} disabled={!selCity}>
+            <option value="">{loadingLevel==="barangay"?"Loading...":"Select..."}</option>
+            {barangays.map(b=><option key={b.code} value={b.code}>{b.name}</option>)}
+          </select>
+        </div>
+        <div className="am-field am-full">
+          <label className="am-label">House No. / Street / Sitio <span className="am-label-optional">(optional)</span></label>
+          <input className="am-input" value={street} onChange={e=>handleStreet(e.target.value)} placeholder="e.g. 123 Rizal St."/>
+        </div>
+      </div>
+      {preview && (
+        <div style={{marginTop:8,padding:"8px 12px",background:"#f1f8e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
+          📍 {preview}
+        </div>
+      )}
+      {error && <div className="am-field-err" style={{marginTop:6}}>{error}</div>}
+    </div>
+  );
+}
+
 const CLASS_OPTIONS = [
   { key: "Student",  icon: <GraduationCap     size={40} strokeWidth={1.5} color="#2e7d32"/>, label: "Student"  },
   { key: "Senior",   icon: <UserRound         size={40} strokeWidth={1.5} color="#2e7d32"/>, label: "Senior"   },
@@ -102,6 +222,7 @@ export default function ApplyMembership() {
     birth_date:                   "",
     place_of_birth:               "",
     sex:                          "Male",
+    sex_other:                    "",
     civil_status:                 "Single",
     educational_attainment:       "",
     contact_number:               "",
@@ -174,8 +295,13 @@ export default function ApplyMembership() {
     if (!form.first_name.trim())     e.first_name     = "Required";
     if (!form.last_name.trim())      e.last_name      = "Required";
     if (!form.birth_date)            e.birth_date     = "Required";
+    if (!form.place_of_birth.trim()) e.place_of_birth = "Required";
+    if (!form.sex || !form.sex.trim()) e.sex          = "Required";
     if (!form.contact_number.trim()) e.contact_number = "Required";
-    if (!form.address.trim())        e.address        = "Required";
+    if (!form.email.trim())          e.email          = "Required";
+    else if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "Please enter a valid email address.";
+    if (!form.address.trim())        e.address        = "Please complete the address dropdowns above.";
+    if (form.sex === "Other" && !(form.sex_other||"").trim()) e.sex_other = "Please specify";
     if (!form.occupation.trim())     e.occupation     = "Required";
     if (form.classification === "Student") {
       if (!form.school_name.trim()) e.school_name = "Required";
@@ -190,7 +316,7 @@ export default function ApplyMembership() {
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
-      const personalFields = ["first_name","last_name","birth_date","contact_number","address","occupation"];
+      const personalFields = ["first_name","last_name","birth_date","place_of_birth","sex","sex_other","contact_number","email","address","occupation"];
       const classFields    = ["school_name","year_level"];
       const idFields       = ["id_front","id_back"];
       if (personalFields.some(f => e[f])) { setTab("personal");       return; }
@@ -218,7 +344,7 @@ export default function ApplyMembership() {
         middle_name:                  form.middle_name,
         birth_date:                   form.birth_date,
         place_of_birth:               form.place_of_birth,
-        sex:                          form.sex,
+        sex:                          form.sex === "Other" ? form.sex_other : form.sex,
         civil_status:                 form.civil_status,
         educational_attainment:       form.educational_attainment,
         contact_number:               form.contact_number,
@@ -369,12 +495,15 @@ export default function ApplyMembership() {
               <FormField name="first_name"  label="First Name" required value={form.first_name}  onChange={handle} error={errors.first_name}/>
               <FormField name="middle_name" label="Middle Name"          value={form.middle_name} onChange={handle}/>
 
-              <FormField name="address" label="Address" required full value={form.address} onChange={handle} error={errors.address}/>
+              <PhAddressPicker onAddressChange={addr => setForm(p => ({ ...p, address: addr }))} error={errors.address}/>
 
               <FormField name="birth_date"     label="Date of Birth"  required type="date" value={form.birth_date}     onChange={handle} error={errors.birth_date}/>
-              <FormField name="place_of_birth" label="Place of Birth"           value={form.place_of_birth} onChange={handle}/>
+              <FormField name="place_of_birth" label="Place of Birth" required value={form.place_of_birth} onChange={handle} error={errors.place_of_birth}/>
 
-              <FormField name="sex"          label="Sex"          options={["Male","Female"]}                                              value={form.sex}          onChange={handle}/>
+              <FormField name="sex"          label="Sex"          required options={["Male","Female","Non-binary","Prefer not to say","Other"]}                     value={form.sex}          onChange={handle} error={errors.sex}/>
+              {form.sex === "Other" && (
+                <FormField name="sex_other" label="Please specify" required value={form.sex_other||""} onChange={handle} error={errors.sex_other}/>
+              )}
               <FormField name="civil_status" label="Civil Status" options={["Single","Married","Widowed","Separated"]}                    value={form.civil_status} onChange={handle}/>
 
               <FormField name="tin_no"      label="TIN No."      value={form.tin_no}      onChange={handle}/>
@@ -384,7 +513,7 @@ export default function ApplyMembership() {
               <FormField name="income"     label="Monthly Income (₱)" type="number" value={form.income} onChange={handle}/>
 
               <FormField name="contact_number" label="Tel. No. / CP No." required value={form.contact_number} onChange={handle} error={errors.contact_number}/>
-              <FormField name="email"          label="Email Address"    type="email" value={form.email}          onChange={handle}/>
+              <FormField name="email"          label="Email Address"    type="email" required value={form.email} onChange={handle} error={errors.email}/>
 
               <FormField name="educational_attainment"       label="Educational Attainment"      options={["Elementary","High School","Vocational","College","Post Graduate"]} value={form.educational_attainment}       onChange={handle}/>
               <FormField name="religious_social_affiliation" label="Religious/Social Affiliation" value={form.religious_social_affiliation} onChange={handle}/>

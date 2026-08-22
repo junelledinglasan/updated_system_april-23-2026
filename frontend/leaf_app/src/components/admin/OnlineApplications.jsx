@@ -34,6 +34,7 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
 
   const hasIdFront = !!app.id_front_url;
   const hasIdBack  = !!app.id_back_url;
+  const hasSpouseInfo = !!(app.spouse_name || app.beneficiary_name);
 
   return (
     <div className="oa-modal-overlay" onClick={onClose}>
@@ -64,18 +65,41 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
                 <InfoRow label="First Name"             value={app.first_name} />
                 <InfoRow label="Middle Name"            value={app.middle_name} />
                 <InfoRow label="Birthdate"              value={app.birth_date} />
+                <InfoRow label="Place of Birth"         value={app.place_of_birth} />
+                <InfoRow label="Sex"                    value={app.sex} />
                 <InfoRow label="Civil Status"           value={app.civil_status} />
+                <InfoRow label="TIN No."                value={app.tin_no} />
+                <InfoRow label="SSS/GSIS No."           value={app.sss_gsis_no} />
                 <InfoRow label="Classification"         value={app.classification} />
                 <InfoRow label="Educational Attainment" value={app.educational_attainment} />
                 <InfoRow label="Occupation"             value={app.occupation} />
                 <InfoRow label="Monthly Income"         value={app.income && app.income !== "0.00" ? `₱${Number(app.income).toLocaleString()}` : "—"} />
                 <InfoRow label="Contact No."            value={app.contact_number} mono />
                 <InfoRow label="Email"                  value={app.email} mono />
+                <InfoRow label="Religious/Social Affiliation" value={app.religious_social_affiliation} />
                 <InfoRow label="Address"                value={app.address} full />
                 <InfoRow label="Birth Certificate"      value={app.birth_certificate ? "✅ Submitted" : "❌ Not submitted"} />
                 <InfoRow label="Marriage Certificate"   value={app.marriage_certificate ? "✅ Submitted" : "❌ Not submitted"} />
               </div>
             </div>
+
+            {/* ── Spouse & Family ── */}
+            {hasSpouseInfo && (
+              <div className="oa-section">
+                <div className="oa-section-title">👪 Spouse & Family</div>
+                <div className="oa-info-grid">
+                  <InfoRow label="Spouse Name"        value={app.spouse_name} />
+                  <InfoRow label="Spouse Occupation"  value={app.spouse_occupation} />
+                  <InfoRow label="Spouse Income"      value={app.spouse_income && app.spouse_income !== "0.00" ? `₱${Number(app.spouse_income).toLocaleString()}` : "—"} />
+                  <InfoRow label="No. of Dependants"  value={app.no_of_dependants} />
+                  <InfoRow label="Beneficiary Name"   value={app.beneficiary_name} />
+                  <InfoRow label="Relationship"       value={app.beneficiary_relationship} />
+                  {app.credit_references && (
+                    <InfoRow label="Credit References" value={app.credit_references} full />
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Valid ID Images ── */}
             <div className="oa-section">

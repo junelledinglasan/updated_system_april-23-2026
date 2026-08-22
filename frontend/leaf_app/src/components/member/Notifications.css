@@ -84,7 +84,7 @@
 .nf-item-action  { font-size:11px; font-weight:600; margin-top:2px; }
 .nf-unread-dot   { width:9px; height:9px; min-width:9px; border-radius:50%; background:#2e7d32; margin-top:6px; flex-shrink:0; }
 
-/* ─── Notification Modal ─────────────────────────────────────────────────── */
+/* ─── Notification Modal (MAS MAAYOS NA LAYOUT — bago) ──────────────────────── */
 .nf-modal-overlay {
   position:fixed; inset:0;
   background:rgba(0,0,0,0.45);
@@ -96,55 +96,64 @@
 @keyframes nfFadeIn { from{opacity:0} to{opacity:1} }
 
 .nf-modal-box {
-  background:#fff; border-radius:16px;
+  background:#fff; border-radius:18px;
   width:100%; max-width:480px;
+  max-height:85vh; overflow-y:auto;
   box-shadow:0 20px 60px rgba(0,0,0,0.18);
-  overflow:hidden;
   animation: nfSlideIn 0.2s ease;
 }
 @keyframes nfSlideIn { from{opacity:0;transform:scale(0.96) translateY(8px)} to{opacity:1;transform:none} }
 
 .nf-modal-header {
-  display:flex; align-items:center; gap:14px;
-  padding:18px 20px 16px;
-  border-bottom:1px solid #f0f0f0;
+  display:flex; align-items:flex-start; gap:14px;
+  padding:22px 22px 18px;
 }
 .nf-modal-icon-wrap {
   width:52px; height:52px; min-width:52px; border-radius:14px;
   display:flex; align-items:center; justify-content:center;
-  flex-shrink:0;
+  flex-shrink:0; border:1px solid transparent;
 }
-.nf-modal-header-info { flex:1; }
+.nf-modal-header-info { flex:1; min-width:0; }
 .nf-modal-type-badge  {
-  display:inline-block; padding:3px 10px; border-radius:20px;
-  font-size:10px; font-weight:700; margin-bottom:4px;
+  display:inline-block; padding:4px 11px; border-radius:20px;
+  font-size:11px; font-weight:700; margin-bottom:7px;
 }
-.nf-modal-time   { font-size:11px; color:#aaa; }
+.nf-modal-time   {
+  display:flex; align-items:center; gap:5px;
+  font-size:12px; color:#999;
+}
 .nf-modal-close  {
-  background:none; border:none; font-size:16px;
-  cursor:pointer; color:#aaa; padding:4px 8px;
-  border-radius:6px; transition:all 0.15s; margin-left:auto; flex-shrink:0;
+  background:#f5f5f5; border:none; border-radius:50%;
+  width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:#888; flex-shrink:0; transition:all 0.15s;
 }
-.nf-modal-close:hover { background:#f5f5f5; color:#333; }
+.nf-modal-close:hover { background:#eeeeee; color:#333; }
 
-.nf-modal-body  { padding:20px; }
-.nf-modal-title { font-size:15px; font-weight:700; color:#1a1a1a; margin-bottom:10px; line-height:1.4; }
-.nf-modal-msg   { font-size:13px; color:#555; line-height:1.7; }
+.nf-modal-body  { padding:0 22px 4px; }
+.nf-modal-title { font-size:18px; font-weight:800; color:#1a1a1a; margin-bottom:16px; line-height:1.35; }
+
+/* ── BAGO: Message ngayon nasa loob ng card, hindi na plain text lumulutang ── */
+.nf-modal-msg-card {
+  background:#fafafa; border:1px solid #f0f0f0; border-radius:12px;
+  padding:16px;
+}
+.nf-modal-msg   { font-size:13.5px; color:#4a4a4a; line-height:1.75; white-space:pre-line; }
 
 .nf-modal-footer {
-  display:flex; justify-content:flex-end; gap:10px;
-  padding:14px 20px; border-top:1px solid #f0f0f0;
-  background:#fafafa;
+  display:flex; gap:10px;
+  padding:22px;
 }
 .nf-modal-btn-close {
-  padding:8px 18px; border:1px solid #e0e0e0; border-radius:8px;
-  background:#fff; color:#666; font-size:12px; font-weight:600;
+  flex:1;
+  padding:12px 0; border:1.5px solid #e0e0e0; border-radius:10px;
+  background:#fff; color:#555; font-size:13px; font-weight:600;
   cursor:pointer; font-family:inherit; transition:all 0.15s;
 }
 .nf-modal-btn-close:hover { background:#f5f5f5; }
 .nf-modal-btn-go {
-  padding:8px 20px; border:none; border-radius:8px;
-  background:#2e7d32; color:#fff; font-size:12px; font-weight:600;
+  flex:2;
+  padding:12px 0; border:none; border-radius:10px;
+  background:#2e7d32; color:#fff; font-size:13px; font-weight:700;
   cursor:pointer; font-family:inherit; transition:all 0.15s;
 }
 .nf-modal-btn-go:hover { background:#1b5e20; }
@@ -152,6 +161,89 @@
 @media (max-width:600px) {
   .nf-wrapper { padding:12px 12px 24px; }
   .nf-item    { padding:12px 14px; }
-  .nf-modal-overlay { padding:12px; align-items:flex-end; }
-  .nf-modal-box { border-radius:16px 16px 0 0; max-height:90vh; overflow-y:auto; }
+  .nf-modal-overlay { padding:0; align-items:flex-end; }
+  .nf-modal-box { border-radius:18px 18px 0 0; max-height:90vh; }
+}
+
+/* ─── BAGO: Structured detail elements sa loob ng modal ──────────────────────── */
+
+/* Requirements checklist */
+.nf-modal-req-box {
+  margin-top: 14px;
+  background: #f9fef9;
+  border: 1px solid #e0eee0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.nf-modal-req-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b5e20;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 10px;
+}
+.nf-modal-req-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+}
+.nf-modal-req-check {
+  width: 18px; height: 18px; min-width: 18px;
+  border-radius: 50%;
+  background: #2e7d32;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.nf-modal-req-text {
+  font-size: 12.5px;
+  color: #444;
+  line-height: 1.5;
+}
+
+/* Highlight info box (office hours, location, atbp.) */
+.nf-modal-highlight {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.nf-modal-highlight-text {
+  font-size: 12px;
+  color: #1565c0;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Key-value details table (amount, reference no, atbp.) */
+.nf-modal-details {
+  margin-top: 12px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 4px 16px;
+}
+.nf-modal-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid #eeeeee;
+}
+.nf-modal-detail-row:last-child { border-bottom: none; }
+.nf-modal-detail-key {
+  font-size: 11.5px;
+  color: #888;
+  font-weight: 600;
+}
+.nf-modal-detail-val {
+  font-size: 12.5px;
+  color: #222;
+  font-weight: 700;
+  text-align: right;
 }

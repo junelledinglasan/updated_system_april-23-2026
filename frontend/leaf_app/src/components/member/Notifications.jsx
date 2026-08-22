@@ -4,11 +4,12 @@ import {
   CalendarClock, Megaphone, CheckCircle2, XCircle,
   Trophy, Settings, AlertTriangle, Bell, Clock, X,
   Smartphone, CreditCard, PiggyBank, FileText, CheckCheck,
+  MapPin, Wallet, Check,
 } from "lucide-react";
 import { getAnnouncementsAPI }              from "../../api/announcements";
 import { getLoansAPI, getGCashRequestsAPI } from "../../api/loans";
 import { getPaymentsAPI }                   from "../../api/payments";
-import { getMyApplicationAPI, getMyOnlineAppAPI, getMemberSavingsAPI } from "../../api/members";
+import { getMyApplicationAPI, getMyOnlineAppAPI, getMemberSavingsAPI, getMemberShareCapitalAPI } from "../../api/members";
 import { useAuth }                          from "../../context/AuthContext";
 import "./Notifications.css";
 
@@ -23,11 +24,12 @@ const TYPE_META = {
   gcash:      { icon:<Smartphone    size={20} color="#007bff"/>, label:"GCash Payment",     bg:"#e3f2fd", border:"#90caf9", text:"#007bff" },
   payment:    { icon:<CreditCard    size={20} color="#2e7d32"/>, label:"Payment Recorded",  bg:"#e8f5e9", border:"#a5d6a7", text:"#2e7d32" },
   savings:    { icon:<PiggyBank     size={20} color="#e65100"/>, label:"Savings",           bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
+  sharecap:   { icon:<Wallet        size={20} color="#6a1b9a"/>, label:"Share Capital",     bg:"#f3e5f5", border:"#ce93d8", text:"#6a1b9a" },
   loan:       { icon:<FileText      size={20} color="#1565c0"/>, label:"Loan",              bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
   completed:  { icon:<CheckCheck    size={20} color="#1565c0"/>, label:"Loan Completed",    bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
 };
 
-const FILTERS = ["All","Unread","Loans","Payments","GCash","Savings","Announcements","Membership","System"];
+const FILTERS = ["All","Unread","Loans","Payments","GCash","Savings","Share Capital","Announcements","Membership","System"];
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -42,33 +44,74 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-PH", { month:"short", day:"numeric" });
 }
 
+// ─── Notification Detail Modal — mas maayos, may structured na content ────────
 function NotifModal({ notif, onClose, onNavigate }) {
   if (!notif) return null;
   const meta = TYPE_META[notif.type] || TYPE_META.system;
   return (
     <div className="nf-modal-overlay" onClick={onClose}>
       <div className="nf-modal-box" onClick={e => e.stopPropagation()}>
-        <div className="nf-modal-header" style={{ borderBottom:`3px solid ${meta.border}` }}>
-          <div className="nf-modal-icon-wrap" style={{ background:meta.bg, borderRadius:12, width:52, height:52, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            {meta.icon && <span style={{transform:"scale(1.4)"}}>{meta.icon}</span>}
+        <div className="nf-modal-header">
+          <div className="nf-modal-icon-wrap" style={{ background:meta.bg, borderColor:meta.border }}>
+            <span style={{transform:"scale(1.3)"}}>{meta.icon}</span>
           </div>
           <div className="nf-modal-header-info">
             <div className="nf-modal-type-badge" style={{ background:meta.bg, color:meta.text, border:`1px solid ${meta.border}` }}>
               {meta.label}
             </div>
-            <div className="nf-modal-time">{notif.time}</div>
+            <div className="nf-modal-time"><Clock size={12}/> {notif.time}</div>
           </div>
           <button className="nf-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
+
         <div className="nf-modal-body">
           <div className="nf-modal-title">{notif.title}</div>
-          <div className="nf-modal-msg">{notif.msg}</div>
+
+          {/* ── Intro message (maikli na lang, hindi na malaking paragraph) ── */}
+          <div className="nf-modal-msg-card">
+            <div className="nf-modal-msg">{notif.msg}</div>
+          </div>
+
+          {/* ── BAGO: Requirements checklist — structured, hindi na kasama sa
+              isang malaking paragraph ── */}
+          {notif.requirements && notif.requirements.length > 0 && (
+            <div className="nf-modal-req-box">
+              <div className="nf-modal-req-title">Requirements to Bring</div>
+              {notif.requirements.map((r, i) => (
+                <div key={i} className="nf-modal-req-item">
+                  <div className="nf-modal-req-check"><Check size={11} color="#fff"/></div>
+                  <div className="nf-modal-req-text">{r}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── BAGO: Info highlight box (hal. office hours, location) ── */}
+          {notif.highlight && (
+            <div className="nf-modal-highlight">
+              <MapPin size={15} color="#1565c0" style={{flexShrink:0,marginTop:1}}/>
+              <div className="nf-modal-highlight-text">{notif.highlight}</div>
+            </div>
+          )}
+
+          {/* ── BAGO: Key-value details table (hal. amount, reference no.) ── */}
+          {notif.details && notif.details.length > 0 && (
+            <div className="nf-modal-details">
+              {notif.details.map(([k, v], i) => (
+                <div key={i} className="nf-modal-detail-row">
+                  <span className="nf-modal-detail-key">{k}</span>
+                  <span className="nf-modal-detail-val">{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
         <div className="nf-modal-footer">
           <button className="nf-modal-btn-close" onClick={onClose}>Close</button>
           {notif.route && (
             <button className="nf-modal-btn-go" onClick={() => { onClose(); onNavigate(notif.route); }}>
-              {notif.actionLabel || "View Details"} →
+              {notif.actionLabel || "View Details"}  →
             </button>
           )}
         </div>
@@ -126,7 +169,15 @@ export default function Notifications() {
             built.push({
               id:"membership-approved", type:"membership",
               title:"Membership Application Approved",
-              msg:`Congratulations! Your application (${app.app_id}) has been approved! Please visit the LEAF MPC office to complete your membership. Requirements to bring: (1) 2 pieces 2x2 ID picture, white background (2) Photocopy of Birth Certificate, PSA copy preferred (3) Photocopy of Marriage Certificate, if married — optional (4) Valid Government-issued ID (5) Initial Share Capital Payment, minimum ₱4,000. Office hours: Mon–Fri, 8:00 AM – 5:00 PM, LEAF MPC Office, Lucban, Quezon.`,
+              msg:`Congratulations! Your application (${app.app_id}) has been approved! Please visit the LEAF MPC office to complete your membership.`,
+              requirements:[
+                "2 pieces 2x2 ID picture, white background",
+                "Photocopy of Birth Certificate (PSA copy preferred)",
+                "Photocopy of Marriage Certificate — if married, optional",
+                "Valid Government-issued ID",
+                "Initial Share Capital Payment, minimum ₱4,000",
+              ],
+              highlight:"Office Hours: Mon–Fri, 8:00 AM – 5:00 PM · LEAF MPC Office, Lucban, Quezon",
               time:timeAgo(app.reviewed_at || app.created_at), date:app.reviewed_at || app.created_at,
               read:false, route:"/member/apply-membership", actionLabel:"View Requirements",
             });
@@ -181,7 +232,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "Overdue").forEach(l => built.push({
               id:`overdue-${l.id}`, type:"overdue",
               title:`⚠ Overdue Payment — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} (${l.loan_id}) is OVERDUE with balance ₱${Number(l.balance).toLocaleString()}. Please settle immediately to avoid additional penalties.`,
+              msg:`Your ${l.loan_type} is OVERDUE. Please settle immediately to avoid additional penalties.`,
+              details:[["Loan ID", l.loan_id], ["Balance", `₱${Number(l.balance).toLocaleString()}`], ["Due Date", l.next_due_date || "—"]],
               time:timeAgo(l.next_due_date), date:l.next_due_date,
               read:false, route:"/member/my-loans", actionLabel:"Pay Now",
             }));
@@ -190,7 +242,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "Active").forEach(l => built.push({
               id:`due-${l.id}`, type:"due",
               title:`Payment Reminder — ${l.loan_id}`,
-              msg:`Your monthly payment of ₱${Number(l.monthly_due).toLocaleString()} for ${l.loan_type} (${l.loan_id}) is due on ${l.next_due_date || "—"}. Pay on time to avoid penalties.`,
+              msg:`Your monthly payment for ${l.loan_type} is coming up. Pay on time to avoid penalties.`,
+              details:[["Loan ID", l.loan_id], ["Amount Due", `₱${Number(l.monthly_due).toLocaleString()}`], ["Due Date", l.next_due_date || "—"]],
               time:timeAgo(l.next_due_date), date:l.next_due_date,
               read:false, route:"/member/my-loans", actionLabel:"View My Loans",
             }));
@@ -199,7 +252,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "Active").forEach(l => built.push({
               id:`approved-${l.id}`, type:"approved",
               title:`Loan Approved — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} for ₱${Number(l.amount).toLocaleString()} has been approved and activated. Monthly due: ₱${Number(l.monthly_due).toLocaleString()}. Visit the office to sign documents.`,
+              msg:`Your ${l.loan_type} has been approved and activated. Visit the office to sign documents.`,
+              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`], ["Monthly Due", `₱${Number(l.monthly_due).toLocaleString()}`]],
               time:timeAgo(l.approved_at), date:l.approved_at,
               read:true, route:"/member/my-loans", actionLabel:"View Loan Details",
             }));
@@ -208,7 +262,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "For Review").forEach(l => built.push({
               id:`forreview-${l.id}`, type:"loan",
               title:`Loan Application Submitted — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} application for ₱${Number(l.amount).toLocaleString()} (${l.loan_id}) has been submitted and is waiting for admin review.`,
+              msg:`Your ${l.loan_type} application has been submitted and is waiting for admin review.`,
+              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
               time:timeAgo(l.applied_at), date:l.applied_at,
               read:true, route:"/member/my-loans", actionLabel:"View Status",
             }));
@@ -217,7 +272,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "Declined").forEach(l => built.push({
               id:`declined-${l.id}`, type:"rejected",
               title:`Loan Application Declined — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} application for ₱${Number(l.amount).toLocaleString()} was declined.${l.decline_reason ? " Reason: " + l.decline_reason : ""} You may re-apply or visit the office.`,
+              msg:`Your ${l.loan_type} application was declined.${l.decline_reason ? " Reason: " + l.decline_reason : ""} You may re-apply or visit the office.`,
+              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
               time:timeAgo(l.applied_at), date:l.applied_at,
               read:false, route:"/member/my-loans", actionLabel:"View My Loans",
             }));
@@ -226,7 +282,8 @@ export default function Notifications() {
             allLoans.filter(l => l.status === "Completed").forEach(l => built.push({
               id:`completed-${l.id}`, type:"completed",
               title:`Loan Fully Paid — ${l.loan_id}`,
-              msg:`Congratulations! Your ${l.loan_type} (${l.loan_id}) for ₱${Number(l.amount).toLocaleString()} has been fully paid. Thank you for being a responsible member!`,
+              msg:`Congratulations! Your ${l.loan_type} has been fully paid. Thank you for being a responsible member!`,
+              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
               time:timeAgo(l.approved_at), date:l.approved_at,
               read:true, route:"/member/my-loans", actionLabel:"View History",
             }));
@@ -238,7 +295,8 @@ export default function Notifications() {
             payments.slice(0, 5).forEach(p => built.push({
               id:`payment-${p.id || p.tx_id}`, type:"payment",
               title:`Payment Recorded — ₱${Number(p.amount).toLocaleString()}`,
-              msg:`Your payment of ₱${Number(p.amount).toLocaleString()} for loan ${p.loan_code} has been recorded (TX: ${p.tx_id}). Remaining balance: ₱${Number(p.balance).toLocaleString()}.`,
+              msg:`Your payment has been recorded to your loan account.`,
+              details:[["Loan", p.loan_code], ["TX ID", p.tx_id], ["Amount Paid", `₱${Number(p.amount).toLocaleString()}`], ["Remaining Balance", `₱${Number(p.balance).toLocaleString()}`]],
               time:timeAgo(p.paid_at), date:p.paid_at,
               read:true, route:"/member/my-loans", actionLabel:"View Payment History",
             }));
@@ -253,7 +311,8 @@ export default function Notifications() {
                   built.push({
                     id:`gcash-verified-${r.id}`, type:"gcash",
                     title:"GCash Payment Verified",
-                    msg:`Your GCash payment of ₱${Number(r.amount).toLocaleString()} for loan ${r.loan_id} (Ref: ${r.reference_number}) has been verified and recorded by admin on ${r.verified_at}.`,
+                    msg:`Your GCash payment has been verified and recorded by admin.`,
+                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
                     time:timeAgo(r.verified_at), date:r.verified_at,
                     read:false, route:"/member/my-loans", actionLabel:"View Payment",
                   });
@@ -261,7 +320,8 @@ export default function Notifications() {
                   built.push({
                     id:`gcash-rejected-${r.id}`, type:"gcash",
                     title:"GCash Payment Not Verified",
-                    msg:`Your GCash payment (Ref: ${r.reference_number}, ₱${Number(r.amount).toLocaleString()}) for loan ${r.loan_id} was not verified. Reason: ${r.reject_reason}. Please resubmit with the correct reference number.`,
+                    msg:`Your GCash payment was not verified.${r.reject_reason ? " Reason: " + r.reject_reason : ""} Please resubmit with the correct reference number.`,
+                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
                     time:timeAgo(r.verified_at), date:r.verified_at,
                     read:false, route:"/member/my-loans", actionLabel:"Resubmit Payment",
                   });
@@ -269,7 +329,8 @@ export default function Notifications() {
                   built.push({
                     id:`gcash-pending-${r.id}`, type:"gcash",
                     title:"GCash Payment Pending Verification",
-                    msg:`Your GCash payment (Ref: ${r.reference_number}, ₱${Number(r.amount).toLocaleString()}) for loan ${r.loan_id} is waiting for admin verification.`,
+                    msg:`Your GCash payment is waiting for admin verification.`,
+                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
                     time:timeAgo(r.created_at), date:r.created_at,
                     read:true, route:"/member/my-loans", actionLabel:"View My Loans",
                   });
@@ -290,8 +351,26 @@ export default function Notifications() {
                 savings.transactions.slice(0, 3).forEach((tx, i) => built.push({
                   id:`savings-${tx.id || i}`, type:"savings",
                   title:`Savings ${tx.transaction_type} — ₱${Number(tx.amount).toLocaleString()}`,
-                  msg:`A ${tx.transaction_type.toLowerCase()} of ₱${Number(tx.amount).toLocaleString()} was recorded to your savings.${tx.note ? " Note: " + tx.note : ""} New balance: ₱${Number(tx.balance_after).toLocaleString()}.`,
+                  msg:`A ${tx.transaction_type.toLowerCase()} was recorded to your savings account.`,
+                  details:[["Amount", `₱${Number(tx.amount).toLocaleString()}`], ["New Balance", `₱${Number(tx.balance_after).toLocaleString()}`], ...(tx.note ? [["Note", tx.note]] : [])],
                   time:timeAgo(tx.created_at), date:tx.created_at,
+                  read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
+                }));
+              }
+            }
+          } catch {}
+
+          // ── 8. SHARE CAPITAL — BAGO ─────────────────────────────────────────
+          try {
+            if (member?.id) {
+              const scHistory = await getMemberShareCapitalAPI(member.id);
+              if (Array.isArray(scHistory) && scHistory.length > 0) {
+                scHistory.slice(0, 3).forEach((t, i) => built.push({
+                  id:`sharecap-${t.id || i}`, type:"sharecap",
+                  title:`Share Capital ${t.txn_type || "Deposit"} — ₱${Number(t.amount).toLocaleString()}`,
+                  msg:`A ${(t.txn_type || "Deposit").toLowerCase()} was recorded to your share capital.`,
+                  details:[["Amount", `₱${Number(t.amount).toLocaleString()}`], ["New Balance", `₱${Number(t.balance_after).toLocaleString()}`], ["Max Loanable", `₱${(Number(t.balance_after)*2).toLocaleString()}`], ...(t.note ? [["Note", t.note]] : [])],
+                  time:timeAgo(t.created_at), date:t.created_at,
                   read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
                 }));
               }
@@ -342,6 +421,7 @@ export default function Notifications() {
     if (filter === "Payments")      return n.type === "payment";
     if (filter === "GCash")         return n.type === "gcash";
     if (filter === "Savings")       return n.type === "savings";
+    if (filter === "Share Capital") return n.type === "sharecap";
     if (filter === "Announcements") return n.type === "notice";
     if (filter === "Membership")    return ["membership","rejected"].includes(n.type);
     if (filter === "System")        return n.type === "system";
