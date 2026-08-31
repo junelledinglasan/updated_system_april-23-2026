@@ -102,26 +102,8 @@ class _MemberScreenScaffoldState extends State<MemberScreenScaffold> {
           child: Container(height: 1, color: _MSColors.border),
         ),
         actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, size: 20, color: _MSColors.green),
-                onPressed: () => Navigator.pushNamed(context, '/member/notifications'),
-              ),
-              if (memberProv.notifCount > 0)
-                Positioned(
-                  top: 6, right: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(color: const Color(0xFFE53935), shape: BoxShape.circle, border: Border.all(color: _MSColors.topbarBg, width: 1.5)),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text('${memberProv.notifCount}', style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 6),
+          // ── TINANGGAL: bell icon button — redundant na dahil meron
+          // nang red number badge ang "Notifications" sa drawer mismo. ──
           PopupMenuButton<String>(
             tooltip: 'Account',
             offset: const Offset(0, 40),

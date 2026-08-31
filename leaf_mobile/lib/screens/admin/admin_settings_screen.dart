@@ -20,7 +20,7 @@ class AdminSettingsScreen extends StatefulWidget {
 }
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
-  String _tab = 'logo'; // 'logo' | 'permissions'
+  String _tab = 'logo'; // 'logo' | 'permissions' | 'gcash'
 
   // ── Logo state ──
   bool _loadingLogo = true;
@@ -39,10 +39,27 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   int? _savingStaffId;
   final Map<int, List<String>> _localPerms = {};
 
+  // ── BAGO: GCash Payment settings state ──────────────────────────────
+  bool _loadingGcash = true;
+  final _gcashNumberCtrl = TextEditingController();
+  final _gcashNameCtrl = TextEditingController();
+  String _savedGcashNumber = '';
+  String _savedGcashName = '';
+  bool _gcashSaving = false;
+  String? _gcashError;
+  String? _gcashSuccess;
+
   @override
   void initState() {
     super.initState();
     _loadLogo();
+  }
+
+  @override
+  void dispose() {
+    _gcashNumberCtrl.dispose();
+    _gcashNameCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLogo() async {
@@ -70,6 +87,49 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _loadingStaff = false);
+    }
+  }
+
+  // ── BAGO: kunin ang kasalukuyang GCash number/account name ─────────
+  Future<void> _loadGcash() async {
+    if (_savedGcashNumber.isNotEmpty) return; // load once lang
+    setState(() => _loadingGcash = true);
+    try {
+      final data = await SettingsService.getGCashSettings(forceRefresh: true);
+      if (mounted) {
+        setState(() {
+          _savedGcashNumber = data['gcash_number'] ?? '';
+          _savedGcashName = data['gcash_name'] ?? '';
+          _gcashNumberCtrl.text = _savedGcashNumber;
+          _gcashNameCtrl.text = _savedGcashName;
+          _loadingGcash = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingGcash = false);
+    }
+  }
+
+  bool get _gcashDirty => _gcashNumberCtrl.text.trim() != _savedGcashNumber || _gcashNameCtrl.text.trim() != _savedGcashName;
+
+  Future<void> _handleSaveGcash() async {
+    setState(() { _gcashError = null; _gcashSuccess = null; });
+    if (_gcashNumberCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'GCash number is required.'); return; }
+    if (_gcashNameCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'Account name is required.'); return; }
+    setState(() => _gcashSaving = true);
+    try {
+      await SettingsService.updateGCashSettings(_gcashNumberCtrl.text.trim(), _gcashNameCtrl.text.trim());
+      if (mounted) {
+        setState(() {
+          _savedGcashNumber = _gcashNumberCtrl.text.trim();
+          _savedGcashName = _gcashNameCtrl.text.trim();
+          _gcashSuccess = 'GCash payment details updated! Members will see the new number right away.';
+          _gcashSaving = false;
+        });
+        Future.delayed(const Duration(milliseconds: 3500), () { if (mounted) setState(() => _gcashSuccess = null); });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _gcashError = 'Failed to update GCash settings.'; _gcashSaving = false; });
     }
   }
 
@@ -157,10 +217,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             child: Row(children: [
               Expanded(child: _TabBtn(label: '🖼️ Logo', active: _tab == 'logo', onTap: () => setState(() => _tab = 'logo'))),
               Expanded(child: _TabBtn(label: '🔐 Staff Permissions', active: _tab == 'permissions', onTap: () { setState(() => _tab = 'permissions'); _loadStaffPermissions(); })),
+              // ── BAGO: GCash Payment tab ──
+              Expanded(child: _TabBtn(label: '💳 GCash', active: _tab == 'gcash', onTap: () { setState(() => _tab = 'gcash'); _loadGcash(); })),
             ]),
           ),
           Expanded(
-            child: _tab == 'logo' ? _buildLogoTab() : _buildPermissionsTab(),
+            child: _tab == 'logo'
+                ? _buildLogoTab()
+                : _tab == 'permissions'
+                    ? _buildPermissionsTab()
+                    : _buildGcashTab(),
           ),
         ],
       ),
@@ -246,6 +312,69 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                     ),
                   ),
                 ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── BAGO: GCash Payment tab — para ma-edit ng admin ang GCash
+  // number/account name na ipinapakita sa members. ────────────────────
+  Widget _buildGcashTab() {
+    if (_loadingGcash) return const Center(child: CircularProgressIndicator(color: _STColors.green));
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _STColors.border)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: const [
+                  Icon(Icons.smartphone, size: 15, color: _STColors.green),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Ito ang numero at pangalan na makikita ng mga member sa "Pay via GCash" na modal.', style: TextStyle(fontSize: 11, color: _STColors.sub, height: 1.5))),
+                ]),
+                const SizedBox(height: 16),
+
+                const Text('GCASH NUMBER', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _gcashNumberCtrl,
+                  onChanged: (_) => setState(() => _gcashError = null),
+                  style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, letterSpacing: 1),
+                  decoration: InputDecoration(hintText: 'e.g. 0967-006-3500', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                ),
+                const SizedBox(height: 14),
+
+                const Text('ACCOUNT NAME', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _gcashNameCtrl,
+                  onChanged: (_) => setState(() => _gcashError = null),
+                  decoration: InputDecoration(hintText: 'e.g. LEAF MPC', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                ),
+
+                if (_gcashError != null) Container(margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8)), child: Text(_gcashError!, style: const TextStyle(fontSize: 11.5, color: _STColors.red, fontWeight: FontWeight.w600))),
+                if (_gcashSuccess != null) Container(margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: Text(_gcashSuccess!, style: const TextStyle(fontSize: 11.5, color: _STColors.green, fontWeight: FontWeight.w600))),
+
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: _STColors.green, foregroundColor: Colors.white),
+                    onPressed: (!_gcashDirty || _gcashSaving) ? null : _handleSaveGcash,
+                    child: _gcashSaving
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save GCash Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ),
               ],
             ),
           ),

@@ -368,3 +368,37 @@ def send_gcash_rejected_email(email, fullname, member_id, loan_id, reference_num
         f"❌ GCash Payment Not Verified — {loan_id} · Ref: {reference_number}",
         _base(content)
     )
+
+
+# ══════════════════════════════════════════════════════════════════
+#  LOAN — APPROVED, WAITING FOR RELEASE (bagong 2-step na flow)
+# ══════════════════════════════════════════════════════════════════
+
+def send_loan_approved_pending_release_email(email, fullname, member_id, loan_id, loan_type, amount):
+    """Send email when loan is Approved — pero hindi pa na-release
+    ang pera. Kailangan pang pumunta sa opisina para kunin."""
+    content = f"""
+    <p>Dear <strong>{fullname}</strong>,</p>
+    <p>Great news! Your loan application has been <strong>approved</strong> by LEAF MPC.
+    Please visit the LEAF MPC office to claim your loan proceeds and sign the necessary documents.</p>
+
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Member ID</span><span class="info-value">{member_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan ID</span><span class="info-value">{loan_id}</span></div>
+      <div class="info-row"><span class="info-label">Loan Type</span><span class="info-value">{loan_type}</span></div>
+      <div class="info-row"><span class="info-label">Loan Amount</span><span class="info-value">₱{float(amount):,.2f}</span></div>
+    </div>
+
+    <div class="alert-box">
+      <strong>Next Step:</strong> Please visit the LEAF MPC office during office hours
+      (Mon–Fri, 8:00 AM – 5:00 PM) to claim your loan proceeds. Your monthly due date
+      and repayment schedule will be confirmed once your loan is released.
+    </div>
+
+    <p>Please bring a valid ID for verification. We look forward to seeing you soon!</p>
+    """
+    return send_email(
+        email,
+        f"Loan Approved — {loan_id} · Please Visit the Office to Claim",
+        _base(content)
+    )

@@ -21,6 +21,10 @@ class Loan(models.Model):
         ('Completed',  'Completed'),
         ('Declined',   'Declined'),
         ('Overdue',    'Overdue'),
+        # ── BAGO: hiwalay sa "Declined" — ito ay kapag ang MEMBER MISMO
+        # ang nag-cancel ng sarili niyang "For Review" application, hindi
+        # dahil sa desisyon ng admin. ─────────────────────────────────
+        ('Cancelled',  'Cancelled'),
     ]
 
     loan_id        = models.CharField(max_length=20, unique=True, blank=True)
@@ -37,6 +41,12 @@ class Loan(models.Model):
     applied_at     = models.DateTimeField(auto_now_add=True)
     approved_at    = models.DateTimeField(null=True, blank=True)
     approved_by    = models.CharField(max_length=50, blank=True)
+    # ── BAGO: para sa 2-step na Approve → Confirm Release flow.
+    # approved_at/approved_by = kailan/sino nag-"Approve" (status → Approved).
+    # released_at/released_by = kailan/sino nag-"Confirm Release" (status → Active,
+    # dito lang talaga nakuha ng member ang pera). ──────────────────────────────
+    released_at    = models.DateTimeField(null=True, blank=True)
+    released_by    = models.CharField(max_length=50, blank=True)
     next_due_date  = models.DateField(null=True, blank=True)
     decline_reason = models.TextField(blank=True)
     remarks        = models.TextField(blank=True)

@@ -61,6 +61,52 @@ def reset_system_logo_view(request):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  BAGO: GCASH PAYMENT NUMBER/NAME — dating hardcoded sa
+#  GCashPayment.jsx (GCASH_NUMBER / GCASH_NAME constants), ngayon
+#  nasa database na para ma-edit ng admin sa Settings nang hindi na
+#  kailangang galawin ang code.
+# ══════════════════════════════════════════════════════════════════
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def gcash_settings_view(request):
+    """GET — kunin ang kasalukuyang GCash number/account name.
+    Naka-IsAuthenticated lang (hindi AllowAny tulad ng logo), dahil
+    ginagamit lang ito sa loob ng "Pay via GCash" modal ng member
+    (naka-login na siya doon) — hindi kailangan pre-login/public.
+    PATCH — i-update — ADMIN ONLY."""
+    settings_obj = SystemSettings.get_solo()
+
+    if request.method == 'GET':
+        return Response({
+            'gcash_number': settings_obj.gcash_number,
+            'gcash_name':   settings_obj.gcash_name,
+        })
+
+    # PATCH — ADMIN ONLY
+    if request.user.role != 'admin':
+        return Response({'error': 'Unauthorized. Admin access only.'}, status=403)
+
+    number = request.data.get('gcash_number', '').strip()
+    name   = request.data.get('gcash_name', '').strip()
+
+    if not number:
+        return Response({'error': 'GCash number is required.'}, status=400)
+    if not name:
+        return Response({'error': 'Account name is required.'}, status=400)
+
+    settings_obj.gcash_number = number
+    settings_obj.gcash_name   = name
+    settings_obj.updated_by   = request.user
+    settings_obj.save()
+
+    return Response({
+        'gcash_number': settings_obj.gcash_number,
+        'gcash_name':   settings_obj.gcash_name,
+    }, status=200)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  STAFF FEATURE PERMISSIONS
 # ══════════════════════════════════════════════════════════════════
 

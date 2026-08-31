@@ -1,5 +1,5 @@
 // lib/services/settings_service.dart
-// Katumbas ng web's api/settings.js — logo customization.
+// Katumbas ng web's api/settings.js — logo customization + GCash settings.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -63,6 +63,54 @@ class SettingsService {
     }
     _cachedLogoUrl = null;
     _fetched = true;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  BAGO: GCASH PAYMENT NUMBER/NAME — dating hardcoded (kGcashNumber
+  //  / kGcashName sa gcash_payment_screen.dart), ngayon nasa database
+  //  na para ma-edit ng admin sa Settings.
+  // ══════════════════════════════════════════════════════════════
+
+  static String? _cachedGcashNumber;
+  static String? _cachedGcashName;
+  static bool _gcashFetched = false;
+
+  // Kailangan ng auth header dito (hindi tulad ng getLogoUrl na
+  // AllowAny) — ang backend endpoint ay IsAuthenticated, dahil
+  // ginagamit lang ito sa loob ng naka-login na member portal.
+  static Future<Map<String, String>> getGCashSettings({bool forceRefresh = false}) async {
+    if (_gcashFetched && !forceRefresh) {
+      return {'gcash_number': _cachedGcashNumber ?? '', 'gcash_name': _cachedGcashName ?? ''};
+    }
+    try {
+      final res = await http.get(Uri.parse('${AppConstants.baseUrl}/settings/gcash/'), headers: await _authHeader());
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        _cachedGcashNumber = data['gcash_number'] as String?;
+        _cachedGcashName = data['gcash_name'] as String?;
+        _gcashFetched = true;
+        return {'gcash_number': _cachedGcashNumber ?? '', 'gcash_name': _cachedGcashName ?? ''};
+      }
+      return {'gcash_number': '', 'gcash_name': ''};
+    } catch (_) {
+      return {'gcash_number': '', 'gcash_name': ''};
+    }
+  }
+
+  // Admin-only — i-update ang GCash number/account name
+  static Future<void> updateGCashSettings(String number, String name) async {
+    final res = await http.patch(
+      Uri.parse('${AppConstants.baseUrl}/settings/gcash/'),
+      headers: {...await _authHeader(), 'Content-Type': 'application/json'},
+      body: jsonEncode({'gcash_number': number, 'gcash_name': name}),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      throw Exception(body['error'] ?? 'Failed to update GCash settings (${res.statusCode})');
+    }
+    _cachedGcashNumber = number;
+    _cachedGcashName = name;
+    _gcashFetched = true;
   }
 
   // ══════════════════════════════════════════════════════════════

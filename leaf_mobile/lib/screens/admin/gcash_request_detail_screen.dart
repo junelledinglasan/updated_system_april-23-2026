@@ -67,7 +67,13 @@ class _GcashRequestDetailScreenState extends State<GcashRequestDetailScreen> {
   Widget build(BuildContext context) {
     final req = widget.req;
     final status = (req['status'] ?? 'Pending').toString();
-    final hasProof = req['screenshot_url'] != null;
+    // ── FIX: hindi lang null ang dapat i-check — ang Django URLField
+    // (blank=True) ay nag-de-default sa EMPTY STRING kapag walang
+    // laman, hindi null. Dating palaging "may proof" kahit walang
+    // laman ang screenshot_url, kaya sinusubukang i-load ang isang
+    // blangkong URL (error placeholder ang lumalabas imbes na malinaw
+    // na "No screenshot" message). ─────────────────────────────────
+    final hasProof = '${req['screenshot_url'] ?? ''}'.trim().isNotEmpty;
     final amount = double.tryParse('${req['amount'] ?? 0}') ?? 0;
 
     return Scaffold(

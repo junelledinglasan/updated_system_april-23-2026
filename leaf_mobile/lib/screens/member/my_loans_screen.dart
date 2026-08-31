@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/loans_service.dart';
 import '../../services/payments_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
+import '../../providers/auth_provider.dart';
+import '../../utils/page_cache.dart';
 import '../admin/receipt_screen.dart';
 import 'gcash_payment_screen.dart';
 
@@ -47,15 +50,39 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
   String _mainTab = 'active'; // active | history | all
   String _detailTab = 'details'; // details | payments | schedule
   String? _expandedLoanId;
+  // ── BAGO: scope key para sa cache — gamit ang username mula sa
+  // AuthProvider (available na agad, hindi async, hindi tulad ng
+  // member profile na kailangan pang i-fetch). ────────────────────
+  String? _scopeKey;
 
   @override
   void initState() {
     super.initState();
-    _fetchAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      _scopeKey = auth.username ?? auth.name;
+      // ── BAGO: cache-first — instant na ipinapakita ang huling
+      // nakitang loans/payments/gcash requests habang tahimik na
+      // nagre-refresh sa likod. ───────────────────────────────────
+      final cached = PageCache.get<Map<String, dynamic>>('myloans', _scopeKey);
+      if (cached != null && mounted) {
+        setState(() {
+          _activeLoans = cached['activeLoans'] as List<dynamic>? ?? [];
+          _allLoans = cached['allLoans'] as List<dynamic>? ?? [];
+          _payments = cached['payments'] as List<dynamic>? ?? [];
+          _gcashRequests = cached['gcashRequests'] as List<dynamic>? ?? [];
+          _selectedLoan = _activeLoans.isNotEmpty ? _activeLoans.first : null;
+          _loading = false;
+        });
+      }
+      _fetchAll();
+    });
   }
 
   Future<void> _fetchAll() async {
-    setState(() => _loading = true);
+    // ── Huwag pilitin ang loading spinner kung may cache na tayong
+    // ipinapakita — tahimik na lang mag-refresh sa likod. ───────────
+    if (PageCache.get('myloans', _scopeKey) == null && mounted) setState(() => _loading = true);
     List<dynamic> active = [];
     List<dynamic> completed = [];
     List<dynamic> payments = [];
@@ -67,16 +94,21 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
       () async { try { gcash = await LoansService.getGCashRequests(); } catch (_) {} }(),
     ]);
     final activeFiltered = active.where((l) => l['status'] == 'Active' || l['status'] == 'Overdue').toList();
+    final newAllLoans = [...activeFiltered, ...completed]..sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
     if (mounted) {
       setState(() {
         _activeLoans = activeFiltered;
-        _allLoans = [...activeFiltered, ...completed]..sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
+        _allLoans = newAllLoans;
         _payments = payments;
         _gcashRequests = gcash;
         _selectedLoan = activeFiltered.isNotEmpty ? activeFiltered.first : null;
         _loading = false;
       });
     }
+    PageCache.set('myloans', _scopeKey, {
+      'activeLoans': activeFiltered, 'allLoans': newAllLoans,
+      'payments': payments, 'gcashRequests': gcash,
+    });
   }
 
   bool _hasPendingGCash(String loanId) => _gcashRequests.any((r) => r['loan_id'] == loanId && r['status'] == 'Pending');
@@ -332,31 +364,76 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
 
   Widget _buildPaymentsTab(dynamic loan) {
     final loanPayments = _payments.where((p) => p['loan'] == loan['id'] || '${p['loan_code']}' == '${loan['loan_id']}').toList();
-    if (loanPayments.isEmpty) {
+    // ── BAGO: isama rin ang GCash payment requests na Pending o
+    // Rejected — para makita ang BUONG proseso ng pagbabayad, hindi
+    // lang yung mga na-confirm na. Hindi na kasama ang "Verified"
+    // requests dito dahil may kasama na silang totoong Payment record
+    // sa itaas (maiiwasan ang duplicate). ─────────────────────────────
+    final loanGcash = _gcashRequests.where((r) => r['loan_id'] == loan['loan_id'] && r['status'] != 'Verified').toList();
+
+    final combined = <Map<String, dynamic>>[
+      ...loanPayments.map((p) => {'kind': 'payment', 'sortDate': p['paid_at'], ...Map<String, dynamic>.from(p)}),
+      ...loanGcash.map((r) => {'kind': 'gcash', 'sortDate': r['created_at'], ...Map<String, dynamic>.from(r)}),
+    ]..sort((a, b) {
+        final da = DateTime.tryParse('${a['sortDate'] ?? ''}') ?? DateTime(0);
+        final db = DateTime.tryParse('${b['sortDate'] ?? ''}') ?? DateTime(0);
+        return db.compareTo(da);
+      });
+
+    if (combined.isEmpty) {
       return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No payments yet.', style: TextStyle(color: _MLColors.sub))));
     }
     return Column(
-      children: loanPayments.map<Widget>((p) => Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(color: const Color(0xFFFAFAFA), borderRadius: BorderRadius.circular(8)),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${p['paid_at'] ?? ''}'.split('T').first, style: const TextStyle(fontSize: 11, color: Color(0xFF666666))),
-                    Text('${p['tx_id'] ?? ''}', style: const TextStyle(fontSize: 9.5, color: _MLColors.sub, fontFamily: 'monospace')),
-                  ],
-                ),
+      children: combined.map<Widget>((item) {
+        final isPayment = item['kind'] == 'payment';
+        return Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(color: const Color(0xFFFAFAFA), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${(isPayment ? item['paid_at'] : item['created_at']) ?? ''}'.split('T').first, style: const TextStyle(fontSize: 11, color: Color(0xFF666666))),
+                  Text('${isPayment ? item['tx_id'] : item['reference_number']}', style: const TextStyle(fontSize: 9.5, color: _MLColors.sub, fontFamily: 'monospace')),
+                  const SizedBox(height: 3),
+                  // ── BAGO: Status badge ──────────────────────────────
+                  if (isPayment)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFA5D6A7))),
+                      child: const Text('Completed', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.green)),
+                    )
+                  else if (item['status'] == 'Pending')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFFFE082))),
+                      child: const Text('Pending Verification', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.orange)),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFEF9A9A))),
+                      child: const Text('Rejected', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.red)),
+                    ),
+                  if (!isPayment && item['status'] == 'Rejected' && item['reject_reason'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text('${item['reject_reason']}', style: const TextStyle(fontSize: 9.5, color: _MLColors.red)),
+                    ),
+                ],
               ),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(_peso(double.tryParse('${p['amount'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _MLColors.green)),
-                Text(_peso(double.tryParse('${p['balance'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 10, color: _MLColors.blue)),
-              ]),
-              IconButton(icon: const Icon(Icons.visibility_outlined, size: 16, color: _MLColors.green), onPressed: () => _openReceipt(p), visualDensity: VisualDensity.compact),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(_peso(double.tryParse('${item['amount'] ?? 0}') ?? 0), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: isPayment ? _MLColors.green : const Color(0xFF555555))),
+              if (isPayment) Text(_peso(double.tryParse('${item['balance'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 10, color: _MLColors.blue)),
             ]),
-          )).toList(),
+            if (isPayment)
+              IconButton(icon: const Icon(Icons.visibility_outlined, size: 16, color: _MLColors.green), onPressed: () => _openReceipt(item), visualDensity: VisualDensity.compact),
+          ]),
+        );
+      }).toList(),
     );
   }
 

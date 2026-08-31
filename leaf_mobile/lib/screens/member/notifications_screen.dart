@@ -27,6 +27,11 @@ const Map<String, _NotifMeta> _typeMeta = {
   'due':        _NotifMeta(Icons.calendar_today_outlined, 'Payment Due', Color(0xFFFFF8E1), Color(0xFFFFE082), Color(0xFFE65100)),
   'notice':     _NotifMeta(Icons.campaign_outlined, 'Announcement', Color(0xFFE3F2FD), Color(0xFF90CAF9), Color(0xFF1565C0)),
   'approved':   _NotifMeta(Icons.check_circle_outline, 'Approved', Color(0xFFE8F5E9), Color(0xFFA5D6A7), Color(0xFF1B5E20)),
+  // ── BAGO: hiwalay na type para sa loan na "Approved" pa lang (hindi
+  // pa "Active") — kailangan pang pumunta ng member sa opisina para
+  // makuha ang pera. Hiwalay ito sa "approved" (na para sa Active/
+  // na-release nang loan) para hindi malito ang member. ──────────────
+  'pending_release': _NotifMeta(Icons.account_balance_wallet_outlined, 'Approved — For Release', Color(0xFFFFF8E1), Color(0xFFFFE082), Color(0xFFE65100)),
   'rejected':   _NotifMeta(Icons.cancel_outlined, 'Rejected', Color(0xFFFFEBEE), Color(0xFFEF9A9A), Color(0xFFC62828)),
   'membership': _NotifMeta(Icons.emoji_events_outlined, 'Membership', Color(0xFFE8F5E9), Color(0xFFA5D6A7), Color(0xFF1B5E20)),
   'system':     _NotifMeta(Icons.settings_outlined, 'System', Color(0xFFF5F5F5), Color(0xFFE0E0E0), Color(0xFF555555)),
@@ -40,7 +45,6 @@ const Map<String, _NotifMeta> _typeMeta = {
 };
 
 const List<String> _filters = ['All', 'Unread', 'Loans', 'Payments', 'GCash', 'Savings', 'Share Capital', 'Announcements', 'Membership', 'System'];
-const String _storageKey = 'leaf_read_notifs';
 
 class NotifItem {
   final String id;
@@ -55,9 +59,13 @@ class NotifItem {
   final List<String>? requirements;
   final String? highlight;
   final List<List<String>>? details; // [[key, value], ...]
-  NotifItem({required this.id, required this.type, required this.title, required this.msg, this.date, required this.read, this.route, this.actionLabel, this.requirements, this.highlight, this.details});
+  // ── BAGO: para sa Payment Reminder — "Due in X days" imbes na
+  // "X ago" (hinaharap na petsa ang due date, hindi nakaraan). ────────
+  final String? timeOverride;
+  NotifItem({required this.id, required this.type, required this.title, required this.msg, this.date, required this.read, this.route, this.actionLabel, this.requirements, this.highlight, this.details, this.timeOverride});
 
   String get timeAgo {
+    if (timeOverride != null) return timeOverride!;
     if (date == null) return '';
     final diff = DateTime.now().difference(date!);
     if (diff.inMinutes < 1) return 'Just now';
@@ -76,14 +84,42 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  // ── BAGO: static (in-memory) cache — katumbas ng sessionStorage sa
+  // web. Sa unang beses na buksan ang screen na ito sa loob ng app
+  // session, maghihintay pa rin (walang cache pa). Pero sa susunod na
+  // pagbalik dito (hal. galing sa ibang tab), agad lalabas ang huling
+  // nakitang datos habang tahimik na kinukuha sa likod ang bago.
+  // ── FIX: naka-scope na ngayon PER-ACCOUNT (Map imbes na iisang
+  // List) — dating iisang static field lang, kaya kahit magpalit ng
+  // account sa parehong app session, nakikita pa rin ng bagong
+  // account ang cached notifications ng nauna. ─────────────────────
+  static final Map<String, List<NotifItem>> _cachedNotifsByAccount = {};
+
   bool _loading = true;
   List<NotifItem> _notifs = [];
   String _filter = 'All';
   Set<String> _readIds = {};
+  String? _scopeKey;
+
+  List<NotifItem>? get _cachedNotifs => _scopeKey == null ? null : _cachedNotifsByAccount[_scopeKey];
+
+  // ── FIX: naka-scope na rin per-account ang SharedPreferences key
+  // (dating fixed/shared ang key na 'to) — kaya kahit magpalit ng
+  // account sa parehong device, hindi na maghahalo ang read-status
+  // ng magkaibang users. ─────────────────────────────────────────
+  String get _storageKey => 'leaf_read_notifs_${_scopeKey ?? "anon"}';
 
   @override
   void initState() {
     super.initState();
+    // ── BAGO: kunin agad ang scope key (username) bago tignan ang
+    // cache — kailangan ito para malaman kung saang "kahon" titingin. ──
+    final auth = context.read<AuthProvider>();
+    _scopeKey = auth.username ?? auth.name;
+    if (_cachedNotifs != null) {
+      _notifs  = List.of(_cachedNotifs!);
+      _loading = false;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _build());
   }
 
@@ -97,17 +133,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await prefs.setStringList(_storageKey, ids.toList());
   }
 
+  // ── BAGO: matalinong pag-parse ng petsa (kaparehong ayos sa web).
+  // Susubukan munang basahin nang normal. Kapag ang resulta ay
+  // masyadong nasa hinaharap (higit 2 minuto mula ngayon — senyales
+  // na baka mali ang pagkaka-interpret ng timezone), saka lang natin
+  // susubukang i-reinterpret bilang UTC. ─────────────────────────────
+  // ── BAGO: "Due in X days" na label para sa Payment Reminder — hindi
+  // dapat "time ago" ang gamitin dahil hinaharap na petsa ang due date.
+  String _dueLabel(String? dueDateStr) {
+    if (dueDateStr == null || dueDateStr.isEmpty) return 'Upcoming';
+    try {
+      final due = DateTime.parse('${dueDateStr}T00:00:00');
+      final today = DateTime.now();
+      final todayMidnight = DateTime(today.year, today.month, today.day);
+      final diffDays = due.difference(todayMidnight).inDays;
+      if (diffDays < 0) return 'Was due ${diffDays.abs()} day${diffDays.abs() != 1 ? 's' : ''} ago';
+      if (diffDays == 0) return 'Due today';
+      if (diffDays == 1) return 'Due tomorrow';
+      return 'Due in $diffDays days';
+    } catch (_) {
+      return 'Upcoming';
+    }
+  }
+
   DateTime? _parseDate(dynamic v) {
     if (v == null) return null;
     try {
-      return DateTime.parse('$v');
+      final normal = DateTime.parse('$v');
+      final twoMinFromNow = DateTime.now().add(const Duration(minutes: 2));
+      if (!normal.isAfter(twoMinFromNow)) return normal;
+
+      final str = '$v'.trim();
+      final hasTimezone = RegExp(r'Z$|[+-]\d{2}:?\d{2}$').hasMatch(str);
+      if (!hasTimezone) {
+        try {
+          final asUtc = DateTime.parse('${str}Z').toLocal();
+          if (!asUtc.isAfter(twoMinFromNow)) return asUtc;
+        } catch (_) {}
+      }
+      return normal;
     } catch (_) {
       return null;
     }
   }
 
   Future<void> _build() async {
-    setState(() => _loading = true);
+    // Kung may cache na tayong ipinapakita, huwag nang ipakita ang
+    // loading spinner — tahimik na lang mag-refresh sa likod.
+    if (_cachedNotifs == null) setState(() => _loading = true);
     final auth = context.read<AuthProvider>();
     final memberProv = context.read<MemberProvider>();
     // Hindi tulad ng Dashboard, hindi natin sigurado kung na-load na
@@ -123,10 +196,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final List<NotifItem> built = [];
 
     // ── 1. WELCOME ──────────────────────────────────────────────────
-    built.add(NotifItem(id: 'welcome-system', type: 'system', title: 'Welcome to LEAF MPC', msg: 'Hello, $name! Welcome to the LEAF MPC Management System. Stay updated on your loans, payments, and cooperative news here.', date: DateTime.now(), read: true));
+    built.add(NotifItem(id: 'welcome-system', type: 'system', title: 'Welcome to LEAF MPC', msg: 'Hello, $name! Welcome to the LEAF MPC Management System. Stay updated on your loans, payments, and cooperative news here.', date: DateTime.now(), read: false));
 
     if (!isOfficial) {
-      built.add(NotifItem(id: 'system-info-portal', type: 'system', title: 'About the LEAF MPC Portal', msg: 'Apply for membership, track your application, and view announcements. Full features unlock once you become an official member.', date: DateTime.now(), read: true));
+      built.add(NotifItem(id: 'system-info-portal', type: 'system', title: 'About the LEAF MPC Portal', msg: 'Apply for membership, track your application, and view announcements. Full features unlock once you become an official member.', date: DateTime.now(), read: false));
     }
 
     // ── 2. MEMBERSHIP STATUS (non-official lang) ──────────────────────
@@ -159,7 +232,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ));
         } else if (status == 'Pending') {
           hasApplication = true;
-          built.add(NotifItem(id: 'membership-pending', type: 'system', title: 'Membership Application Under Review', msg: "Your application (${app['app_id']}) is currently under review. Thank you for your patience.", date: _parseDate(app['created_at']), read: true));
+          built.add(NotifItem(id: 'membership-pending', type: 'system', title: 'Membership Application Under Review', msg: "Your application (${app['app_id']}) is currently under review. Thank you for your patience.", date: _parseDate(app['created_at']), read: false));
         }
       } catch (_) {}
 
@@ -183,18 +256,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         for (final l in allLoans.where((l) => l['status'] == 'Overdue')) {
           built.add(NotifItem(id: 'overdue-${l['id']}', type: 'overdue', title: '⚠ Overdue Payment — ${l['loan_id']}', msg: "Your ${l['loan_type']} (${l['loan_id']}) is OVERDUE with balance ₱${(double.tryParse('${l['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}. Please settle immediately to avoid additional penalties.", date: _parseDate(l['next_due_date']), read: false, route: 'my-loans', actionLabel: 'Pay Now'));
         }
+        // ── BAGO: "Approved" — hindi pa "Active", waiting pa para
+        // ma-release ang pera sa opisina. Hiwalay ito sa "Active"
+        // loop sa ibaba. ─────────────────────────────────────────────
+        for (final l in allLoans.where((l) => l['status'] == 'Approved')) {
+          built.add(NotifItem(
+            id: 'pending-release-${l['id']}', type: 'pending_release', title: 'Loan Approved — ${l['loan_id']}',
+            msg: "Your ${l['loan_type']} for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} has been approved! Please visit the LEAF MPC office to claim your loan proceeds and sign the necessary documents.",
+            details: [['Loan ID', '${l['loan_id']}'], ['Amount', '₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}']],
+            date: _parseDate(l['approved_at']), read: false, route: 'my-loans', actionLabel: 'View My Loans',
+          ));
+        }
         for (final l in allLoans.where((l) => l['status'] == 'Active')) {
-          built.add(NotifItem(id: 'due-${l['id']}', type: 'due', title: 'Payment Reminder — ${l['loan_id']}', msg: "Your monthly payment of ₱${(double.tryParse('${l['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)} for ${l['loan_type']} (${l['loan_id']}) is due on ${l['next_due_date'] ?? '—'}. Pay on time to avoid penalties.", date: _parseDate(l['next_due_date']), read: false, route: 'my-loans', actionLabel: 'View My Loans'));
-          built.add(NotifItem(id: 'approved-${l['id']}', type: 'approved', title: 'Loan Approved — ${l['loan_id']}', msg: "Your ${l['loan_type']} for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} has been approved and activated. Monthly due: ₱${(double.tryParse('${l['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)}. Visit the office to sign documents.", date: _parseDate(l['approved_at']), read: true, route: 'my-loans', actionLabel: 'View Loan Details'));
+          // ── BAGO: lalabas lang ang reminder kapag loob ng 3 araw na
+          // ang due date — hindi na agad kahit isang buwan pa. ────────
+          final nextDue = l['next_due_date'] as String?;
+          if (nextDue != null && nextDue.isNotEmpty) {
+            try {
+              final due = DateTime.parse('${nextDue}T00:00:00');
+              final today = DateTime.now();
+              final diffDays = due.difference(DateTime(today.year, today.month, today.day)).inDays;
+              if (diffDays <= 3) {
+                built.add(NotifItem(
+                  id: 'due-${l['id']}', type: 'due', title: 'Payment Reminder — ${l['loan_id']}',
+                  msg: "Your monthly payment for ${l['loan_type']} is coming up. Pay on time to avoid penalties.",
+                  details: [['Loan ID', '${l['loan_id']}'], ['Amount Due', '₱${(double.tryParse('${l['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)}'], ['Due Date', nextDue]],
+                  date: _parseDate(l['approved_at']) ?? _parseDate(nextDue), timeOverride: _dueLabel(nextDue),
+                  read: false, route: 'my-loans', actionLabel: 'View My Loans',
+                ));
+              }
+            } catch (_) {}
+          }
+          built.add(NotifItem(id: 'approved-${l['id']}', type: 'approved', title: 'Loan Approved — ${l['loan_id']}', msg: "Your ${l['loan_type']} for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} has been approved and activated. Monthly due: ₱${(double.tryParse('${l['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)}. Visit the office to sign documents.", date: _parseDate(l['approved_at']), read: false, route: 'my-loans', actionLabel: 'View Loan Details'));
         }
         for (final l in allLoans.where((l) => l['status'] == 'For Review')) {
-          built.add(NotifItem(id: 'forreview-${l['id']}', type: 'loan', title: 'Loan Application Submitted — ${l['loan_id']}', msg: "Your ${l['loan_type']} application for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} (${l['loan_id']}) has been submitted and is waiting for admin review.", date: _parseDate(l['applied_at']), read: true, route: 'my-loans', actionLabel: 'View Status'));
+          built.add(NotifItem(id: 'forreview-${l['id']}', type: 'loan', title: 'Loan Application Submitted — ${l['loan_id']}', msg: "Your ${l['loan_type']} application for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} (${l['loan_id']}) has been submitted and is waiting for admin review.", date: _parseDate(l['applied_at']), read: false, route: 'my-loans', actionLabel: 'View Status'));
         }
         for (final l in allLoans.where((l) => l['status'] == 'Declined')) {
           built.add(NotifItem(id: 'declined-${l['id']}', type: 'rejected', title: 'Loan Application Declined — ${l['loan_id']}', msg: "Your ${l['loan_type']} application for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} was declined.${l['decline_reason'] != null ? ' Reason: ${l['decline_reason']}' : ''} You may re-apply or visit the office.", date: _parseDate(l['applied_at']), read: false, route: 'my-loans', actionLabel: 'View My Loans'));
         }
         for (final l in allLoans.where((l) => l['status'] == 'Completed')) {
-          built.add(NotifItem(id: 'completed-${l['id']}', type: 'completed', title: 'Loan Fully Paid — ${l['loan_id']}', msg: "Congratulations! Your ${l['loan_type']} (${l['loan_id']}) for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} has been fully paid. Thank you for being a responsible member!", date: _parseDate(l['approved_at']), read: true, route: 'my-loans', actionLabel: 'View History'));
+          built.add(NotifItem(id: 'completed-${l['id']}', type: 'completed', title: 'Loan Fully Paid — ${l['loan_id']}', msg: "Congratulations! Your ${l['loan_type']} (${l['loan_id']}) for ₱${(double.tryParse('${l['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} has been fully paid. Thank you for being a responsible member!", date: _parseDate(l['approved_at']), read: false, route: 'my-loans', actionLabel: 'View History'));
         }
       } catch (_) {}
 
@@ -202,7 +304,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       try {
         final payments = await PaymentsService.getPayments();
         for (final p in payments.take(5)) {
-          built.add(NotifItem(id: 'payment-${p['id'] ?? p['tx_id']}', type: 'payment', title: 'Payment Recorded — ₱${(double.tryParse('${p['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}', msg: "Your payment of ₱${(double.tryParse('${p['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} for loan ${p['loan_code']} has been recorded (TX: ${p['tx_id']}). Remaining balance: ₱${(double.tryParse('${p['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}.", date: _parseDate(p['paid_at']), read: true, route: 'my-loans', actionLabel: 'View Payment History'));
+          built.add(NotifItem(id: 'payment-${p['id'] ?? p['tx_id']}', type: 'payment', title: 'Payment Recorded — ₱${(double.tryParse('${p['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}', msg: "Your payment of ₱${(double.tryParse('${p['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} for loan ${p['loan_code']} has been recorded (TX: ${p['tx_id']}). Remaining balance: ₱${(double.tryParse('${p['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}.", date: _parseDate(p['paid_at']), read: false, route: 'my-loans', actionLabel: 'View Payment History'));
         }
       } catch (_) {}
 
@@ -210,12 +312,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       try {
         final gcashReqs = await LoansService.getGCashRequests();
         for (final r in gcashReqs) {
+          final effectiveDate = r['verified_at'] ?? r['created_at'];
           if (r['status'] == 'Verified') {
-            built.add(NotifItem(id: 'gcash-verified-${r['id']}', type: 'gcash', title: 'GCash Payment Verified', msg: "Your GCash payment of ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} for loan ${r['loan_id']} (Ref: ${r['reference_number']}) has been verified and recorded by admin on ${r['verified_at']}.", date: _parseDate(r['verified_at']), read: false, route: 'my-loans', actionLabel: 'View Payment'));
+            built.add(NotifItem(id: 'gcash-verified-${r['id']}', type: 'gcash', title: 'GCash Payment Verified', msg: "Your GCash payment of ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)} for loan ${r['loan_id']} (Ref: ${r['reference_number']}) has been verified and recorded by admin on ${r['verified_at']}.", date: _parseDate(effectiveDate), read: false, route: 'my-loans', actionLabel: 'View Payment'));
           } else if (r['status'] == 'Rejected') {
-            built.add(NotifItem(id: 'gcash-rejected-${r['id']}', type: 'gcash', title: 'GCash Payment Not Verified', msg: "Your GCash payment (Ref: ${r['reference_number']}, ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}) for loan ${r['loan_id']} was not verified. Reason: ${r['reject_reason']}. Please resubmit with the correct reference number.", date: _parseDate(r['verified_at']), read: false, route: 'my-loans', actionLabel: 'Resubmit Payment'));
+            built.add(NotifItem(id: 'gcash-rejected-${r['id']}', type: 'gcash', title: 'GCash Payment Not Verified', msg: "Your GCash payment (Ref: ${r['reference_number']}, ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}) for loan ${r['loan_id']} was not verified. Reason: ${r['reject_reason']}. Please resubmit with the correct reference number.", date: _parseDate(effectiveDate), read: false, route: 'my-loans', actionLabel: 'Resubmit Payment'));
           } else if (r['status'] == 'Pending') {
-            built.add(NotifItem(id: 'gcash-pending-${r['id']}', type: 'gcash', title: 'GCash Payment Pending Verification', msg: "Your GCash payment (Ref: ${r['reference_number']}, ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}) for loan ${r['loan_id']} is waiting for admin verification.", date: _parseDate(r['created_at']), read: true, route: 'my-loans', actionLabel: 'View My Loans'));
+            built.add(NotifItem(id: 'gcash-pending-${r['id']}', type: 'gcash', title: 'GCash Payment Pending Verification', msg: "Your GCash payment (Ref: ${r['reference_number']}, ₱${(double.tryParse('${r['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}) for loan ${r['loan_id']} is waiting for admin verification.", date: _parseDate(r['created_at']), read: false, route: 'my-loans', actionLabel: 'View My Loans'));
           }
         }
       } catch (_) {}
@@ -241,7 +344,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ['New Balance', '₱${bal.toStringAsFixed(0)}'],
                 if (tx['note'] != null && '${tx['note']}'.isNotEmpty) ['Note', '${tx['note']}'],
               ],
-              date: _parseDate(tx['created_at']), read: true, route: 'dashboard', actionLabel: 'View Dashboard',
+              date: _parseDate(tx['created_at']), read: false, route: 'dashboard', actionLabel: 'View Dashboard',
             ));
           }
 
@@ -262,7 +365,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ['Max Loanable', '₱${(bal * 2).toStringAsFixed(0)}'],
                   if (t['note'] != null && '${t['note']}'.isNotEmpty) ['Note', '${t['note']}'],
                 ],
-                date: _parseDate(t['created_at']), read: true, route: 'dashboard', actionLabel: 'View Dashboard',
+                date: _parseDate(t['created_at']), read: false, route: 'dashboard', actionLabel: 'View Dashboard',
               ));
             }
           } catch (_) {}
@@ -271,11 +374,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     // ── Sort: unread muna, tapos by date ────────────────────────────
-    built.sort((a, b) {
-      if (!a.read && b.read) return -1;
-      if (a.read && !b.read) return 1;
-      return (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0));
-    });
+    // BAGO: purong petsa na lang (pinakabago sa pinakaluma) — dating
+    // in-uuna ang "unread" bago ang petsa, kaya lumalabas na mali ang
+    // pagkakasunod (hal. 3-days-old unread items lumalabas BAGO ang
+    // genuinely-mas-bagong read items). Alisin na ang read/unread
+    // priority — petsa lang ang basehan ngayon (kagaya ng web).
+    built.sort((a, b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
 
     final readIds = await _loadReadIds();
     for (final n in built) {
@@ -290,10 +394,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       });
       memberProv.setNotifCount(built.where((n) => !n.read).length);
     }
+    if (_scopeKey != null) _cachedNotifsByAccount[_scopeKey!] = List.of(built); // ── i-save para sa susunod na pagbukas
   }
 
+  // ── FIX: dating basta na lang sinusulat ang `_notifs.map(id)`
+  // (kasalukuyang list lang) papunta sa storage — kung may dating
+  // na-basa nang notification na wala na sa kasalukuyang build (hal.
+  // lumang announcement na lumabas na sa window), nabubura ang
+  // record nito. Ngayon: sariwang kinukuha muna ang laman ng storage
+  // bago i-merge — hindi na kailanman nag-o-overwrite. ──────────────
   Future<void> _markAllRead() async {
-    final allIds = _notifs.map((n) => n.id).toSet();
+    final freshIds = await _loadReadIds();
+    final allIds = {...freshIds, ..._notifs.map((n) => n.id)};
     await _saveReadIds(allIds);
     setState(() {
       _readIds = allIds;
@@ -301,17 +413,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         n.read = true;
       }
     });
-    context.read<MemberProvider>().setNotifCount(0);
+    if (mounted) context.read<MemberProvider>().setNotifCount(0);
   }
 
+  // ── FIX: parehong dahilan — ang `_readIds` (in-memory state) ay
+  // puwedeng maging luma kumpara sa SharedPreferences (hal. kung
+  // dalawang tabs/session ng parehong account). Laging kumukuha na
+  // lang ngayon ng SARIWANG copy mula sa storage bago i-merge. ──────
   Future<void> _handleTap(NotifItem n) async {
-    final newIds = {..._readIds, n.id};
+    final freshIds = await _loadReadIds();
+    final newIds = {...freshIds, n.id};
     await _saveReadIds(newIds);
     setState(() {
       _readIds = newIds;
       n.read = true;
     });
-    context.read<MemberProvider>().setNotifCount(_notifs.where((x) => !x.read).length);
+    if (mounted) context.read<MemberProvider>().setNotifCount(_notifs.where((x) => !x.read).length);
     if (mounted) _showDetail(n);
   }
 
@@ -503,7 +620,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       switch (_filter) {
         case 'All': return true;
         case 'Unread': return !n.read;
-        case 'Loans': return ['loan', 'approved', 'rejected', 'overdue', 'due', 'completed'].contains(n.type);
+        case 'Loans': return ['loan', 'approved', 'pending_release', 'rejected', 'overdue', 'due', 'completed'].contains(n.type);
         case 'Payments': return n.type == 'payment';
         case 'GCash': return n.type == 'gcash';
         case 'Savings': return n.type == 'savings';
@@ -560,17 +677,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                     const SizedBox(height: 12),
 
-                    Row(children: [
-                      Expanded(child: _SummaryChip(value: '${_notifs.length}', label: 'Total', bg: Colors.white, valColor: _NFColors.dark, border: const Color(0xFFDDEEDD))),
-                      const SizedBox(width: 6),
-                      Expanded(child: _SummaryChip(value: '$unreadCount', label: 'Unread', bg: const Color(0xFFE8F5E9), valColor: const Color(0xFF2E7D32), border: const Color(0xFFC8E6C9))),
-                      const SizedBox(width: 6),
-                      Expanded(child: _SummaryChip(value: '${_notifs.where((n) => n.type == 'due' || n.type == 'overdue').length}', label: 'Due', bg: const Color(0xFFFFF8E1), valColor: const Color(0xFFE65100), border: const Color(0xFFFFE0B2))),
-                      const SizedBox(width: 6),
-                      Expanded(child: _SummaryChip(value: '${_notifs.where((n) => n.type == 'notice').length}', label: 'News', bg: const Color(0xFFE3F2FD), valColor: const Color(0xFF1565C0), border: const Color(0xFFBBDEFB))),
-                    ]),
-                    const SizedBox(height: 12),
-
+                    // ── TINANGGAL na ayon sa hiling — parehong ginawa
+                    // na natin sa web (Total/Unread/Due/News chips row). ──
                     SizedBox(
                       height: 34,
                       child: ListView.separated(
@@ -649,27 +757,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
               ),
       ),
-    );
-  }
-}
-
-class _SummaryChip extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color bg;
-  final Color valColor;
-  final Color border;
-  const _SummaryChip({required this.value, required this.label, required this.bg, required this.valColor, required this.border});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: border)),
-      child: Column(children: [
-        FittedBox(child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: valColor))),
-        Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF888888), fontWeight: FontWeight.w600)),
-      ]),
     );
   }
 }

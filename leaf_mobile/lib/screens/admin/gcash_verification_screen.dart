@@ -203,7 +203,11 @@ class _RequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = (req['status'] ?? 'Pending').toString();
-    final hasProof = req['screenshot_url'] != null;
+    // ── FIX: hindi lang null ang dapat i-check — ang Django URLField
+    // (blank=True) ay nag-de-default sa EMPTY STRING kapag walang
+    // laman, hindi null. Dating palaging "Has proof screenshot" kahit
+    // walang laman ang screenshot_url. ──────────────────────────────
+    final hasProof = '${req['screenshot_url'] ?? ''}'.trim().isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

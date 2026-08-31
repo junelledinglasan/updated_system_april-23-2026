@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
   CalendarClock, Megaphone, CheckCircle2, XCircle,
@@ -11,43 +11,335 @@ import { getLoansAPI, getGCashRequestsAPI } from "../../api/loans";
 import { getPaymentsAPI }                   from "../../api/payments";
 import { getMyApplicationAPI, getMyOnlineAppAPI, getMemberSavingsAPI, getMemberShareCapitalAPI } from "../../api/members";
 import { useAuth }                          from "../../context/AuthContext";
+import { useLanguage }                      from "../../context/LanguageContext";
 import "./Notifications.css";
 
 const TYPE_META = {
-  due:        { icon:<CalendarClock size={20} color="#e65100"/>, label:"Payment Due",       bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
-  notice:     { icon:<Megaphone     size={20} color="#1565c0"/>, label:"Announcement",      bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
-  approved:   { icon:<CheckCircle2  size={20} color="#1b5e20"/>, label:"Approved",          bg:"#e8f5e9", border:"#a5d6a7", text:"#1b5e20" },
-  rejected:   { icon:<XCircle       size={20} color="#c62828"/>, label:"Rejected",          bg:"#ffebee", border:"#ef9a9a", text:"#c62828" },
-  membership: { icon:<Trophy        size={20} color="#1b5e20"/>, label:"Membership",        bg:"#e8f5e9", border:"#a5d6a7", text:"#1b5e20" },
-  system:     { icon:<Settings      size={20} color="#555"/>,    label:"System",            bg:"#f5f5f5", border:"#e0e0e0", text:"#555"    },
-  overdue:    { icon:<AlertTriangle size={20} color="#c62828"/>, label:"Overdue",           bg:"#ffebee", border:"#ef9a9a", text:"#c62828" },
-  gcash:      { icon:<Smartphone    size={20} color="#007bff"/>, label:"GCash Payment",     bg:"#e3f2fd", border:"#90caf9", text:"#007bff" },
-  payment:    { icon:<CreditCard    size={20} color="#2e7d32"/>, label:"Payment Recorded",  bg:"#e8f5e9", border:"#a5d6a7", text:"#2e7d32" },
-  savings:    { icon:<PiggyBank     size={20} color="#e65100"/>, label:"Savings",           bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
-  sharecap:   { icon:<Wallet        size={20} color="#6a1b9a"/>, label:"Share Capital",     bg:"#f3e5f5", border:"#ce93d8", text:"#6a1b9a" },
-  loan:       { icon:<FileText      size={20} color="#1565c0"/>, label:"Loan",              bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
-  completed:  { icon:<CheckCheck    size={20} color="#1565c0"/>, label:"Loan Completed",    bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
+  due:             { icon:<CalendarClock size={20} color="#e65100"/>, key:"nf_type_due",        bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
+  notice:          { icon:<Megaphone     size={20} color="#1565c0"/>, key:"nf_type_notice",      bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
+  approved:        { icon:<CheckCircle2  size={20} color="#1b5e20"/>, key:"nf_type_approved",    bg:"#e8f5e9", border:"#a5d6a7", text:"#1b5e20" },
+  pending_release: { icon:<Wallet        size={20} color="#e65100"/>, key:"nf_type_pending_release", bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
+  rejected:        { icon:<XCircle       size={20} color="#c62828"/>, key:"nf_type_rejected",    bg:"#ffebee", border:"#ef9a9a", text:"#c62828" },
+  membership:      { icon:<Trophy        size={20} color="#1b5e20"/>, key:"nf_type_membership",  bg:"#e8f5e9", border:"#a5d6a7", text:"#1b5e20" },
+  system:          { icon:<Settings      size={20} color="#555"/>,    key:"nf_type_system",      bg:"#f5f5f5", border:"#e0e0e0", text:"#555"    },
+  overdue:         { icon:<AlertTriangle size={20} color="#c62828"/>, key:"nf_type_overdue",     bg:"#ffebee", border:"#ef9a9a", text:"#c62828" },
+  gcash:           { icon:<Smartphone    size={20} color="#007bff"/>, key:"nf_type_gcash",       bg:"#e3f2fd", border:"#90caf9", text:"#007bff" },
+  payment:         { icon:<CreditCard    size={20} color="#2e7d32"/>, key:"nf_type_payment",     bg:"#e8f5e9", border:"#a5d6a7", text:"#2e7d32" },
+  savings:         { icon:<PiggyBank     size={20} color="#e65100"/>, key:"nf_type_savings",     bg:"#fff8e1", border:"#ffe082", text:"#e65100" },
+  sharecap:        { icon:<Wallet        size={20} color="#6a1b9a"/>, key:"nf_type_sharecap",    bg:"#f3e5f5", border:"#ce93d8", text:"#6a1b9a" },
+  loan:            { icon:<FileText      size={20} color="#1565c0"/>, key:"nf_type_loan",        bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
+  completed:       { icon:<CheckCheck    size={20} color="#1565c0"/>, key:"nf_type_completed",   bg:"#e3f2fd", border:"#90caf9", text:"#1565c0" },
 };
+function getTypeMeta(type, t) {
+  const m = TYPE_META[type] || TYPE_META.system;
+  return { ...m, label: t(m.key) };
+}
 
-const FILTERS = ["All","Unread","Loans","Payments","GCash","Savings","Share Capital","Announcements","Membership","System"];
+const FILTER_DEFS = [
+  ["All",           "nf_filter_all"],
+  ["Unread",        "nf_filter_unread"],
+  ["Loans",         "nf_filter_loans"],
+  ["Payments",      "nf_filter_payments"],
+  ["GCash",         "nf_filter_gcash"],
+  ["Savings",       "nf_filter_savings"],
+  ["Share Capital", "nf_filter_sharecap"],
+  ["Announcements", "nf_filter_announcements"],
+  ["Membership",    "nf_filter_membership"],
+  ["System",        "nf_filter_system"],
+];
 
-function timeAgo(dateStr) {
+function parseApiDate(dateStr) {
+  if (!dateStr) return null;
+  const normal = new Date(dateStr);
+  if (isNaN(normal.getTime())) return null;
+
+  const twoMinFromNow = Date.now() + 2 * 60000;
+  if (normal.getTime() <= twoMinFromNow) return normal;
+
+  const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateStr.trim());
+  if (!hasTimezone) {
+    const asUtc = new Date(`${dateStr}Z`);
+    if (!isNaN(asUtc.getTime()) && asUtc.getTime() <= twoMinFromNow) return asUtc;
+  }
+  return normal;
+}
+
+function dueLabel(dueDateStr) {
+  if (!dueDateStr) return "Upcoming";
+  const due   = new Date(`${dueDateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diffDays = Math.round((due - today) / 86400000);
+  if (diffDays < 0)  return `Was due ${Math.abs(diffDays)} day${Math.abs(diffDays)!==1?"s":""} ago`;
+  if (diffDays === 0) return "Due today";
+  if (diffDays === 1) return "Due tomorrow";
+  return `Due in ${diffDays} days`;
+}
+
+function timeAgo(dateStr, t) {
   if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const parsed = parseApiDate(dateStr);
+  if (!parsed) return "";
+  const diff = Date.now() - parsed.getTime();
   const mins = Math.floor(diff / 60000);
   const hrs  = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  if (mins < 1)  return "Just now";
-  if (mins < 60) return `${mins} minute${mins !== 1 ? "s" : ""} ago`;
-  if (hrs  < 24) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
-  if (days < 7)  return `${days} day${days !== 1 ? "s" : ""} ago`;
-  return new Date(dateStr).toLocaleDateString("en-PH", { month:"short", day:"numeric" });
+  if (mins < 1)  return t("ma_just_now");
+  if (mins < 60) return t("ma_mins_ago", { n: mins });
+  if (hrs  < 24) return t("ma_hours_ago", { n: hrs });
+  if (days < 7)  return t("ma_days_ago", { n: days });
+  return parsed.toLocaleDateString("en-PH", { month:"short", day:"numeric" });
 }
 
-// ─── Notification Detail Modal — mas maayos, may structured na content ────────
+// ══════════════════════════════════════════════════════════════════════════
+// BAGO: hiwalay na function — kinukuha lang ang RAW na API results (na
+// naka-imbak na sa memory, hindi na kailangang i-fetch ulit sa network)
+// at yun lang ang isina-salin papuntang notification objects gamit ang
+// kasalukuyang `t`. Dating naka-halo ang fetching (network calls) at ang
+// translation sa iisang function, kaya kapag nag-toggle ng language,
+// wala talagang nangyayari (walang re-fetch trigger), o kung mag-navigate
+// palayo't balik, kailangan pang hintayin ulit ang 7 API calls bago
+// makita ang bagong wika. Ngayon: sabay na fetch + build sa unang pag-
+// load, pero kapag nag-toggle lang ng language, dito na lang tatawag
+// gamit ang cached raw data — instant, walang network. ─────────────────
+// ══════════════════════════════════════════════════════════════════════════
+function buildNotifsFromRaw(raw, t) {
+  const {
+    user, isUser,
+    appResult, annResult, loansResult, paymentsResult,
+    gcashResult, savingsResult, sharecapResult,
+  } = raw;
+
+  const built = [];
+
+  built.push({
+    id:"welcome-system", type:"system",
+    title:t("nf_welcome_title"),
+    msg:t("nf_welcome_msg", { name: user?.name || "Member" }),
+    time:t("ma_just_now"), date:raw.fetchedAt, read:false, route:null,
+  });
+  if (isUser) {
+    built.push({
+      id:"system-info-portal", type:"system",
+      title:t("nf_portal_info_title"),
+      msg:t("nf_portal_info_msg"),
+      time:t("ma_just_now"), date:raw.fetchedAt, read:false, route:null,
+    });
+  }
+
+  let hasApplication = false;
+  if (appResult.status === "fulfilled" && appResult.value) {
+    const app = appResult.value;
+    if (app?.application_status === "Approved") {
+      hasApplication = true;
+      built.push({
+        id:"membership-approved", type:"membership",
+        title:t("nf_mem_approved_title"),
+        msg:t("nf_mem_approved_msg", { id: app.app_id }),
+        requirements:[
+          t("nf_req_1"), t("nf_req_2"), t("nf_req_3"), t("nf_req_4"), t("nf_req_5"),
+        ],
+        highlight:t("nf_office_hours"),
+        time:timeAgo(app.reviewed_at || app.created_at, t), date:app.reviewed_at || app.created_at,
+        read:false, route:"/member/apply-membership", actionLabel:t("nf_action_view_requirements"),
+      });
+    } else if (app?.application_status === "Rejected") {
+      hasApplication = true;
+      built.push({
+        id:"membership-rejected", type:"rejected",
+        title:t("nf_mem_rejected_title"),
+        msg:t("nf_mem_rejected_msg", { id: app.app_id, reason: app.reject_reason ? t("nf_reason_suffix", { reason: app.reject_reason }) : "" }),
+        time:timeAgo(app.reviewed_at || app.created_at, t), date:app.reviewed_at || app.created_at,
+        read:false, route:"/member/apply-membership", actionLabel:t("nf_action_reapply"),
+      });
+    } else if (app?.application_status === "Pending") {
+      hasApplication = true;
+      built.push({
+        id:"membership-pending", type:"system",
+        title:t("nf_mem_pending_title"),
+        msg:t("nf_mem_pending_msg", { id: app.app_id }),
+        time:timeAgo(app.created_at, t), date:app.created_at, read:false, route:null,
+      });
+    }
+  }
+  if (isUser && !hasApplication) {
+    built.push({
+      id:"no-application", type:"membership",
+      title:t("nf_no_app_title"),
+      msg:t("nf_no_app_msg", { name: user?.name || "there" }),
+      time:t("ma_just_now"), date:raw.fetchedAt,
+      read:false, route:"/member/apply-membership", actionLabel:t("nf_action_apply_membership"),
+    });
+  }
+
+  if (annResult.status === "fulfilled" && Array.isArray(annResult.value)) {
+    annResult.value.slice(0, 10).forEach(a => built.push({
+      id:`ann-${a.id}`, type:"notice",
+      title:a.title,
+      msg:a.body || a.caption || a.content || "—",
+      time:timeAgo(a.created_at || a.posted_at, t), date:a.created_at || a.posted_at,
+      read:false, route:"/member/announcements", actionLabel:t("nf_action_view_announcement"),
+    }));
+  }
+
+  if (!isUser) {
+    if (loansResult.status === "fulfilled" && Array.isArray(loansResult.value)) {
+      const allLoans = loansResult.value;
+
+      allLoans.filter(l => l.status === "Overdue").forEach(l => built.push({
+        id:`overdue-${l.id}`, type:"overdue",
+        title:t("nf_overdue_title", { id: l.loan_id }),
+        msg:t("nf_overdue_msg", { type: l.loan_type }),
+        details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_balance"), `₱${Number(l.balance).toLocaleString()}`], [t("nf_detail_due_date"), l.next_due_date || "—"]],
+        time:timeAgo(l.next_due_date, t), date:l.next_due_date,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_pay_now"),
+      }));
+
+      allLoans.filter(l => l.status === "Approved").forEach(l => built.push({
+        id:`pending-release-${l.id}`, type:"pending_release",
+        title:t("nf_loan_approved_title", { id: l.loan_id }),
+        msg:t("nf_pending_release_msg", { type: l.loan_type }),
+        details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount"), `₱${Number(l.amount).toLocaleString()}`]],
+        time:timeAgo(l.approved_at, t), date:l.approved_at,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_my_loans"),
+      }));
+
+      allLoans.filter(l => l.status === "Active").forEach(l => {
+        if (l.next_due_date) {
+          const due   = new Date(`${l.next_due_date}T00:00:00`);
+          const today = new Date(); today.setHours(0,0,0,0);
+          const diffDays = Math.round((due - today) / 86400000);
+          if (diffDays <= 3) {
+            built.push({
+              id:`due-${l.id}`, type:"due",
+              title:t("nf_reminder_title", { id: l.loan_id }),
+              msg:t("nf_reminder_msg", { type: l.loan_type }),
+              details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount_due"), `₱${Number(l.monthly_due).toLocaleString()}`], [t("nf_detail_due_date"), l.next_due_date || "—"]],
+              time:dueLabel(l.next_due_date), date:l.approved_at || l.next_due_date,
+              read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_my_loans"),
+            });
+          }
+        }
+        built.push({
+          id:`approved-${l.id}`, type:"approved",
+          title:t("nf_loan_approved_title", { id: l.loan_id }),
+          msg:t("nf_loan_approved_msg", { type: l.loan_type }),
+          details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount"), `₱${Number(l.amount).toLocaleString()}`], [t("nf_detail_monthly_due"), `₱${Number(l.monthly_due).toLocaleString()}`]],
+          time:timeAgo(l.approved_at, t), date:l.approved_at,
+          read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_loan_details"),
+        });
+      });
+
+      allLoans.filter(l => l.status === "For Review").forEach(l => built.push({
+        id:`forreview-${l.id}`, type:"loan",
+        title:t("nf_forreview_title", { id: l.loan_id }),
+        msg:t("nf_forreview_msg", { type: l.loan_type }),
+        details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount"), `₱${Number(l.amount).toLocaleString()}`]],
+        time:timeAgo(l.applied_at, t), date:l.applied_at,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_status"),
+      }));
+
+      allLoans.filter(l => l.status === "Declined").forEach(l => built.push({
+        id:`declined-${l.id}`, type:"rejected",
+        title:t("nf_declined_title", { id: l.loan_id }),
+        msg:t("nf_declined_msg", { type: l.loan_type, reason: l.decline_reason ? t("nf_reason_suffix", { reason: l.decline_reason }) : "" }),
+        details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount"), `₱${Number(l.amount).toLocaleString()}`]],
+        time:timeAgo(l.applied_at, t), date:l.applied_at,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_my_loans"),
+      }));
+
+      allLoans.filter(l => l.status === "Completed").forEach(l => built.push({
+        id:`completed-${l.id}`, type:"completed",
+        title:t("nf_completed_title", { id: l.loan_id }),
+        msg:t("nf_completed_msg", { type: l.loan_type }),
+        details:[[t("nf_detail_loan_id"), l.loan_id], [t("nf_detail_amount"), `₱${Number(l.amount).toLocaleString()}`]],
+        time:timeAgo(l.approved_at, t), date:l.approved_at,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_history"),
+      }));
+    }
+
+    if (paymentsResult.status === "fulfilled" && Array.isArray(paymentsResult.value)) {
+      paymentsResult.value.slice(0, 5).forEach(p => built.push({
+        id:`payment-${p.id || p.tx_id}`, type:"payment",
+        title:t("nf_payment_title", { amt: `₱${Number(p.amount).toLocaleString()}` }),
+        msg:t("nf_payment_msg"),
+        details:[[t("nf_detail_loan"), p.loan_code], [t("nf_detail_tx_id"), p.tx_id], [t("nf_detail_amount_paid"), `₱${Number(p.amount).toLocaleString()}`], [t("nf_detail_remaining_balance"), `₱${Number(p.balance).toLocaleString()}`]],
+        time:timeAgo(p.paid_at, t), date:p.paid_at,
+        read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_payment_history"),
+      }));
+    }
+
+    if (gcashResult.status === "fulfilled" && Array.isArray(gcashResult.value)) {
+      gcashResult.value.forEach(r => {
+        const effectiveDate = r.verified_at || r.created_at;
+        if (r.status === "Verified") {
+          built.push({
+            id:`gcash-verified-${r.id}`, type:"gcash",
+            title:t("nf_gcash_verified_title"),
+            msg:t("nf_gcash_verified_msg"),
+            details:[[t("nf_detail_loan"), r.loan_id], [t("nf_detail_reference_no"), r.reference_number], [t("nf_detail_amount"), `₱${Number(r.amount).toLocaleString()}`]],
+            time:timeAgo(effectiveDate, t), date:effectiveDate,
+            read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_payment"),
+          });
+        } else if (r.status === "Rejected") {
+          built.push({
+            id:`gcash-rejected-${r.id}`, type:"gcash",
+            title:t("nf_gcash_rejected_title"),
+            msg:t("nf_gcash_rejected_msg", { reason: r.reject_reason ? t("nf_reason_suffix", { reason: r.reject_reason }) : "" }),
+            details:[[t("nf_detail_loan"), r.loan_id], [t("nf_detail_reference_no"), r.reference_number], [t("nf_detail_amount"), `₱${Number(r.amount).toLocaleString()}`]],
+            time:timeAgo(effectiveDate, t), date:effectiveDate,
+            read:false, route:"/member/my-loans", actionLabel:t("nf_action_resubmit"),
+          });
+        } else if (r.status === "Pending") {
+          built.push({
+            id:`gcash-pending-${r.id}`, type:"gcash",
+            title:t("nf_gcash_pending_title"),
+            msg:t("nf_gcash_pending_msg"),
+            details:[[t("nf_detail_loan"), r.loan_id], [t("nf_detail_reference_no"), r.reference_number], [t("nf_detail_amount"), `₱${Number(r.amount).toLocaleString()}`]],
+            time:timeAgo(r.created_at, t), date:r.created_at,
+            read:false, route:"/member/my-loans", actionLabel:t("nf_action_view_my_loans"),
+          });
+        }
+      });
+    }
+
+    if (savingsResult.status === "fulfilled" && savingsResult.value?.transactions?.length > 0) {
+      savingsResult.value.transactions.slice(0, 3).forEach((tx, i) => {
+        const typeLabel = tx.transaction_type === "Deposit" ? t("nf_txn_deposit") : tx.transaction_type === "Withdraw" ? t("nf_txn_withdraw") : tx.transaction_type;
+        built.push({
+          id:`savings-${tx.id || i}`, type:"savings",
+          title:t("nf_savings_title", { type: typeLabel, amt: `₱${Number(tx.amount).toLocaleString()}` }),
+          msg:t("nf_savings_msg", { type: typeLabel.toLowerCase() }),
+          details:[[t("nf_detail_amount"), `₱${Number(tx.amount).toLocaleString()}`], [t("nf_detail_new_balance"), `₱${Number(tx.balance_after).toLocaleString()}`], ...(tx.note ? [[t("nf_detail_note"), tx.note]] : [])],
+          time:timeAgo(tx.created_at, t), date:tx.created_at,
+          read:false, route:"/member/dashboard", actionLabel:t("nf_action_view_dashboard"),
+        });
+      });
+    }
+
+    if (sharecapResult.status === "fulfilled" && Array.isArray(sharecapResult.value)) {
+      sharecapResult.value.slice(0, 3).forEach((tItem, i) => {
+        const typeLabel = tItem.txn_type || "Deposit";
+        built.push({
+          id:`sharecap-${tItem.id || i}`, type:"sharecap",
+          title:t("nf_sharecap_title", { type: typeLabel, amt: `₱${Number(tItem.amount).toLocaleString()}` }),
+          msg:t("nf_sharecap_msg", { type: typeLabel.toLowerCase() }),
+          details:[[t("nf_detail_amount"), `₱${Number(tItem.amount).toLocaleString()}`], [t("nf_detail_new_balance"), `₱${Number(tItem.balance_after).toLocaleString()}`], [t("nf_detail_max_loanable"), `₱${(Number(tItem.balance_after)*2).toLocaleString()}`], ...(tItem.note ? [[t("nf_detail_note"), tItem.note]] : [])],
+          time:timeAgo(tItem.created_at, t), date:tItem.created_at,
+          read:false, route:"/member/dashboard", actionLabel:t("nf_action_view_dashboard"),
+        });
+      });
+    }
+  }
+
+  return built;
+}
+
+// ─── Notification Detail Modal ─────────────────────────────────────────────
 function NotifModal({ notif, onClose, onNavigate }) {
+  const { t } = useLanguage();
   if (!notif) return null;
-  const meta = TYPE_META[notif.type] || TYPE_META.system;
+  const meta = getTypeMeta(notif.type, t);
   return (
     <div className="nf-modal-overlay" onClick={onClose}>
       <div className="nf-modal-box" onClick={e => e.stopPropagation()}>
@@ -67,16 +359,13 @@ function NotifModal({ notif, onClose, onNavigate }) {
         <div className="nf-modal-body">
           <div className="nf-modal-title">{notif.title}</div>
 
-          {/* ── Intro message (maikli na lang, hindi na malaking paragraph) ── */}
           <div className="nf-modal-msg-card">
             <div className="nf-modal-msg">{notif.msg}</div>
           </div>
 
-          {/* ── BAGO: Requirements checklist — structured, hindi na kasama sa
-              isang malaking paragraph ── */}
           {notif.requirements && notif.requirements.length > 0 && (
             <div className="nf-modal-req-box">
-              <div className="nf-modal-req-title">Requirements to Bring</div>
+              <div className="nf-modal-req-title">{t("nf_requirements_title")}</div>
               {notif.requirements.map((r, i) => (
                 <div key={i} className="nf-modal-req-item">
                   <div className="nf-modal-req-check"><Check size={11} color="#fff"/></div>
@@ -86,7 +375,6 @@ function NotifModal({ notif, onClose, onNavigate }) {
             </div>
           )}
 
-          {/* ── BAGO: Info highlight box (hal. office hours, location) ── */}
           {notif.highlight && (
             <div className="nf-modal-highlight">
               <MapPin size={15} color="#1565c0" style={{flexShrink:0,marginTop:1}}/>
@@ -94,7 +382,6 @@ function NotifModal({ notif, onClose, onNavigate }) {
             </div>
           )}
 
-          {/* ── BAGO: Key-value details table (hal. amount, reference no.) ── */}
           {notif.details && notif.details.length > 0 && (
             <div className="nf-modal-details">
               {notif.details.map(([k, v], i) => (
@@ -108,10 +395,10 @@ function NotifModal({ notif, onClose, onNavigate }) {
         </div>
 
         <div className="nf-modal-footer">
-          <button className="nf-modal-btn-close" onClick={onClose}>Close</button>
+          <button className="nf-modal-btn-close" onClick={onClose}>{t("nf_close")}</button>
           {notif.route && (
             <button className="nf-modal-btn-go" onClick={() => { onClose(); onNavigate(notif.route); }}>
-              {notif.actionLabel || "View Details"}  →
+              {notif.actionLabel}  →
             </button>
           )}
         </div>
@@ -120,294 +407,128 @@ function NotifModal({ notif, onClose, onNavigate }) {
   );
 }
 
-const STORAGE_KEY = "leaf_read_notifs";
-function getReadIds() { try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]")); } catch { return new Set(); } }
-function saveReadIds(ids) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids])); } catch {} }
+// ── FIX: naka-scope na ngayon per-account ang parehong keys (dating
+// fixed/shared ang keys na 'to) — kaya kahit magpalit ng account sa
+// parehong browser/tab, hindi na maghahalo ang read-status at cached
+// notification list ng magkaibang users. ────────────────────────────
+const STORAGE_KEY_BASE = "leaf_read_notifs";
+function getReadIds(scopeKey) { try { return new Set(JSON.parse(localStorage.getItem(`${STORAGE_KEY_BASE}_${scopeKey ?? "anon"}`) || "[]")); } catch { return new Set(); } }
+function saveReadIds(scopeKey, ids) { try { localStorage.setItem(`${STORAGE_KEY_BASE}_${scopeKey ?? "anon"}`, JSON.stringify([...ids])); } catch {} }
+
+const CACHE_KEY_BASE = "leaf_notifs_cache";
+function getCachedNotifs(scopeKey) {
+  try {
+    const raw = sessionStorage.getItem(`${CACHE_KEY_BASE}_${scopeKey ?? "anon"}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch { return null; }
+}
+function saveCachedNotifs(scopeKey, notifs) {
+  try { sessionStorage.setItem(`${CACHE_KEY_BASE}_${scopeKey ?? "anon"}`, JSON.stringify(notifs)); } catch {}
+}
 
 export default function Notifications() {
   const ctx           = useOutletContext() || {};
   const { setNotif, member } = ctx;
   const navigate      = useNavigate();
   const { user }      = useAuth();
+  const { t, language } = useLanguage();
   const isUser        = user?.role === "user";
+  // ── BAGO: scope key para hindi maghalo ang read-status/cache ng
+  // magkaibang accounts sa parehong browser. ──────────────────────────
+  const scopeKey = user?.id ?? user?.username ?? null;
 
-  const [notifs,   setNotifs]  = useState([]);
-  const [loading,  setLoading] = useState(true);
+  const cachedNotifs  = getCachedNotifs(scopeKey);
+  const [notifs,   setNotifs]  = useState(cachedNotifs || []);
+  const [loading,  setLoading] = useState(!cachedNotifs);
   const [filter,   setFilter]  = useState("All");
   const [selected, setSelected]= useState(null);
-  const [readIds,  setReadIds] = useState(getReadIds);
+  const [readIds,  setReadIds] = useState(() => getReadIds(scopeKey));
 
+  // ── BAGO: hawak dito ang RAW (untranslated) na resulta ng huling
+  // successful fetch — ginagamit ng language-toggle effect sa ibaba
+  // para instant na mag-rebuild nang walang bagong network calls. ────
+  const rawRef = useRef(null);
+
+  const finalizeAndSet = (built) => {
+    built.sort((a, b) => (parseApiDate(b.date)?.getTime() || 0) - (parseApiDate(a.date)?.getTime() || 0));
+    const currentReadIds = getReadIds(scopeKey);
+    const withRead = built.map(n => ({ ...n, read: n.read || currentReadIds.has(n.id) }));
+    setNotifs(withRead);
+    saveCachedNotifs(scopeKey, withRead);
+    if (setNotif) setNotif(withRead.filter(n => !n.read).length);
+  };
+
+  // ── Fetch (mount / user o member pagbabago lang) ────────────────────
   useEffect(() => {
-    const build = async () => {
-      setLoading(true);
+    const fetchAndBuild = async () => {
+      if (!getCachedNotifs(scopeKey)) setLoading(true);
       try {
-        const built = [];
+        const [
+          appResult, annResult, loansResult, paymentsResult,
+          gcashResult, savingsResult, sharecapResult,
+        ] = await Promise.allSettled([
+          isUser ? getMyOnlineAppAPI() : getMyApplicationAPI(),
+          getAnnouncementsAPI(),
+          !isUser ? getLoansAPI() : Promise.resolve(null),
+          !isUser ? getPaymentsAPI() : Promise.resolve(null),
+          !isUser ? getGCashRequestsAPI() : Promise.resolve(null),
+          (!isUser && member?.id) ? getMemberSavingsAPI(member.id) : Promise.resolve(null),
+          (!isUser && member?.id) ? getMemberShareCapitalAPI(member.id) : Promise.resolve(null),
+        ]);
 
-        // ── 1. WELCOME ──────────────────────────────────────────────────────
-        built.push({
-          id:"welcome-system", type:"system",
-          title:"Welcome to LEAF MPC",
-          msg:`Hello, ${user?.name || "Member"}! Welcome to the LEAF MPC Management System. Stay updated on your loans, payments, and cooperative news here.`,
-          time:"Just now", date:new Date().toISOString(), read:true, route:null,
-        });
+        // ── I-save ang RAW results — dito na lang babalik ang
+        // language-toggle effect sa halip na mag-fetch ulit. ────────
+        rawRef.current = {
+          user, isUser, fetchedAt: new Date().toISOString(),
+          appResult, annResult, loansResult, paymentsResult,
+          gcashResult, savingsResult, sharecapResult,
+        };
 
-        if (isUser) {
-          built.push({
-            id:"system-info-portal", type:"system",
-            title:"About the LEAF MPC Portal",
-            msg:"Apply for membership, track your application, and view announcements. Full features unlock once you become an official member.",
-            time:"Just now", date:new Date().toISOString(), read:true, route:null,
-          });
-        }
-
-        // ── 2. MEMBERSHIP STATUS ─────────────────────────────────────────────
-        let hasApplication = false;
-        try {
-          const app = isUser ? await getMyOnlineAppAPI() : await getMyApplicationAPI();
-          if (app?.application_status === "Approved") {
-            hasApplication = true;
-            built.push({
-              id:"membership-approved", type:"membership",
-              title:"Membership Application Approved",
-              msg:`Congratulations! Your application (${app.app_id}) has been approved! Please visit the LEAF MPC office to complete your membership.`,
-              requirements:[
-                "2 pieces 2x2 ID picture, white background",
-                "Photocopy of Birth Certificate (PSA copy preferred)",
-                "Photocopy of Marriage Certificate — if married, optional",
-                "Valid Government-issued ID",
-                "Initial Share Capital Payment, minimum ₱4,000",
-              ],
-              highlight:"Office Hours: Mon–Fri, 8:00 AM – 5:00 PM · LEAF MPC Office, Lucban, Quezon",
-              time:timeAgo(app.reviewed_at || app.created_at), date:app.reviewed_at || app.created_at,
-              read:false, route:"/member/apply-membership", actionLabel:"View Requirements",
-            });
-          } else if (app?.application_status === "Rejected") {
-            hasApplication = true;
-            built.push({
-              id:"membership-rejected", type:"rejected",
-              title:"Membership Application Not Approved",
-              msg:`Your application (${app.app_id}) was not approved.${app.reject_reason ? " Reason: " + app.reject_reason : ""} You may re-apply or visit the office.`,
-              time:timeAgo(app.reviewed_at || app.created_at), date:app.reviewed_at || app.created_at,
-              read:false, route:"/member/apply-membership", actionLabel:"Re-apply",
-            });
-          } else if (app?.application_status === "Pending") {
-            hasApplication = true;
-            built.push({
-              id:"membership-pending", type:"system",
-              title:"Membership Application Under Review",
-              msg:`Your application (${app.app_id}) is currently under review. Thank you for your patience.`,
-              time:timeAgo(app.created_at), date:app.created_at, read:true, route:null,
-            });
-          }
-        } catch {}
-
-        if (isUser && !hasApplication) {
-          built.push({
-            id:"no-application", type:"membership",
-            title:"Complete Your Membership Application",
-            msg:`Hi ${user?.name || "there"}! You haven't submitted a membership application yet. Apply now to become an official LEAF MPC member.`,
-            time:"Just now", date:new Date().toISOString(),
-            read:false, route:"/member/apply-membership", actionLabel:"Apply for Membership",
-          });
-        }
-
-        // ── 3. ANNOUNCEMENTS ─────────────────────────────────────────────────
-        try {
-          const anns = await getAnnouncementsAPI();
-          anns.slice(0, 10).forEach(a => built.push({
-            id:`ann-${a.id}`, type:"notice",
-            title:a.title,
-            msg:a.body || a.caption || a.content || "No content available.",
-            time:timeAgo(a.created_at || a.posted_at), date:a.created_at || a.posted_at,
-            read:false, route:"/member/announcements", actionLabel:"View Announcement",
-          }));
-        } catch {}
-
-        // ── 4. LOANS ─────────────────────────────────────────────────────────
-        if (!isUser) {
-          try {
-            const allLoans = await getLoansAPI();
-
-            // Overdue loans
-            allLoans.filter(l => l.status === "Overdue").forEach(l => built.push({
-              id:`overdue-${l.id}`, type:"overdue",
-              title:`⚠ Overdue Payment — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} is OVERDUE. Please settle immediately to avoid additional penalties.`,
-              details:[["Loan ID", l.loan_id], ["Balance", `₱${Number(l.balance).toLocaleString()}`], ["Due Date", l.next_due_date || "—"]],
-              time:timeAgo(l.next_due_date), date:l.next_due_date,
-              read:false, route:"/member/my-loans", actionLabel:"Pay Now",
-            }));
-
-            // Active loans — payment reminder
-            allLoans.filter(l => l.status === "Active").forEach(l => built.push({
-              id:`due-${l.id}`, type:"due",
-              title:`Payment Reminder — ${l.loan_id}`,
-              msg:`Your monthly payment for ${l.loan_type} is coming up. Pay on time to avoid penalties.`,
-              details:[["Loan ID", l.loan_id], ["Amount Due", `₱${Number(l.monthly_due).toLocaleString()}`], ["Due Date", l.next_due_date || "—"]],
-              time:timeAgo(l.next_due_date), date:l.next_due_date,
-              read:false, route:"/member/my-loans", actionLabel:"View My Loans",
-            }));
-
-            // Active loans — approved notification
-            allLoans.filter(l => l.status === "Active").forEach(l => built.push({
-              id:`approved-${l.id}`, type:"approved",
-              title:`Loan Approved — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} has been approved and activated. Visit the office to sign documents.`,
-              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`], ["Monthly Due", `₱${Number(l.monthly_due).toLocaleString()}`]],
-              time:timeAgo(l.approved_at), date:l.approved_at,
-              read:true, route:"/member/my-loans", actionLabel:"View Loan Details",
-            }));
-
-            // For Review loans — submitted, waiting
-            allLoans.filter(l => l.status === "For Review").forEach(l => built.push({
-              id:`forreview-${l.id}`, type:"loan",
-              title:`Loan Application Submitted — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} application has been submitted and is waiting for admin review.`,
-              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
-              time:timeAgo(l.applied_at), date:l.applied_at,
-              read:true, route:"/member/my-loans", actionLabel:"View Status",
-            }));
-
-            // Declined loans
-            allLoans.filter(l => l.status === "Declined").forEach(l => built.push({
-              id:`declined-${l.id}`, type:"rejected",
-              title:`Loan Application Declined — ${l.loan_id}`,
-              msg:`Your ${l.loan_type} application was declined.${l.decline_reason ? " Reason: " + l.decline_reason : ""} You may re-apply or visit the office.`,
-              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
-              time:timeAgo(l.applied_at), date:l.applied_at,
-              read:false, route:"/member/my-loans", actionLabel:"View My Loans",
-            }));
-
-            // Completed loans
-            allLoans.filter(l => l.status === "Completed").forEach(l => built.push({
-              id:`completed-${l.id}`, type:"completed",
-              title:`Loan Fully Paid — ${l.loan_id}`,
-              msg:`Congratulations! Your ${l.loan_type} has been fully paid. Thank you for being a responsible member!`,
-              details:[["Loan ID", l.loan_id], ["Amount", `₱${Number(l.amount).toLocaleString()}`]],
-              time:timeAgo(l.approved_at), date:l.approved_at,
-              read:true, route:"/member/my-loans", actionLabel:"View History",
-            }));
-          } catch {}
-
-          // ── 5. RECENT PAYMENTS ─────────────────────────────────────────────
-          try {
-            const payments = await getPaymentsAPI();
-            payments.slice(0, 5).forEach(p => built.push({
-              id:`payment-${p.id || p.tx_id}`, type:"payment",
-              title:`Payment Recorded — ₱${Number(p.amount).toLocaleString()}`,
-              msg:`Your payment has been recorded to your loan account.`,
-              details:[["Loan", p.loan_code], ["TX ID", p.tx_id], ["Amount Paid", `₱${Number(p.amount).toLocaleString()}`], ["Remaining Balance", `₱${Number(p.balance).toLocaleString()}`]],
-              time:timeAgo(p.paid_at), date:p.paid_at,
-              read:true, route:"/member/my-loans", actionLabel:"View Payment History",
-            }));
-          } catch {}
-
-          // ── 6. GCASH PAYMENT REQUESTS ──────────────────────────────────────
-          try {
-            const gcashReqs = await getGCashRequestsAPI();
-            if (Array.isArray(gcashReqs)) {
-              gcashReqs.forEach(r => {
-                if (r.status === "Verified") {
-                  built.push({
-                    id:`gcash-verified-${r.id}`, type:"gcash",
-                    title:"GCash Payment Verified",
-                    msg:`Your GCash payment has been verified and recorded by admin.`,
-                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
-                    time:timeAgo(r.verified_at), date:r.verified_at,
-                    read:false, route:"/member/my-loans", actionLabel:"View Payment",
-                  });
-                } else if (r.status === "Rejected") {
-                  built.push({
-                    id:`gcash-rejected-${r.id}`, type:"gcash",
-                    title:"GCash Payment Not Verified",
-                    msg:`Your GCash payment was not verified.${r.reject_reason ? " Reason: " + r.reject_reason : ""} Please resubmit with the correct reference number.`,
-                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
-                    time:timeAgo(r.verified_at), date:r.verified_at,
-                    read:false, route:"/member/my-loans", actionLabel:"Resubmit Payment",
-                  });
-                } else if (r.status === "Pending") {
-                  built.push({
-                    id:`gcash-pending-${r.id}`, type:"gcash",
-                    title:"GCash Payment Pending Verification",
-                    msg:`Your GCash payment is waiting for admin verification.`,
-                    details:[["Loan", r.loan_id], ["Reference No.", r.reference_number], ["Amount", `₱${Number(r.amount).toLocaleString()}`]],
-                    time:timeAgo(r.created_at), date:r.created_at,
-                    read:true, route:"/member/my-loans", actionLabel:"View My Loans",
-                  });
-                }
-              });
-            }
-          } catch {}
-
-          // ── 7. SAVINGS ────────────────────────────────────────────────────
-          try {
-            // FIX: dati "me" (literal string) ang ipinapasa dito — palaging
-            // 404 kasi ang backend endpoint ay umaasa sa totoong numeric
-            // Member ID, hindi sa "me". Gamitin natin ang member.id na
-            // galing sa MemberLayout's outlet context.
-            if (member?.id) {
-              const savings = await getMemberSavingsAPI(member.id);
-              if (savings?.transactions?.length > 0) {
-                savings.transactions.slice(0, 3).forEach((tx, i) => built.push({
-                  id:`savings-${tx.id || i}`, type:"savings",
-                  title:`Savings ${tx.transaction_type} — ₱${Number(tx.amount).toLocaleString()}`,
-                  msg:`A ${tx.transaction_type.toLowerCase()} was recorded to your savings account.`,
-                  details:[["Amount", `₱${Number(tx.amount).toLocaleString()}`], ["New Balance", `₱${Number(tx.balance_after).toLocaleString()}`], ...(tx.note ? [["Note", tx.note]] : [])],
-                  time:timeAgo(tx.created_at), date:tx.created_at,
-                  read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
-                }));
-              }
-            }
-          } catch {}
-
-          // ── 8. SHARE CAPITAL — BAGO ─────────────────────────────────────────
-          try {
-            if (member?.id) {
-              const scHistory = await getMemberShareCapitalAPI(member.id);
-              if (Array.isArray(scHistory) && scHistory.length > 0) {
-                scHistory.slice(0, 3).forEach((t, i) => built.push({
-                  id:`sharecap-${t.id || i}`, type:"sharecap",
-                  title:`Share Capital ${t.txn_type || "Deposit"} — ₱${Number(t.amount).toLocaleString()}`,
-                  msg:`A ${(t.txn_type || "Deposit").toLowerCase()} was recorded to your share capital.`,
-                  details:[["Amount", `₱${Number(t.amount).toLocaleString()}`], ["New Balance", `₱${Number(t.balance_after).toLocaleString()}`], ["Max Loanable", `₱${(Number(t.balance_after)*2).toLocaleString()}`], ...(t.note ? [["Note", t.note]] : [])],
-                  time:timeAgo(t.created_at), date:t.created_at,
-                  read:true, route:"/member/dashboard", actionLabel:"View Dashboard",
-                }));
-              }
-            }
-          } catch {}
-        }
-
-        // ── Sort: unread first then by date ──────────────────────────────────
-        built.sort((a, b) => {
-          if (!a.read && b.read)  return -1;
-          if (a.read  && !b.read) return 1;
-          return new Date(b.date || 0) - new Date(a.date || 0);
-        });
-
-        const currentReadIds = getReadIds();
-        const withRead = built.map(n => ({ ...n, read: n.read || currentReadIds.has(n.id) }));
-        setNotifs(withRead);
-        if (setNotif) setNotif(withRead.filter(n => !n.read).length);
+        finalizeAndSet(buildNotifsFromRaw(rawRef.current, t));
       } catch(e) { console.error(e); }
       finally { setLoading(false); }
     };
-    build();
+    fetchAndBuild();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUser, member?.id]);
+
+  // ── BAGO: language toggle lang — muling i-translate gamit ang
+  // CACHED na raw data, walang bagong network calls, instant. ─────────
+  useEffect(() => {
+    if (!rawRef.current) return; // hihintayin muna ang unang fetch
+    finalizeAndSet(buildNotifsFromRaw(rawRef.current, t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const unreadCount = notifs.filter(n => !n.read).length;
 
+  // ── FIX: dating basta na lang sinusulat ang `notifs.map(id)` (kasalu-
+  // kuyang list lang) papunta sa localStorage — kung may dating na-basa
+  // nang notification na wala na sa kasalukuyang build (hal. lumang
+  // announcement na lumabas na sa window), nabubura ang record nito.
+  // Ngayon: sariwang kinukuha muna ang laman ng localStorage bago i-
+  // merge — hindi na kailanman nag-o-overwrite, laging nagme-merge. ───
   const markAllRead = () => {
-    const allIds = new Set(notifs.map(n => n.id));
-    saveReadIds(allIds);
+    const allIds = new Set([...getReadIds(scopeKey), ...notifs.map(n => n.id)]);
+    saveReadIds(scopeKey, allIds);
     setReadIds(allIds);
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
     if (setNotif) setNotif(0);
   };
 
+  // ── FIX: parehong dahilan — ang `readIds` (React state) ay puwedeng
+  // maging luma kumpara sa localStorage (hal. kung dalawang tabs ng
+  // parehong account ang bukas, magkaiba ang state ng bawat isa pero
+  // parehong localStorage). Kung gagamitin ang lumang state bilang
+  // batayan sa pag-save, mabubura ang mga bagong idinagdag sa ibang
+  // tab. Laging kumukuha na lang ngayon ng SARIWANG copy mula sa
+  // localStorage bago i-merge, hindi na yung potensyal na lumang
+  // `readIds` state. ───────────────────────────────────────────────
   const handleClick = (notif) => {
-    const newReadIds = new Set([...readIds, notif.id]);
-    saveReadIds(newReadIds);
+    const newReadIds = new Set([...getReadIds(scopeKey), notif.id]);
+    saveReadIds(scopeKey, newReadIds);
     setReadIds(newReadIds);
     setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
     if (setNotif) setNotif(notifs.filter(n => !n.read && n.id !== notif.id).length);
@@ -417,7 +538,7 @@ export default function Notifications() {
   const filtered = notifs.filter(n => {
     if (filter === "All")           return true;
     if (filter === "Unread")        return !n.read;
-    if (filter === "Loans")         return ["loan","approved","rejected","overdue","due","completed"].includes(n.type);
+    if (filter === "Loans")         return ["loan","approved","pending_release","rejected","overdue","due","completed"].includes(n.type);
     if (filter === "Payments")      return n.type === "payment";
     if (filter === "GCash")         return n.type === "gcash";
     if (filter === "Savings")       return n.type === "savings";
@@ -434,27 +555,20 @@ export default function Notifications() {
 
       <div className="nf-page-header">
         <div>
-          <div className="nf-page-title">Notifications</div>
-          <div className="nf-page-sub">Stay updated on payments, loans, announcements, and more.</div>
+          <div className="nf-page-title">{t("nf_page_title")}</div>
+          <div className="nf-page-sub">{t("nf_page_sub")}</div>
         </div>
         {unreadCount > 0 && (
           <button className="nf-mark-all-btn" onClick={markAllRead}>
-            <CheckCircle2 size={13}/> Mark all as read
+            <CheckCircle2 size={13}/> {t("nf_mark_all_read")}
           </button>
         )}
       </div>
 
-      <div className="nf-summary-row">
-        <div className="nf-chip total">  <span>{notifs.length}</span> Total</div>
-        <div className="nf-chip unread"> <span>{unreadCount}</span> Unread</div>
-        <div className="nf-chip due">    <span>{notifs.filter(n => n.type === "due" || n.type === "overdue").length}</span> Payment Due</div>
-        <div className="nf-chip notice"> <span>{notifs.filter(n => n.type === "notice").length}</span> Announcements</div>
-      </div>
-
       <div className="nf-filter-tabs">
-        {FILTERS.map(f => (
+        {FILTER_DEFS.map(([f, labelKey]) => (
           <button key={f} className={`nf-filter-tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
-            {f}
+            {t(labelKey)}
             {f === "Unread" && unreadCount > 0 && <span className="nf-filter-count">{unreadCount}</span>}
           </button>
         ))}
@@ -464,15 +578,15 @@ export default function Notifications() {
         {loading ? (
           <div className="nf-empty">
             <div className="nf-empty-icon"><Clock size={36} color="#ccc"/></div>
-            <div className="nf-empty-text">Loading notifications...</div>
+            <div className="nf-empty-text">{t("nf_loading")}</div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="nf-empty">
             <div className="nf-empty-icon"><Bell size={36} color="#ccc"/></div>
-            <div className="nf-empty-text">No notifications</div>
+            <div className="nf-empty-text">{t("nf_empty")}</div>
           </div>
         ) : filtered.map(n => {
-          const meta = TYPE_META[n.type] || TYPE_META.system;
+          const meta = getTypeMeta(n.type, t);
           return (
             <div key={n.id} className={`nf-item ${!n.read ? "unread" : ""}`} onClick={() => handleClick(n)}>
               <div className="nf-icon-wrap" style={{ background:meta.bg, borderRadius:10, width:40, height:40, minWidth:40, display:"flex", alignItems:"center", justifyContent:"center" }}>

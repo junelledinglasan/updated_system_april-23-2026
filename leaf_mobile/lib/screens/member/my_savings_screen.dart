@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/member_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/members_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
+import '../../utils/page_cache.dart';
 
 class _SVColors {
   static const dark   = Color(0xFF1B5E20);
@@ -37,29 +39,64 @@ class _MySavingsScreenState extends State<MySavingsScreen> {
   double _balance = 0;
   List<dynamic> _transactions = [];
   String _filter = 'All'; // All | Deposit | Withdrawal
+  // ── BAGO: scope key para sa CACHE lang — gamit ang username mula
+  // sa AuthProvider (available na agad, hindi async). Si member.id
+  // (mula sa MemberProvider) ay ginagamit pa rin para sa aktwal na
+  // API call, dahil kailangan talaga 'yon ng backend endpoint. ─────
+  String? _scopeKey;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      _scopeKey = auth.username ?? auth.name;
+      // ── BAGO: cache-first — instant na ipinapakita ang huling
+      // nakitang balance/transactions habang tahimik na nagre-
+      // refresh sa likod. ─────────────────────────────────────────
+      final cached = PageCache.get<Map<String, dynamic>>('savings', _scopeKey);
+      if (cached != null && mounted) {
+        setState(() {
+          _balance = cached['balance'] as double? ?? 0;
+          _transactions = cached['transactions'] as List<dynamic>? ?? [];
+          _loading = false;
+        });
+      }
+      _load();
+    });
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = false; });
     final memberProv = context.read<MemberProvider>();
-    final myId = memberProv.profile?['id'];
+    // ── FIX: kung hindi pa tapos mag-load ang MemberProvider,
+    // hintayin muna 'to — para siguradong may myId na tayo bago
+    // mag-early-return (dating puwedeng ma-stuck sa loading spinner
+    // magpakailanman kung na-null pa ang myId sa unang tawag). ─────
+    if (memberProv.loading) await memberProv.load();
+    if (!mounted) return;
+    final myId = context.read<MemberProvider>().profile?['id'];
     if (myId == null) {
       if (mounted) setState(() { _loading = false; _error = true; });
       return;
     }
+    // ── Huwag pilitin ang loading spinner kung may cache na tayong
+    // ipinapakita — tahimik na lang mag-refresh sa likod. ───────────
+    if (PageCache.get('savings', _scopeKey) == null && mounted) {
+      setState(() { _loading = true; _error = false; });
+    } else if (mounted) {
+      setState(() => _error = false);
+    }
     try {
       final data = await MembersService.getMemberSavings('$myId');
       if (mounted) {
+        final newBalance = double.tryParse('${data['balance'] ?? data['savings_balance'] ?? 0}') ?? 0;
+        final newTx = (data['transactions'] as List?) ?? [];
         setState(() {
-          _balance = double.tryParse('${data['balance'] ?? data['savings_balance'] ?? 0}') ?? 0;
-          _transactions = (data['transactions'] as List?) ?? [];
+          _balance = newBalance;
+          _transactions = newTx;
           _loading = false;
         });
+        PageCache.set('savings', _scopeKey, {'balance': newBalance, 'transactions': newTx});
       }
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = true; });

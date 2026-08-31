@@ -30,6 +30,17 @@ class LoansService {
     });
   }
 
+  // ── BAGO: generic PATCH — para sa MEMBER-side edit ng sariling "For
+  // Review" na loan application (amount, term_months, purpose,
+  // collateral, loan_type). Hindi tulad ng updateLoanStatus (na laging
+  // may 'status' + 'decline_reason'), dito ipinapasa ang buong data
+  // object as-is, WALANG 'status' key — dahil sa backend, ang
+  // presensya ng 'status' key ang nagpapasya kung Cancel (kung
+  // 'Cancelled') o Edit (kung wala) ang gagawin.
+  static Future<Map<String, dynamic>> updateLoan(int id, Map<String, dynamic> data) async {
+    return await ApiClient.patch('/loans/$id/', body: data);
+  }
+
   // GET /loans/due-dates/
   static Future<Map<String, dynamic>> getDueDates({String month = ''}) async {
     final params = month.isNotEmpty ? {'month': month} : null;

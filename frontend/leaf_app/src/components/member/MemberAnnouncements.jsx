@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { getAnnouncementsAPI, addCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { getPageCache, savePageCache } from "../../utils/pageCache";
 import "./MemberAnnouncements.css";
 
 const TYPE_COLOR = {
@@ -8,21 +10,28 @@ const TYPE_COLOR = {
   Announcement:"tag-announce", Event:"tag-event",
 };
 
-// ── Reactions (parang Facebook) ──────────────────────────────────────────
+// ── Reactions (parang Facebook) — English ang value (para tumugma sa
+// backend/reactToAnnouncementAPI), naka-translate lang ang DISPLAY
+// label via t("ma_reaction_..."). ────────────────────────────────────
+const REACTION_TYPES = ["Like","Love","Haha","Wow","Sad","Angry"];
 const REACTION_EMOJI = { Like:"👍", Love:"❤️", Haha:"😂", Wow:"😮", Sad:"😢", Angry:"😠" };
 const REACTION_COLOR = { Like:"#1565c0", Love:"#c62828", Haha:"#f57f17", Wow:"#f57f17", Sad:"#f57f17", Angry:"#e65100" };
+const REACTION_KEY   = { Like:"ma_reaction_like", Love:"ma_reaction_love", Haha:"ma_reaction_haha", Wow:"ma_reaction_wow", Sad:"ma_reaction_sad", Angry:"ma_reaction_angry" };
 
-function timeAgo(dateStr) {
+// ── BAGO: tumatanggap na ng t() para ma-translate ang "just now" /
+// "{n}m ago" / atbp. ─────────────────────────────────────────────────
+function timeAgo(dateStr, t) {
   if (!dateStr) return "";
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60)   return "just now";
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-  if (diff < 86400)return `${Math.floor(diff/3600)}h ago`;
-  if (diff < 604800)return `${Math.floor(diff/86400)}d ago`;
+  if (diff < 60)    return t("ma_just_now");
+  if (diff < 3600)  return t("ma_mins_ago", { n: Math.floor(diff/60) });
+  if (diff < 86400) return t("ma_hours_ago", { n: Math.floor(diff/3600) });
+  if (diff < 604800)return t("ma_days_ago", { n: Math.floor(diff/86400) });
   return new Date(dateStr).toLocaleDateString("en-PH", { month:"short", day:"numeric", year:"numeric" });
 }
 
 function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPropagation }) {
+  const { t } = useLanguage();
   const [showPicker, setShowPicker] = useState(false);
   const [showWho,    setShowWho]    = useState(false);
   const hideTimer = useRef(null);
@@ -32,17 +41,17 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
 
   const emoji = myReaction ? REACTION_EMOJI[myReaction] : "👍";
   const color = myReaction ? (REACTION_COLOR[myReaction] || "#2e7d32") : "#888";
-  const label = myReaction || "Like";
+  const label = myReaction ? t(REACTION_KEY[myReaction]) : t("ma_reaction_like");
 
   return (
     <div className="ma-reaction-wrap" onClick={e => stopPropagation && e.stopPropagation()}>
       <div className="ma-reaction-btn-wrap" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
         {showPicker && (
           <div className="ma-reaction-picker" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
-            {Object.entries(REACTION_EMOJI).map(([type, e]) => (
-              <span key={type} className="ma-reaction-emoji" title={type}
+            {REACTION_TYPES.map(type => (
+              <span key={type} className="ma-reaction-emoji" title={t(REACTION_KEY[type])}
                 onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
-                {e}
+                {REACTION_EMOJI[type]}
               </span>
             ))}
           </div>
@@ -56,7 +65,7 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
       {/* ── "Reacted by" — i-hover ang count para makita ang mga pangalan ── */}
       {totalReactions > 0 && (
         <div className="ma-reacted-by-wrap" onMouseEnter={() => setShowWho(true)} onMouseLeave={() => setShowWho(false)}>
-          <span className="ma-reacted-by-count">{totalReactions} reacted</span>
+          <span className="ma-reacted-by-count">{t("ma_reacted", { n: totalReactions })}</span>
           {showWho && (
             <div className="ma-reacted-by-list">
               {(reactions || []).map(r => (
@@ -75,6 +84,7 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
 
 // ── Comments list + input — reusable, ginagamit sa loob ng modal ─────────
 function CommentsSection({ post, user, onCommentAdded }) {
+  const { t } = useLanguage();
   const [commText, setCommText] = useState("");
   const [sending,  setSending]  = useState(false);
 
@@ -92,7 +102,7 @@ function CommentsSection({ post, user, onCommentAdded }) {
   return (
     <div className="ma-comments-section">
       {!post.comments?.length ? (
-        <div className="ma-no-comments">No comments yet. Be the first!</div>
+        <div className="ma-no-comments">{t("ma_no_comments")}</div>
       ) : post.comments.map(c => (
         <div key={c.id} className="ma-comment">
           <div className="ma-comment-avatar">{(c.posted_by_name || c.author || "U")[0].toUpperCase()}</div>
@@ -100,7 +110,7 @@ function CommentsSection({ post, user, onCommentAdded }) {
             <div className="ma-comment-author">
               {c.posted_by_name || c.author}
               {c.posted_by_role && <span className="ma-comment-time" style={{marginLeft:6,color:"#aaa",fontSize:10}}>{c.posted_by_role}</span>}
-              <span className="ma-comment-time">{timeAgo(c.created_at)}</span>
+              <span className="ma-comment-time">{timeAgo(c.created_at, t)}</span>
             </div>
             <div className="ma-comment-text">{c.body || c.text}</div>
           </div>
@@ -110,13 +120,13 @@ function CommentsSection({ post, user, onCommentAdded }) {
         <div className="ma-comment-avatar me">{user?.name?.[0]?.toUpperCase()||"M"}</div>
         <input
           className="ma-comment-input"
-          placeholder="Write a comment..."
+          placeholder={t("ma_write_comment")}
           value={commText}
           onChange={e => setCommText(e.target.value)}
           onKeyDown={e => e.key==="Enter" && submit()}
         />
         <button className="ma-comment-send" onClick={submit} disabled={!commText.trim() || sending}>
-          {sending ? "..." : "Send"}
+          {sending ? "..." : t("ma_send")}
         </button>
       </div>
     </div>
@@ -125,6 +135,7 @@ function CommentsSection({ post, user, onCommentAdded }) {
 
 // ── Full detail "pop-up" — buong post + reactions + comments ─────────────
 function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
+  const { t } = useLanguage();
   if (!post) return null;
   const bodyText   = post.body || post.caption || post.content || "";
   const authorName = post.posted_by_name || "Admin";
@@ -140,7 +151,7 @@ function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
               <div className="ma-post-avatar">{authorName[0].toUpperCase()}</div>
               <div>
                 <div className="ma-post-author">{authorName}<span className="ma-admin-tag">{authorRole}</span></div>
-                <div className="ma-post-time">{timeAgo(post.created_at)}</div>
+                <div className="ma-post-time">{timeAgo(post.created_at, t)}</div>
               </div>
             </div>
             {post.type && <span className={`ma-type-tag ${TYPE_COLOR[post.type]||""}`}>{post.type}</span>}
@@ -158,7 +169,7 @@ function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
             <ReactionButton myReaction={post.my_reaction} totalReactions={post.total_reactions || 0} reactions={post.reactions} onReact={(type) => onReact(post.id, type)} />
           </div>
 
-          <div className="ma-modal-comments-title">Comments ({post.comments?.length || 0})</div>
+          <div className="ma-modal-comments-title">{t("ma_comments_title")} ({post.comments?.length || 0})</div>
           <CommentsSection post={post} user={user} onCommentAdded={onCommentAdded} />
         </div>
       </div>
@@ -168,14 +179,23 @@ function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
 
 export default function MemberAnnouncements() {
   const { user } = useAuth();
-  const [posts,      setPosts]     = useState([]);
+  const { t }     = useLanguage();
+  // ── BAGO: cache-first — pareho ang announcements para sa LAHAT ng
+  // members (hindi per-member data), kaya "shared" na lang ang key,
+  // hindi kailangang i-scope per member ID. Instant na ipinapakita ang
+  // huling nakitang listahan habang tahimik na nagre-refresh sa likod. ──
+  const cachedPosts  = getPageCache("announcements", "shared");
+  const [posts,      setPosts]     = useState(cachedPosts || []);
   const [filter,     setFilter]    = useState("All");
-  const [loading,    setLoading]   = useState(true);
+  const [loading,    setLoading]   = useState(!cachedPosts);
   const [detailPost, setDetailPost]= useState(null); // ← post na naka-open sa popup
 
   useEffect(() => {
     getAnnouncementsAPI()
-      .then(data => setPosts(data))
+      .then(data => {
+        setPosts(data);
+        savePageCache("announcements", "shared", data);
+      })
       .catch(e => console.error(e))
       .finally(() => setLoading(false));
   }, []);
@@ -186,6 +206,7 @@ export default function MemberAnnouncements() {
   const refreshPosts = async () => {
     const updated = await getAnnouncementsAPI();
     setPosts(updated);
+    savePageCache("announcements", "shared", updated);
     // ── I-sync din yung laman ng bukas na modal (kung meron) ──
     setDetailPost(prev => prev ? updated.find(p => p.id === prev.id) || null : null);
   };
@@ -212,24 +233,24 @@ export default function MemberAnnouncements() {
       )}
 
       <div className="ma-page-header">
-        <div className="ma-page-title">Announcements</div>
-        <div className="ma-page-sub">Latest updates, events, and notices from LEAF MPC.</div>
+        <div className="ma-page-title">{t("ma_page_title")}</div>
+        <div className="ma-page-sub">{t("ma_page_sub")}</div>
       </div>
 
       <div className="ma-filter-tabs">
-        {types.map(t => (
-          <button key={t} className={`ma-filter-tab ${filter===t?"active":""}`} onClick={() => setFilter(t)}>{t}</button>
+        {types.map(ty => (
+          <button key={ty} className={`ma-filter-tab ${filter===ty?"active":""}`} onClick={() => setFilter(ty)}>{ty === "All" ? t("ma_filter_all") : ty}</button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{textAlign:"center",padding:"48px",color:"#bbb",fontSize:13}}>Loading announcements...</div>
+        <div style={{textAlign:"center",padding:"48px",color:"#bbb",fontSize:13}}>{t("ma_loading")}</div>
       ) : (
         <div className="ma-feed">
           {displayed.length === 0 ? (
             <div className="ma-empty-state">
               <div className="ma-empty-icon">📢</div>
-              <div className="ma-empty-text">No announcements yet.</div>
+              <div className="ma-empty-text">{t("ma_no_announcements")}</div>
             </div>
           ) : displayed.map(post => {
             const bodyText     = post.body || post.caption || post.content || "";
@@ -245,7 +266,7 @@ export default function MemberAnnouncements() {
                     <div className="ma-post-avatar">{authorName[0].toUpperCase()}</div>
                     <div>
                       <div className="ma-post-author">{authorName}<span className="ma-admin-tag">{authorRole}</span></div>
-                      <div className="ma-post-time">{timeAgo(post.created_at)}</div>
+                      <div className="ma-post-time">{timeAgo(post.created_at, t)}</div>
                     </div>
                   </div>
                   {post.type && <span className={`ma-type-tag ${TYPE_COLOR[post.type]||""}`}>{post.type}</span>}
@@ -264,9 +285,9 @@ export default function MemberAnnouncements() {
                 <div className="ma-post-footer">
                   <ReactionButton myReaction={post.my_reaction} totalReactions={post.total_reactions || 0} reactions={post.reactions} onReact={(type) => handleReact(post.id, type)} stopPropagation/>
                   <button className="ma-comment-toggle" onClick={(e) => { e.stopPropagation(); setDetailPost(post); }}>
-                    💬 {commentCount} Comment{commentCount!==1?"s":""}
+                    💬 {commentCount} {commentCount!==1 ? t("ma_comment_plural") : t("ma_comment_singular")}
                   </button>
-                  <span className="ma-tap-hint">Click to view →</span>
+                  <span className="ma-tap-hint">{t("ma_click_view")}</span>
                 </div>
               </div>
             );

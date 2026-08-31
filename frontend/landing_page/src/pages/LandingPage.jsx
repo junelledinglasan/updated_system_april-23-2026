@@ -52,7 +52,9 @@ export default function LandingPage() {
   const [anns,    setAnns]   = useState([]);
   const [loading, setLoad]   = useState(true);
   const [annPage, setAnnPage] = useState(1);
+  const [logoUrl, setLogoUrl] = useState(null);
   const ANN_PER_PAGE = 6;
+
 
   useEffect(()=>{
     const fn = ()=>setSolid(window.scrollY>60);
@@ -67,6 +69,14 @@ export default function LandingPage() {
       .catch(()=>setAnns([]))
       .finally(()=>setLoad(false));
   },[]);
+
+  useEffect(()=>{
+    fetch(`${API_URL}/settings/logo/`)
+      .then(r=>r.json())
+      .then(d=>{ if (d.logo_url) setLogoUrl(d.logo_url); })
+      .catch(()=>{});
+  },[]);
+
 
   const go = id => {
     document.getElementById(id.toLowerCase())?.scrollIntoView({behavior:"smooth"});
@@ -86,7 +96,7 @@ export default function LandingPage() {
       <nav className={`nav${solid?" nav--s":""}`}>
         <div className="nav-w">
           <button className="nav-logo" onClick={()=>go("home")}>
-            <img src="/logo.png" alt="LEAF MPC"/>
+            <img src={logoUrl || "/logo.png"} alt="LEAF MPC"/>
           </button>
           <div className={`nav-links${open?" open":""}`}>
             {NAV.map(n=>(
@@ -132,7 +142,7 @@ export default function LandingPage() {
           </div>
           <div className="hero-right">
             <div className="hero-logo-ring">
-              <img src="/logo.png" alt="LEAF MPC Logo" className="hero-logo"/>
+              <img src={logoUrl || "/logo.png"} alt="LEAF MPC Logo" className="hero-logo"/>
             </div>
           </div>
         </div>
@@ -331,7 +341,7 @@ export default function LandingPage() {
         <div className="ctn">
           <div className="footer-top">
             <div className="footer-brand">
-              <img src="/logo.png" alt="LEAF MPC" className="footer-logo" onError={e=>e.target.style.display="none"}/>
+              <img src={logoUrl || "/logo.png"} alt="LEAF MPC" className="footer-logo" onError={e=>e.target.style.display="none"}/>
               <div>
                 <div className="footer-name">LEAF Multi-Purpose Cooperative</div>
                 <div className="footer-sub">61 Concepcion St., Lucban, Quezon</div>

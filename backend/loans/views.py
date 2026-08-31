@@ -1,9 +1,10 @@
 import datetime
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from notifications.email_utils import send_loan_approved_email, send_gcash_verified_email, send_gcash_rejected_email, send_loan_declined_email
+from notifications.email_utils import send_loan_approved_email, send_gcash_verified_email, send_gcash_rejected_email, send_loan_declined_email, send_loan_approved_pending_release_email
 from dateutil.relativedelta import relativedelta
 
 from activity_log.utils import log_activity
@@ -41,7 +42,6 @@ def loan_list_view(request):
         # ── If F2F loan (created as Active by serializer), do post-approval tasks ──
         if loan.status == 'Active':
             import datetime
-            from decimal import Decimal
             from members.models import Savings
             from django.db.models import Sum
             from dateutil.relativedelta import relativedelta
@@ -88,19 +88,148 @@ def loan_detail_view(request, pk):
     if request.method == 'GET':
         return Response(LoanSerializer(loan).data)
 
+    # ══════════════════════════════════════════════════════════════════
+    # ── BAGO: MEMBER-SIDE edit/cancel — pinapayagan LANG habang "For
+    # Review" pa ang status (bago pa ma-review ng admin), at ang
+    # nag-e-edit/cancel ay dapat ang may-ari mismo ng loan. Kapag
+    # "Approved" na o iba pa, hindi na dito papasok — babagsak sa
+    # admin/staff-only block sa ibaba, na magbabalik ng "Unauthorized"
+    # para sa member. ────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════
+    if request.user.role == 'member':
+        if not loan.member.user_id or loan.member.user_id != request.user.id:
+            return Response({'error': 'Unauthorized.'}, status=403)
+        if loan.status != 'For Review':
+            return Response({'error': 'You can only edit or cancel a loan application while it is still For Review.'}, status=400)
+
+        new_status = request.data.get('status')
+
+        # ── CANCEL ──
+        if new_status == 'Cancelled':
+            loan.status = 'Cancelled'
+            loan.save()
+            log_activity('loan',
+                f'Loan application cancelled by member: {loan.loan_id} — {loan.member.fullname}',
+                request.user)
+            return Response(LoanSerializer(loan).data)
+
+        if new_status:
+            return Response({'error': 'Invalid status update.'}, status=400)
+
+        # ── EDIT (no 'status' in payload → treat as a details edit) ──
+        amount_raw      = request.data.get('amount', loan.amount)
+        term_raw        = request.data.get('term_months', loan.term_months)
+        purpose         = request.data.get('purpose', loan.purpose)
+        collateral      = request.data.get('collateral', loan.collateral)
+        loan_type       = request.data.get('loan_type', loan.loan_type)
+
+        try:
+            amount = Decimal(str(amount_raw))
+            term_months = int(term_raw)
+        except (ValueError, TypeError, InvalidOperation):
+            return Response({'error': 'Invalid amount or term.'}, status=400)
+
+        if amount < 3000:
+            return Response({'error': 'Minimum loan amount is ₱3,000.'}, status=400)
+
+        max_loanable = float(loan.member.share_capital) * 2
+        if float(amount) > max_loanable:
+            return Response({'error': f'Amount exceeds your max loanable of ₱{max_loanable:,.2f} (Share Capital × 2).'}, status=400)
+
+        if not str(purpose).strip():
+            return Response({'error': 'Purpose is required.'}, status=400)
+
+        if amount <= 50000:
+            monthly_rate = Decimal('0.0125')
+        elif amount <= 150000:
+            monthly_rate = Decimal('0.01125')
+        else:
+            monthly_rate = Decimal('0.01')
+
+        interest      = monthly_rate * amount * term_months
+        monthly_due   = (amount + interest) / term_months
+        interest_rate = monthly_rate * 12 * 100
+
+        loan.loan_type     = loan_type
+        loan.amount        = amount.quantize(Decimal('0.01'))
+        loan.term_months   = term_months
+        loan.purpose       = purpose
+        loan.collateral    = collateral
+        loan.monthly_due   = monthly_due.quantize(Decimal('0.01'))
+        loan.balance       = amount.quantize(Decimal('0.01'))
+        loan.interest_rate = interest_rate.quantize(Decimal('0.01'))
+        loan.save()
+
+        log_activity('loan',
+            f'Loan application edited by member: {loan.loan_id} — {loan.member.fullname} — ₱{loan.amount:,.2f}',
+            request.user)
+        return Response(LoanSerializer(loan).data)
+
+    # ══════════════════════════════════════════════════════════════════
+    # ── ADMIN/STAFF path (existing — unchanged) ──
+    # ══════════════════════════════════════════════════════════════════
     if request.user.role not in ['admin', 'staff']:
         return Response({'error': 'Unauthorized.'}, status=403)
 
     new_status = request.data.get('status')
     if new_status:
         if new_status == 'Approved':
-            from decimal import Decimal
+            # ── BAGO: guard laban sa race condition — posibleng na-
+            # cancel na ng member ang loan na ito (o na-process na ng
+            # ibang admin session) habang stale pa ang datos na
+            # kinukuha ng kasalukuyang view. Kailangang "For Review"
+            # pa talaga bago payagang mag-Approve. ────────────────────
+            if loan.status != 'For Review':
+                return Response({'error': f'This loan is no longer For Review (current status: {loan.status}). It may have been cancelled or already processed.'}, status=400)
+
+            # ── BAGO: Approve lang — HINDI pa naibibigay ang pera.
+            # Walang CBU, walang savings deposit, walang due date pa.
+            # Ang mga 'yon ay mangyayari lang pagka-"Confirm Release"
+            # (new_status == 'Active', ibaba). ───────────────────────
+            loan.status       = 'Approved'
+            loan.approved_at  = timezone.now()
+            loan.approved_by  = request.user.username
+
+            log_activity('loan',
+                f'Loan approved (waiting for release): {loan.loan_id} — {loan.member.fullname} — ₱{loan.amount:,.2f}',
+                request.user)
+
+            try:
+                pm = getattr(loan.member, 'pre_member', None)
+                email_addr = (pm.email if pm else None) or getattr(loan.member.user, 'email', None)
+                if email_addr:
+                    send_loan_approved_pending_release_email(
+                        email=email_addr, fullname=loan.member.fullname,
+                        member_id=loan.member.member_id, loan_id=loan.loan_id,
+                        loan_type=loan.loan_type, amount=loan.amount,
+                    )
+            except Exception as e:
+                print(f"[EMAIL ERROR] Loan approved-pending-release email failed: {e}")
+
+        elif new_status == 'Active':
+            # ── BAGO: "Confirm Release" — dito lang mangyayari ang
+            # totoong pag-release ng pera (F2F sa opisina). Dito lang
+            # magsisimula ang due date countdown, CBU, at savings
+            # deposit — hindi na sa unang "Approve" step. ────────────
+            if loan.status != 'Approved':
+                return Response({'error': 'Loan must be Approved first before it can be released.'}, status=400)
+
+            # ── FIX: tinanggal ang lokal na "from decimal import
+            # Decimal" na dating narito. Dahil sa Python scoping rules,
+            # kapag may import/assignment sa isang pangalan KAHIT SAAN
+            # sa loob ng function, itinuturing itong LOCAL variable sa
+            # BUONG function — kahit may global import na sa taas ng
+            # file. Ito ang naging dahilan ng "UnboundLocalError:
+            # cannot access local variable 'Decimal'" sa member-edit
+            # branch (na tumatakbo bago maabot ang linyang ito). Gamit
+            # na lang ngayon ang Decimal mula sa module-level import
+            # (linya 2 ng file). ─────────────────────────────────────
             from members.models import Savings
             from django.db.models import Sum
 
             loan.status        = 'Active'
-            loan.approved_at   = timezone.now()
-            loan.approved_by   = request.user.username
+            loan.released_at   = timezone.now()
+            loan.released_by   = request.user.username
             loan.next_due_date = datetime.date.today() + relativedelta(months=1)
 
             share_capital_addition = loan.amount * Decimal('0.03')
@@ -121,7 +250,7 @@ def loan_detail_view(request, pk):
             )
 
             log_activity('loan',
-                f'Loan approved & activated: {loan.loan_id} — {loan.member.fullname} — ₱{loan.amount:,.2f} | Share Capital +₱{share_capital_addition:,.2f} | Savings Deposit +₱{savings_deposit:,.2f}',
+                f'Loan money released & activated: {loan.loan_id} — {loan.member.fullname} — ₱{loan.amount:,.2f} | Share Capital +₱{share_capital_addition:,.2f} | Savings Deposit +₱{savings_deposit:,.2f}',
                 request.user)
 
             try:
@@ -136,9 +265,15 @@ def loan_detail_view(request, pk):
                         next_due_date=str(loan.next_due_date),
                     )
             except Exception as e:
-                print(f"[EMAIL ERROR] Loan approved email failed: {e}")
+                print(f"[EMAIL ERROR] Loan released/active email failed: {e}")
 
         elif new_status == 'Declined':
+            # ── BAGO: parehong guard — hindi puwedeng i-decline ang
+            # loan na hindi na "For Review" (hal. na-cancel na ng
+            # member, o na-approve na sa ibang session). ─────────────
+            if loan.status != 'For Review':
+                return Response({'error': f'This loan is no longer For Review (current status: {loan.status}). It may have been cancelled or already processed.'}, status=400)
+
             loan.status         = 'Declined'
             loan.decline_reason = request.data.get('decline_reason', '')
             log_activity('loan', f'Loan declined: {loan.loan_id} — {loan.member.fullname}', request.user)
@@ -252,11 +387,17 @@ def gcash_request_list_view(request):
         return Response({'error': 'Member profile not found.'}, status=404)
 
     from .models import GCashPaymentRequest
-    data    = request.data
-    loan_pk = data.get('loan_id')
-    amount  = data.get('amount')
-    ref_no  = data.get('reference_number', '').strip()
-    note    = data.get('note', '')
+    data           = request.data
+    loan_pk        = data.get('loan_id')
+    amount         = data.get('amount')
+    ref_no         = data.get('reference_number', '').strip()
+    note           = data.get('note', '')
+    # ── FIX: dating hindi kinukuha ang screenshot_url mula sa request
+    # body — kahit matagumpay na na-upload ng member sa Supabase
+    # Storage ang proof of payment (at nakuha nga ang public URL sa
+    # frontend), hindi ito naisasave sa database dahil wala itong
+    # dinaanan papunta sa .create() call sa ibaba. ────────────────────
+    screenshot_url = data.get('screenshot_url', '')
 
     if not loan_pk:
         return Response({'error': 'loan_id is required.'}, status=400)
@@ -284,6 +425,7 @@ def gcash_request_list_view(request):
     req = GCashPaymentRequest.objects.create(
         loan=loan, member=member, amount=float(amount),
         reference_number=ref_no, note=note,
+        screenshot_url=screenshot_url,
     )
 
     log_activity('payment',

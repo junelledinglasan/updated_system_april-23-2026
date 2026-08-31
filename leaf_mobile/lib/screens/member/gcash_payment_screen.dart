@@ -4,10 +4,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import '../../services/loans_service.dart';
 import '../../services/supabase_storage_service.dart';
+import '../../services/settings_service.dart';
 
-// GCash details ng LEAF MPC cooperative — i-update base sa actual account.
-const String kGcashNumber = '0967-006-3500';
-const String kGcashName = 'LEAF MPC';
+// ── BAGO: hindi na naka-hardcode — kinukuha na ngayon mula sa Settings
+// (backend, na-e-edit ng admin sa Settings → "💳 GCash" tab). Ang mga
+// ito sa ibaba ay FALLBACK LANG habang kinukuha pa/kung mag-fail ang
+// fetch — hindi na dapat umasa dito. ─────────────────────────────────
+const String _kFallbackGcashNumber = '0967-006-3500';
+const String _kFallbackGcashName = 'LEAF MPC';
 
 class _GPColors {
   static const blue    = Color(0xFF007BFF);
@@ -33,6 +37,10 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   bool _uploading = false;
   Map<String, dynamic>? _result;
 
+  // ── BAGO: GCash number/name mula sa Settings API ────────────────────
+  String _gcashNumber = _kFallbackGcashNumber;
+  String _gcashName = _kFallbackGcashName;
+
   late final TextEditingController _amountCtrl;
   final _refCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
@@ -45,6 +53,17 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   void initState() {
     super.initState();
     _amountCtrl = TextEditingController(text: '${widget.loan['monthly_due'] ?? ''}');
+    _loadGcashSettings();
+  }
+
+  Future<void> _loadGcashSettings() async {
+    final data = await SettingsService.getGCashSettings();
+    if (mounted) {
+      setState(() {
+        if ((data['gcash_number'] ?? '').isNotEmpty) _gcashNumber = data['gcash_number']!;
+        if ((data['gcash_name'] ?? '').isNotEmpty) _gcashName = data['gcash_name']!;
+      });
+    }
   }
 
   @override
@@ -56,7 +75,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   }
 
   void _copyNumber() {
-    Clipboard.setData(ClipboardData(text: kGcashNumber.replaceAll('-', '')));
+    Clipboard.setData(ClipboardData(text: _gcashNumber.replaceAll('-', '')));
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
@@ -233,9 +252,12 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   Widget _buildStep1() {
     final balance = double.tryParse('${widget.loan['balance'] ?? 0}') ?? 0;
     final monthlyDue = double.tryParse('${widget.loan['monthly_due'] ?? 0}') ?? 0;
-    const steps = [
+    // ── BAGO: hindi na "const" — dahil ang _gcashNumber/_gcashName ay
+    // instance fields na ngayon (dynamic mula sa API), hindi na
+    // compile-time constants. ───────────────────────────────────────
+    final steps = [
       'Open your GCash app',
-      'Send payment to $kGcashNumber ($kGcashName)',
+      'Send payment to $_gcashNumber ($_gcashName)',
       'Enter the amount you want to pay',
       'Complete the transaction',
       'Note your 13-digit reference number',
@@ -275,9 +297,9 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
             children: [
               const Text('SEND GCASH PAYMENT TO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _GPColors.green, letterSpacing: 0.5)),
               const SizedBox(height: 6),
-              const Text(kGcashNumber, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _GPColors.dark, letterSpacing: 2)),
+              Text(_gcashNumber, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _GPColors.dark, letterSpacing: 2)),
               const SizedBox(height: 4),
-              const Text(kGcashName, style: TextStyle(fontSize: 13, color: Color(0xFF555555))),
+              Text(_gcashName, style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _copyNumber,

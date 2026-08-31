@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/announcements_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
+import '../../utils/page_cache.dart';
 
 class _MAColors {
   static const dark  = Color(0xFF1B5E20);
@@ -65,17 +66,27 @@ class _MemberAnnouncementsScreenState extends State<MemberAnnouncementsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetch();
+    // ── BAGO: cache-first — pareho ang announcements para sa LAHAT ng
+    // members (hindi per-member data), kaya "shared" na lang ang key.
+    // Instant na ipinapakita ang huling nakitang listahan habang
+    // tahimik na nagre-refresh sa likod. ─────────────────────────────
+    final cached = PageCache.get<List<dynamic>>('announcements', 'shared');
+    if (cached != null) {
+      _posts = cached;
+      _loading = false;
+    }
+    _fetch(silent: cached != null);
   }
 
   Future<void> _fetch({bool silent = false}) async {
-    if (!silent) setState(() => _loading = true);
+    if (!silent && mounted) setState(() => _loading = true);
     try {
       final data = await AnnouncementsService.getAnnouncements();
       if (mounted) setState(() => _posts = data);
+      PageCache.set('announcements', 'shared', data);
     } catch (_) {
     } finally {
-      if (mounted && !silent) setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

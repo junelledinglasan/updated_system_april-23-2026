@@ -10,52 +10,57 @@ import { Wallet, CalendarClock, CheckCircle2, TrendingUp, CreditCard, Megaphone,
 import { getLoansAPI } from "../../api/loans";
 import { getPaymentsAPI } from "../../api/payments";
 import { getAnnouncementsAPI } from "../../api/announcements";
+import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
+import { getPageCache, savePageCache } from "../../utils/pageCache";
 import "./MemberDashboard.css";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 function NonOfficialWelcome({ member, navigate }) {
+  // ── BAGO: useLanguage() hook para sa translations ────────────────
+  const { t } = useLanguage();
   const firstname = member.name.split(" ")[0];
   return (
     <div className="md-wrapper">
       <div className="md-banner">
         <div>
-          <div className="md-banner-greeting">Welcome, {firstname}! 👋</div>
-          <div className="md-banner-sub">You're almost there. Complete your membership to unlock all features.</div>
+          <div className="md-banner-greeting">{t("dash_welcome", { firstname })}</div>
+          <div className="md-banner-sub">{t("dash_almost_there")}</div>
         </div>
         <div className="md-banner-chip">
           <div className="md-banner-avatar">{member.initials}</div>
           <div>
             <div className="md-banner-name">{member.name}</div>
-            <div className="md-banner-id">Pending Membership</div>
+            <div className="md-banner-id">{t("dash_pending_membership")}</div>
           </div>
-          <span className="md-pending-badge">Pending</span>
+          <span className="md-pending-badge">{t("dash_pending")}</span>
         </div>
       </div>
       <div className="md-unofficial-card">
         <div className="md-unofficial-header">
           <div className="md-unofficial-icon">⏳</div>
           <div>
-            <div className="md-unofficial-title">Account Not Yet Official</div>
-            <div className="md-unofficial-sub">Your account is created but you are not yet an official LEAF MPC member. Some features are currently locked.</div>
+            <div className="md-unofficial-title">{t("dash_not_official_title")}</div>
+            <div className="md-unofficial-sub">{t("dash_not_official_sub")}</div>
           </div>
         </div>
         <div className="md-access-grid">
           <div className="md-access-col locked-col">
-            <div className="md-access-col-title">🔒 Locked Features</div>
-            <div className="md-access-item locked">Dashboard overview</div>
-            <div className="md-access-item locked">My Loans & payments</div>
-            <div className="md-access-item locked">Apply for Loan</div>
+            <div className="md-access-col-title">{t("dash_locked_features")}</div>
+            <div className="md-access-item locked">{t("dash_locked_dashboard")}</div>
+            <div className="md-access-item locked">{t("dash_locked_loans")}</div>
+            <div className="md-access-item locked">{t("dash_locked_apply")}</div>
           </div>
           <div className="md-access-col open-col">
-            <div className="md-access-col-title">✅ Available Now</div>
-            <div className="md-access-item open">Notifications</div>
-            <div className="md-access-item open">Announcements</div>
-            <div className="md-access-item open">My Profile</div>
+            <div className="md-access-col-title">{t("dash_available_now")}</div>
+            <div className="md-access-item open">{t("nav_notifications")}</div>
+            <div className="md-access-item open">{t("nav_announcements")}</div>
+            <div className="md-access-item open">{t("nav_profile")}</div>
           </div>
         </div>
         <div className="md-unofficial-actions">
-          <button className="md-cta-primary" onClick={() => navigate("/member/apply-membership")}>Apply for Official Membership</button>
+          <button className="md-cta-primary" onClick={() => navigate("/member/apply-membership")}>{t("dash_apply_membership_btn")}</button>
         </div>
       </div>
     </div>
@@ -66,22 +71,36 @@ export default function MemberDashboard() {
   const ctx      = useOutletContext() || {};
   const navigate = useNavigate();
   const member   = ctx.member || { name: "Member", memberId: "—", initials: "M", isOfficial: false };
+  const { user } = useAuth();
+  // ── BAGO: useLanguage() hook para sa translations ────────────────
+  const { t } = useLanguage();
 
   // ALL hooks declared BEFORE any conditional return — Rules of Hooks
-  const [loans,    setLoans]    = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [notifs,   setNotifs]   = useState([]);
-  const [loading,  setLoading]  = useState(true);
+  // ── FIX: dating member.id ang cache key — pero `null` muna 'to sa
+  // unang saglit pag-refresh (hinihintay pa ang async profile fetch
+  // ng MemberLayout), kaya mali munang key ang tinatamaan, hindi
+  // makita ang tamang cache. Gamit na lang ngayon ang user.id mula
+  // sa AuthContext — available na agad mula sa saved session. ────────
+  const scopeKey = user?.id ?? user?.username ?? null;
+  const cached = getPageCache("dashboard", scopeKey);
+  const [loans,    setLoans]    = useState(cached?.loans || []);
+  const [payments, setPayments] = useState(cached?.payments || []);
+  const [notifs,   setNotifs]   = useState(cached?.notifs || []);
+  const [loading,  setLoading]  = useState(!cached);
 
   useEffect(() => {
     if (!member.isOfficial) { setLoading(false); return; }
     Promise.allSettled([getLoansAPI(), getPaymentsAPI(), getAnnouncementsAPI()])
       .then(([l, p, n]) => {
-        if (l.status === "fulfilled") setLoans(l.value);
-        if (p.status === "fulfilled") setPayments(p.value);
-        if (n.status === "fulfilled") setNotifs(n.value.slice(0, 3));
+        const newLoans    = l.status === "fulfilled" ? l.value : [];
+        const newPayments = p.status === "fulfilled" ? p.value : [];
+        const newNotifs   = n.status === "fulfilled" ? n.value.slice(0, 3) : [];
+        setLoans(newLoans);
+        setPayments(newPayments);
+        setNotifs(newNotifs);
+        savePageCache("dashboard", scopeKey, { loans: newLoans, payments: newPayments, notifs: newNotifs });
       }).finally(() => setLoading(false));
-  }, [member.isOfficial]);
+  }, [member.isOfficial, scopeKey]);
 
   // Conditional return AFTER all hooks
   if (!member.isOfficial) return <NonOfficialWelcome member={member} navigate={navigate} />;
@@ -102,7 +121,7 @@ export default function MemberDashboard() {
       fill:true, tension:0.4, pointRadius:4, pointBackgroundColor:"#2e7d32", borderWidth:2 }],
   };
   const doughnutData = {
-    labels: ["Paid","Remaining"],
+    labels: [t("dash_paid"), t("dash_left")],
     datasets: [{ data:[totalPaid, balance], backgroundColor:["#2e7d32","#e8f5e9"], borderWidth:0, hoverOffset:4 }],
   };
   const lineOpts = {
@@ -118,13 +137,13 @@ export default function MemberDashboard() {
     <div className="md-wrapper">
       <div className="md-banner">
         <div>
-          <div className="md-banner-greeting">Good day, {firstname}!</div>
-          <div className="md-banner-sub">Here's a summary of your LEAF MPC account.</div>
+          <div className="md-banner-greeting">{t("dash_good_day", { firstname })}</div>
+          <div className="md-banner-sub">{t("dash_summary_sub")}</div>
         </div>
         <div className="md-banner-chip">
           <div className="md-banner-avatar">{member.initials}</div>
           <div><div className="md-banner-name">{member.name}</div><div className="md-banner-id">{member.memberId}</div></div>
-          <span className="md-active-badge">Active</span>
+          <span className="md-active-badge">{t("dash_active")}</span>
         </div>
       </div>
 
@@ -132,15 +151,15 @@ export default function MemberDashboard() {
         <div className="md-kpi-card md-kpi-danger">
           <div className="md-kpi-icon"><Wallet size={22} color="#c62828"/></div>
           <div>
-            <div className="md-kpi-label">Remaining Balance</div>
+            <div className="md-kpi-label">{t("dash_remaining_balance")}</div>
             <div className="md-kpi-val red">₱{balance.toLocaleString()}</div>
-            <div className="md-kpi-sub">{activeLoan?.loan_type || "No active loan"} · {activeLoan?.loan_id || "—"}</div>
+            <div className="md-kpi-sub">{activeLoan?.loan_type || t("dash_no_active_loan")} · {activeLoan?.loan_id || "—"}</div>
           </div>
         </div>
         <div className="md-kpi-card">
           <div className="md-kpi-icon"><CalendarClock size={22} color="#e65100"/></div>
           <div>
-            <div className="md-kpi-label">Next Payment Due</div>
+            <div className="md-kpi-label">{t("dash_next_payment_due")}</div>
             <div className="md-kpi-val orange">₱{monthlyDue.toLocaleString()}</div>
             <div className="md-kpi-sub">{activeLoan?.next_due_date || "—"}</div>
           </div>
@@ -148,69 +167,69 @@ export default function MemberDashboard() {
         <div className="md-kpi-card">
           <div className="md-kpi-icon"><CheckCircle2 size={22} color="#2e7d32"/></div>
           <div>
-            <div className="md-kpi-label">Total Paid</div>
+            <div className="md-kpi-label">{t("dash_total_paid")}</div>
             <div className="md-kpi-val green">₱{totalPaid.toLocaleString()}</div>
-            <div className="md-kpi-sub">{paidPct}% of loan completed</div>
+            <div className="md-kpi-sub">{t("dash_pct_completed", { pct: paidPct })}</div>
           </div>
         </div>
         <div className="md-kpi-card">
           <div className="md-kpi-icon"><TrendingUp size={22} color="#1565c0"/></div>
           <div>
-            <div className="md-kpi-label">Share Capital</div>
+            <div className="md-kpi-label">{t("dash_share_capital")}</div>
             <div className="md-kpi-val blue">₱{shareCapital.toLocaleString()}</div>
-            <div className="md-kpi-sub">Max loanable: ₱{shareCapital.toLocaleString()}</div>
+            <div className="md-kpi-sub">{t("dash_max_loanable", { amt: `₱${shareCapital.toLocaleString()}` })}</div>
           </div>
         </div>
       </div>
 
       <div className="md-mid-row">
         <div className="md-card md-progress-card">
-          <div className="md-card-title">Loan Repayment Progress</div>
+          <div className="md-card-title">{t("dash_repayment_progress")}</div>
           <div className="md-card-sub">{activeLoan?.loan_type || "—"} — {activeLoan?.loan_id || "—"}</div>
           <div className="md-progress-bar-wrap">
             <div className="md-progress-bar"><div className="md-progress-fill" style={{width:paidPct+"%"}}/></div>
             <div className="md-progress-labels">
-              <span className="green fw">₱{totalPaid.toLocaleString()} paid</span>
+              <span className="green fw">₱{totalPaid.toLocaleString()} {t("dash_paid")}</span>
               <span>{paidPct}%</span>
-              <span className="red">₱{balance.toLocaleString()} left</span>
+              <span className="red">₱{balance.toLocaleString()} {t("dash_left")}</span>
             </div>
           </div>
           <div className="md-loan-details">
-            <div className="md-loan-detail-item"><span className="md-ld-label">Principal</span><span className="md-ld-val">₱{totalLoan.toLocaleString()}</span></div>
-            <div className="md-loan-detail-item"><span className="md-ld-label">Monthly Due</span><span className="md-ld-val green">₱{monthlyDue.toLocaleString()}</span></div>
-            <div className="md-loan-detail-item"><span className="md-ld-label">Status</span><span className="md-loan-status-badge current">{activeLoan?.status || "—"}</span></div>
-            <div className="md-loan-detail-item"><span className="md-ld-label">Next Due</span><span className="md-ld-val">{activeLoan?.next_due_date || "—"}</span></div>
+            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_principal")}</span><span className="md-ld-val">₱{totalLoan.toLocaleString()}</span></div>
+            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_monthly_due")}</span><span className="md-ld-val green">₱{monthlyDue.toLocaleString()}</span></div>
+            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_status")}</span><span className="md-loan-status-badge current">{activeLoan?.status || "—"}</span></div>
+            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_next_due")}</span><span className="md-ld-val">{activeLoan?.next_due_date || "—"}</span></div>
           </div>
         </div>
         <div className="md-card">
-          <div className="md-card-title">Loan Breakdown</div>
-          <div className="md-card-sub">Paid vs Remaining</div>
+          <div className="md-card-title">{t("dash_loan_breakdown")}</div>
+          <div className="md-card-sub">{t("dash_paid_vs_remaining")}</div>
           <div style={{height:200}}><Doughnut data={doughnutData} options={doughnutOpts}/></div>
         </div>
       </div>
 
       <div className="md-bot-row">
         <div className="md-card">
-          <div className="md-card-title">Payment History</div>
-          <div className="md-card-sub">Last 6 months</div>
+          <div className="md-card-title">{t("dash_payment_history")}</div>
+          <div className="md-card-sub">{t("dash_last_6_months")}</div>
           <div style={{height:180}}>
             {payments.length===0
-              ? <div style={{textAlign:"center",padding:"40px",color:"#aaa",fontSize:13}}>No payment history yet.</div>
+              ? <div style={{textAlign:"center",padding:"40px",color:"#aaa",fontSize:13}}>{t("dash_no_payment_history")}</div>
               : <Line data={lineData} options={lineOpts}/>}
           </div>
         </div>
         <div className="md-card">
           <div className="md-card-header-row">
-            <div><div className="md-card-title">Recent Transactions</div><div className="md-card-sub">Latest payment records</div></div>
-            <button className="md-view-all-btn" onClick={()=>navigate("/member/my-loans")}>View All →</button>
+            <div><div className="md-card-title">{t("dash_recent_transactions")}</div><div className="md-card-sub">{t("dash_latest_payment_records")}</div></div>
+            <button className="md-view-all-btn" onClick={()=>navigate("/member/my-loans")}>{t("dash_view_all")}</button>
           </div>
           <div className="md-tx-list">
             {payments.length===0
-              ? <div style={{textAlign:"center",padding:"20px",color:"#aaa",fontSize:12}}>No transactions yet.</div>
+              ? <div style={{textAlign:"center",padding:"20px",color:"#aaa",fontSize:12}}>{t("dash_no_transactions")}</div>
               : payments.slice(0,5).map((tx,i)=>(
                 <div key={i} className="md-tx-item">
                   <div className="md-tx-icon payment"><CreditCard size={16} color="#2e7d32"/></div>
-                  <div className="md-tx-info"><div className="md-tx-desc">Loan Payment</div><div className="md-tx-date">{tx.paid_at}</div></div>
+                  <div className="md-tx-info"><div className="md-tx-desc">{t("dash_loan_payment")}</div><div className="md-tx-date">{tx.paid_at}</div></div>
                   <div className="md-tx-amount red">−₱{Number(tx.amount).toLocaleString()}</div>
                 </div>
               ))}
@@ -218,12 +237,12 @@ export default function MemberDashboard() {
         </div>
         <div className="md-card">
           <div className="md-card-header-row">
-            <div><div className="md-card-title">Announcements</div><div className="md-card-sub">Latest updates</div></div>
-            <button className="md-view-all-btn" onClick={()=>navigate("/member/announcements")}>View All →</button>
+            <div><div className="md-card-title">{t("dash_announcements")}</div><div className="md-card-sub">{t("dash_latest_updates")}</div></div>
+            <button className="md-view-all-btn" onClick={()=>navigate("/member/announcements")}>{t("dash_view_all")}</button>
           </div>
           <div className="md-notif-list">
             {notifs.length===0
-              ? <div style={{textAlign:"center",padding:"20px",color:"#aaa",fontSize:12}}>No announcements yet.</div>
+              ? <div style={{textAlign:"center",padding:"20px",color:"#aaa",fontSize:12}}>{t("dash_no_announcements")}</div>
               : notifs.map((n,i)=>(
                 <div key={i} className="md-notif-item">
                   <div className="md-notif-icon"><Megaphone size={16} color="#1565c0"/></div>

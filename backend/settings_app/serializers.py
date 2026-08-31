@@ -9,7 +9,11 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SystemSettings
-        fields = ['id', 'logo', 'logo_url', 'updated_at']
+        # ── BAGO: kasama na ang gcash_number/gcash_name — read-write
+        # (hindi write_only tulad ng logo), dahil kailangan silang
+        # ibalik nang direkta sa GET response (walang hiwalay na "url"
+        # transform tulad ng logo → logo_url). ─────────────────────────
+        fields = ['id', 'logo', 'logo_url', 'gcash_number', 'gcash_name', 'updated_at']
         extra_kwargs = {'logo': {'write_only': True, 'required': False}}
 
     def get_logo_url(self, obj):

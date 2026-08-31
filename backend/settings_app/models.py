@@ -1,6 +1,7 @@
 # backend/settings_app/models.py
 # Bagong Django app para sa: (1) customizable na logo, (2) per-staff
-# feature permissions (checkbox kung anong module ang makikita nila).
+# feature permissions (checkbox kung anong module ang makikita nila),
+# (3) BAGO: customizable na GCash payment number/account name.
 
 from django.db import models
 from django.conf import settings
@@ -9,6 +10,11 @@ from django.conf import settings
 class SystemSettings(models.Model):
     """Singleton — isa lang dapat na row ang gagamitin (id=1)."""
     logo = models.ImageField(upload_to='system/', null=True, blank=True)
+    # ── BAGO: GCash number/account name na ipinapakita sa member sa
+    # "Pay via GCash" modal — dating hardcoded sa GCashPayment.jsx,
+    # ngayon nasa database na para ma-edit ng admin sa Settings. ──────
+    gcash_number = models.CharField(max_length=20, blank=True, default='0967-006-3500')
+    gcash_name   = models.CharField(max_length=100, blank=True, default='LEAF MPC')
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 

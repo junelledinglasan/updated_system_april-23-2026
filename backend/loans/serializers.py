@@ -79,15 +79,18 @@ class CreateLoanSerializer(serializers.ModelSerializer):
                     )
 
         # ── 5. Existing pending/active loan check ───────────────────────────
-        # Allow new application only if member has no active loans
-        # OR if member has good payment standing
+        # Allow new application only if member has no active loans, OR if:
+        #   (a) an admin/staff is the one submitting (F2F on their behalf), OR
+        #   (b) an admin/staff has GRANTED this specific member a one-time
+        #       "Loan Override Permission" (via Loan Approval screen). ──────
         existing_active = Loan.objects.filter(
             member=member,
-            status__in=['Active', 'For Review']
+            status__in=['Active', 'For Review', 'Approved']
         )
         if existing_active.exists():
-            # Check admin role — admin can override
-            if request and getattr(request.user, 'role', None) not in ['admin', 'staff']:
+            is_admin_or_staff = request and getattr(request.user, 'role', None) in ['admin', 'staff']
+            has_override       = getattr(member, 'loan_override_granted', False)
+            if not is_admin_or_staff and not has_override:
                 active_ids = ', '.join(l.loan_id for l in existing_active[:3])
                 raise serializers.ValidationError(
                     {'non_field_errors': f'You still have an active or pending loan ({active_ids}). Please complete or settle it before applying for a new one.'}
@@ -120,4 +123,14 @@ class CreateLoanSerializer(serializers.ModelSerializer):
             interest_rate = round(interest_rate, 2),
             status        = 'Active' if is_f2f else 'For Review',
         )
+
+        # ── BAGO: Kung nagamit ang "Loan Override Permission", i-reset
+        # ito pagkatapos — isang-beses lang na pahintulot ito, hindi
+        # dapat manatiling bukas magpakailanman. ───────────────────────
+        member = loan.member
+        if getattr(member, 'loan_override_granted', False):
+            member.loan_override_granted = False
+            member.loan_override_reason  = ''
+            member.save(update_fields=['loan_override_granted', 'loan_override_reason'])
+
         return loan

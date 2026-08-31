@@ -8,23 +8,27 @@ import {
   AlertTriangle, Clock, FileText,
 } from "lucide-react";
 import GCashPayment from "./GCashPayment";
+import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
+import { getPageCache, savePageCache } from "../../utils/pageCache";
 import "./MyLoans.css";
 
 // ─── Receipt Modal ─────────────────────────────────────────────────────────────
 function ReceiptModal({ payment, onClose }) {
+  const { t } = useLanguage();
   if (!payment) return null;
   const isOnBlockchain = payment.polygon_tx && payment.network === "polygon";
   const rows = [
-    ["Transaction ID", payment.tx_id],
-    ["Date & Time",    payment.paid_at],
-    ["Loan ID",        payment.loan_code],
-    ["Amount Paid",    `₱${Number(payment.amount||0).toLocaleString()}`],
-    ["Balance After",  `₱${Number(payment.balance||0).toLocaleString()}`],
-    ["Note",           payment.note || "—"],
-    ["Recorded By",    payment.recorded_by || "—"],
-    ["SHA-256 Hash",   payment.hash || "—"],
-    ["Blockchain",     isOnBlockchain ? "Polygon Mainnet" : "Local only"],
-    ["Polygon TX",     payment.polygon_tx || "—"],
+    [t("myloans_tx_id"),         payment.tx_id],
+    [t("myloans_date_time"),     payment.paid_at],
+    [t("myloans_loan_id"),       payment.loan_code],
+    [t("myloans_th_amount_paid"),`₱${Number(payment.amount||0).toLocaleString()}`],
+    [t("myloans_th_balance_after"), `₱${Number(payment.balance||0).toLocaleString()}`],
+    [t("myloans_th_note"),       payment.note || "—"],
+    [t("myloans_recorded_by"),   payment.recorded_by || "—"],
+    [t("myloans_sha_hash"),      payment.hash || "—"],
+    [t("myloans_blockchain"),    isOnBlockchain ? t("myloans_blockchain_mainnet") : t("myloans_blockchain_local")],
+    [t("myloans_polygon_tx"),    payment.polygon_tx || "—"],
   ];
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
@@ -32,7 +36,7 @@ function ReceiptModal({ payment, onClose }) {
         <div style={{padding:"18px 24px",borderBottom:"1px solid #e8f5e9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:800,fontSize:15,color:"#1b5e20",display:"flex",alignItems:"center",gap:8}}>
-              <Receipt size={16} color="#1b5e20"/> Transaction Receipt
+              <Receipt size={16} color="#1b5e20"/> {t("myloans_receipt_title")}
             </div>
             <div style={{fontSize:11,color:"#aaa",fontFamily:"monospace",marginTop:2}}>{payment.tx_id}</div>
           </div>
@@ -40,43 +44,43 @@ function ReceiptModal({ payment, onClose }) {
         </div>
         <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:0}}>
           <div style={{marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Member Information</div>
+            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{t("myloans_member_info")}</div>
             {rows.slice(0,3).map(([k,v]) => (
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f5f5f5"}}>
                 <span style={{fontSize:12,color:"#888",fontWeight:600}}>{k}</span>
-                <span style={{fontSize:12,color:"#333",fontWeight:400,fontFamily:k==="Transaction ID"?"monospace":"inherit"}}>{v}</span>
+                <span style={{fontSize:12,color:"#333",fontWeight:400,fontFamily:k===t("myloans_tx_id")?"monospace":"inherit"}}>{v}</span>
               </div>
             ))}
           </div>
           <div style={{marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Payment Details</div>
+            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{t("myloans_payment_details")}</div>
             {rows.slice(3,7).map(([k,v]) => (
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f5f5f5"}}>
                 <span style={{fontSize:12,color:"#888",fontWeight:600}}>{k}</span>
-                <span style={{fontSize:12,fontWeight:k==="Amount Paid"?800:400,color:k==="Amount Paid"?"#2e7d32":"#333"}}>{v}</span>
+                <span style={{fontSize:12,fontWeight:k===t("myloans_th_amount_paid")?800:400,color:k===t("myloans_th_amount_paid")?"#2e7d32":"#333"}}>{v}</span>
               </div>
             ))}
           </div>
           <div>
-            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Verification</div>
+            <div style={{fontSize:10,fontWeight:700,color:"#2e7d32",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{t("myloans_verification")}</div>
             {rows.slice(7).map(([k,v]) => (
               <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,padding:"7px 0",borderBottom:"1px solid #f5f5f5"}}>
                 <span style={{fontSize:12,color:"#888",fontWeight:600,flexShrink:0}}>{k}</span>
-                <span style={{fontSize:11,color:k==="Blockchain"?(isOnBlockchain?"#2e7d32":"#f57c00"):"#555",fontFamily:k==="SHA-256 Hash"||k==="Polygon TX"?"monospace":"inherit",wordBreak:"break-all",textAlign:"right",fontWeight:k==="Blockchain"?700:400}}>{v}</span>
+                <span style={{fontSize:11,color:k===t("myloans_blockchain")?(isOnBlockchain?"#2e7d32":"#f57c00"):"#555",fontFamily:k===t("myloans_sha_hash")||k===t("myloans_polygon_tx")?"monospace":"inherit",wordBreak:"break-all",textAlign:"right",fontWeight:k===t("myloans_blockchain")?700:400}}>{v}</span>
               </div>
             ))}
             {payment.polygon_tx && (
               <a href={`https://polygonscan.com/tx/${payment.polygon_tx}`} target="_blank" rel="noopener noreferrer"
                 style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,color:"#7c3aed",fontWeight:600,fontSize:12,marginTop:10,padding:"8px",background:"#f3e5f5",borderRadius:8,textDecoration:"none"}}>
-                View on Polygonscan
+                {t("myloans_view_polygonscan")}
               </a>
             )}
           </div>
         </div>
         <div style={{padding:"14px 24px",borderTop:"1px solid #f0f0f0",display:"flex",gap:8,justifyContent:"flex-end"}}>
-          <button onClick={onClose} style={{padding:"9px 20px",background:"#f5f5f5",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"inherit"}}>Close</button>
+          <button onClick={onClose} style={{padding:"9px 20px",background:"#f5f5f5",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"inherit"}}>{t("myloans_close")}</button>
           <button onClick={()=>window.print()} style={{padding:"9px 20px",background:"#2e7d32",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
-            Print
+            {t("myloans_print")}
           </button>
         </div>
       </div>
@@ -85,18 +89,31 @@ function ReceiptModal({ payment, onClose }) {
 }
 
 export default function MyLoans() {
+  const { t } = useLanguage();
+  const { user } = useAuth();
   const ctx    = useOutletContext() || {};
-  const [loans,         setLoans]      = useState([]);
-  const [allLoans,      setAllLoans]   = useState([]);
-  const [payments,      setPayments]   = useState([]);
-  const [selectedLoan,  setSelected]   = useState(null);
+  const member = ctx.member || {};
+  // ── FIX: dating member.id (mula sa MemberLayout) ang ginagamit
+  // bilang cache key — pero `null` muna 'to sa unang saglit habang
+  // hinihintay ang async profile fetch ng MemberLayout, kaya sa
+  // pag-refresh, mali munang key ang tinatamaan ("anon"), hindi
+  // makita ang tamang cache, kaya nagpapakitang blangko muna bago
+  // lumabas ang totoong datos. Gamit na lang ngayon ang user.id mula
+  // sa AuthContext — naka-load na 'to AGAD mula sa saved session,
+  // hindi na kailangang maghintay ng async fetch. ────────────────────
+  const scopeKey = user?.id ?? user?.username ?? null;
+  const cached = getPageCache("myloans", scopeKey);
+  const [loans,         setLoans]      = useState(cached?.loans || []);
+  const [allLoans,      setAllLoans]   = useState(cached?.allLoans || []);
+  const [payments,      setPayments]   = useState(cached?.payments || []);
+  const [selectedLoan,  setSelected]   = useState(cached?.loans?.[0] || null);
   const [tab,           setTab]        = useState("details");
   const [mainTab,       setMainTab]    = useState("active");
-  const [loading,       setLoading]    = useState(true);
+  const [loading,       setLoading]    = useState(!cached);
   const [receipt,       setReceipt]    = useState(null);
   const [expandedLoan,  setExpanded]   = useState(null);
   const [gcashLoan,     setGcashLoan]  = useState(null);
-  const [gcashRequests, setGcashReqs]  = useState([]);
+  const [gcashRequests, setGcashReqs]  = useState(cached?.gcashRequests || []);
 
   useEffect(() => {
     Promise.allSettled([
@@ -108,13 +125,17 @@ export default function MyLoans() {
       const active    = l.status    === "fulfilled" ? l.value    : [];
       const completed = lc.status   === "fulfilled" ? lc.value   : [];
       const activeFiltered = active.filter(loan => loan.status === "Active" || loan.status === "Overdue");
+      const newAllLoans = [...activeFiltered, ...completed].sort((a,b) => b.id - a.id);
+      const newPayments = p.status === "fulfilled" ? p.value : [];
+      const newGcash    = gcash.status === "fulfilled" && Array.isArray(gcash.value) ? gcash.value : [];
       setLoans(activeFiltered);
-      setAllLoans([...activeFiltered, ...completed].sort((a,b) => b.id - a.id));
+      setAllLoans(newAllLoans);
       if (activeFiltered.length > 0) setSelected(activeFiltered[0]);
-      if (p.status     === "fulfilled") setPayments(p.value);
-      if (gcash.status === "fulfilled") setGcashReqs(Array.isArray(gcash.value) ? gcash.value : []);
+      setPayments(newPayments);
+      setGcashReqs(newGcash);
+      savePageCache("myloans", scopeKey, { loans: activeFiltered, allLoans: newAllLoans, payments: newPayments, gcashRequests: newGcash });
     }).finally(() => setLoading(false));
-  }, []);
+  }, [scopeKey]);
 
   const hasPendingGCash = (loanId) =>
     gcashRequests.some(r => r.loan_id === loanId && r.status === "Pending");
@@ -122,7 +143,7 @@ export default function MyLoans() {
   if (loading) return (
     <div style={{textAlign:"center",padding:"80px",color:"#aaa",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
       <Clock size={32} color="#c8e6c9"/>
-      <div style={{fontSize:14,fontWeight:600}}>Loading loans...</div>
+      <div style={{fontSize:14,fontWeight:600}}>{t("myloans_loading")}</div>
     </div>
   );
 
@@ -136,9 +157,9 @@ export default function MyLoans() {
   const statusBg    = { Active:"#e8f5e9", Overdue:"#ffebee", Completed:"#e3f2fd", Declined:"#f5f5f5" };
 
   const MAIN_TABS = [
-    { key:"active",  label:"Active Loans",  icon:<CreditCard   size={14}/>, count:loans.length    },
-    { key:"history", label:"Loan History",  icon:<ClipboardList size={14}/>, count:allLoans.length },
-    { key:"all",     label:"All Payments",  icon:<Receipt       size={14}/>, count:payments.length },
+    { key:"active",  label:t("myloans_tab_active"),       icon:<CreditCard   size={14}/>, count:loans.length    },
+    { key:"history", label:t("myloans_tab_history"),       icon:<ClipboardList size={14}/>, count:allLoans.length },
+    { key:"all",     label:t("myloans_tab_all_payments"),  icon:<Receipt       size={14}/>, count:payments.length },
   ];
 
   return (
@@ -158,28 +179,28 @@ export default function MyLoans() {
 
       {/* Page Header */}
       <div className="ml-page-header">
-        <div className="ml-page-title">My Loans</div>
-        <div className="ml-page-sub">View your loans, payment history, and receipts.</div>
+        <div className="ml-page-title">{t("myloans_page_title")}</div>
+        <div className="ml-page-sub">{t("myloans_page_sub")}</div>
       </div>
 
       {/* Main Tabs */}
       <div style={{display:"flex",gap:0,background:"#fff",borderRadius:12,border:"1px solid #e8f5e9",marginBottom:20,overflow:"hidden"}}>
-        {MAIN_TABS.map(t => (
-          <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+        {MAIN_TABS.map(mt => (
+          <button key={mt.key} onClick={() => setMainTab(mt.key)} style={{
             flex:1,padding:"13px 10px",fontSize:13,fontWeight:600,cursor:"pointer",
             border:"none",
-            background:mainTab===t.key?"#1b5e20":"transparent",
-            color:mainTab===t.key?"#fff":"#888",
+            background:mainTab===mt.key?"#1b5e20":"transparent",
+            color:mainTab===mt.key?"#fff":"#888",
             display:"flex",alignItems:"center",justifyContent:"center",gap:7,
             transition:"all 0.15s",fontFamily:"inherit",
           }}>
-            {t.icon}
-            {t.label}
+            {mt.icon}
+            {mt.label}
             <span style={{
-              background:mainTab===t.key?"rgba(255,255,255,0.2)":"#f0f0f0",
-              color:mainTab===t.key?"#fff":"#aaa",
+              background:mainTab===mt.key?"rgba(255,255,255,0.2)":"#f0f0f0",
+              color:mainTab===mt.key?"#fff":"#aaa",
               borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700,
-            }}>{t.count}</span>
+            }}>{mt.count}</span>
           </button>
         ))}
       </div>
@@ -189,8 +210,8 @@ export default function MyLoans() {
         {loans.length === 0 ? (
           <div style={{textAlign:"center",padding:"60px 20px",background:"#fff",borderRadius:14,border:"1px solid #e8f5e9",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
             <FileText size={40} color="#c8e6c9"/>
-            <div style={{fontWeight:700,fontSize:15,color:"#555"}}>No active loans</div>
-            <div style={{fontSize:13,color:"#aaa"}}>You have no active loan records at the moment.</div>
+            <div style={{fontWeight:700,fontSize:15,color:"#555"}}>{t("myloans_no_active")}</div>
+            <div style={{fontSize:13,color:"#aaa"}}>{t("myloans_no_active_sub")}</div>
           </div>
         ) : (<>
           {/* Loan selector cards */}
@@ -209,9 +230,9 @@ export default function MyLoans() {
                   </div>
                   <div className="ml-lc-id">{loan.loan_id}</div>
                   <div className="ml-lc-balance">₱{Number(loan.balance).toLocaleString()}</div>
-                  <div className="ml-lc-label">remaining balance</div>
+                  <div className="ml-lc-label">{t("myloans_remaining_balance")}</div>
                   <div className="ml-lc-bar"><div className="ml-lc-fill" style={{width:pct+"%"}}/></div>
-                  <div className="ml-lc-pct">{pct}% paid</div>
+                  <div className="ml-lc-pct">{t("myloans_pct_paid", { pct })}</div>
                   <button
                     onClick={e => { e.stopPropagation(); setGcashLoan(loan); }}
                     disabled={pending}
@@ -225,7 +246,7 @@ export default function MyLoans() {
                     }}
                   >
                     <Smartphone size={13}/>
-                    {pending ? "GCash Pending Verification" : "Pay via GCash"}
+                    {pending ? t("myloans_gcash_pending") : t("myloans_pay_gcash")}
                   </button>
                 </div>
               );
@@ -236,7 +257,7 @@ export default function MyLoans() {
           {gcashRequests.filter(r=>r.status==="Pending").length > 0 && (
             <div style={{background:"#fff8e1",border:"1px solid #ffe082",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#f57c00",fontWeight:600,marginBottom:4}}>
               <AlertTriangle size={16} color="#f57c00"/>
-              You have {gcashRequests.filter(r=>r.status==="Pending").length} GCash payment request(s) pending admin verification. You will be notified once verified.
+              {t("myloans_gcash_notice", { count: gcashRequests.filter(r=>r.status==="Pending").length })}
             </div>
           )}
 
@@ -244,12 +265,12 @@ export default function MyLoans() {
           <div className="ml-detail-card">
             <div className="ml-tabs">
               {[
-                {key:"details",  label:"Loan Details"},
-                {key:"payments", label:"Payment History"},
-                {key:"schedule", label:"Amortization"},
-              ].map(t => (
-                <button key={t.key} className={`ml-tab ${tab === t.key ? "active" : ""}`} onClick={() => setTab(t.key)}>
-                  {t.label}
+                {key:"details",  label:t("myloans_tab_details")},
+                {key:"payments", label:t("myloans_tab_payments")},
+                {key:"schedule", label:t("myloans_tab_schedule")},
+              ].map(tb => (
+                <button key={tb.key} className={`ml-tab ${tab === tb.key ? "active" : ""}`} onClick={() => setTab(tb.key)}>
+                  {tb.label}
                 </button>
               ))}
             </div>
@@ -259,16 +280,16 @@ export default function MyLoans() {
               <div style={{padding:"20px 24px"}}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0,borderRadius:10,overflow:"hidden",border:"1px solid #e8f5e9"}}>
                   {[
-                    ["Loan ID",      selectedLoan?.loan_id],
-                    ["Loan Type",    selectedLoan?.loan_type],
-                    ["Principal",    `₱${principal.toLocaleString()}`],
-                    ["Remaining",    `₱${balance.toLocaleString()}`],
-                    ["Total Paid",   `₱${totalPaid.toLocaleString()}`],
-                    ["Monthly Due",  `₱${monthlyDue.toLocaleString()}`],
-                    ["Term",         `${selectedLoan?.term_months} months`],
-                    ["Release Date", selectedLoan?.approved_at?.slice(0,10)||"—"],
-                    ["Next Due",     selectedLoan?.next_due_date||"—"],
-                    ["Status",       selectedLoan?.status],
+                    [t("myloans_loan_id"),      selectedLoan?.loan_id],
+                    [t("myloans_loan_type"),    selectedLoan?.loan_type],
+                    [t("myloans_principal"),    `₱${principal.toLocaleString()}`],
+                    [t("myloans_remaining"),    `₱${balance.toLocaleString()}`],
+                    [t("myloans_total_paid"),   `₱${totalPaid.toLocaleString()}`],
+                    [t("myloans_monthly_due"),  `₱${monthlyDue.toLocaleString()}`],
+                    [t("myloans_term"),         t("myloans_term_months", { n: selectedLoan?.term_months })],
+                    [t("myloans_release_date"), selectedLoan?.approved_at?.slice(0,10)||"—"],
+                    [t("myloans_next_due"),     selectedLoan?.next_due_date||"—"],
+                    [t("myloans_status"),       selectedLoan?.status],
                   ].map(([k,v],i) => (
                     <div key={k} style={{
                       padding:"13px 18px",
@@ -278,7 +299,7 @@ export default function MyLoans() {
                       display:"flex",flexDirection:"column",gap:3,
                     }}>
                       <span style={{fontSize:10,fontWeight:700,color:"#aaa",textTransform:"uppercase",letterSpacing:0.5}}>{k}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:k==="Remaining"?"#c62828":k==="Total Paid"?"#2e7d32":"#1a1a1a"}}>{v}</span>
+                      <span style={{fontSize:14,fontWeight:700,color:k===t("myloans_remaining")?"#c62828":k===t("myloans_total_paid")?"#2e7d32":"#1a1a1a"}}>{v}</span>
                     </div>
                   ))}
                 </div>
@@ -287,8 +308,8 @@ export default function MyLoans() {
                   <div style={{width:paidPct+"%",height:"100%",background:"#2e7d32",borderRadius:20,transition:"width 0.5s"}}/>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:"#888"}}>
-                  <span>{paidPct}% paid</span>
-                  <span>₱{balance.toLocaleString()} remaining</span>
+                  <span>{t("myloans_pct_paid", { pct: paidPct })}</span>
+                  <span>₱{balance.toLocaleString()} {t("myloans_remaining_label")}</span>
                 </div>
               </div>
             )}
@@ -296,30 +317,58 @@ export default function MyLoans() {
             {/* Payments */}
             {tab === "payments" && (() => {
               const loanPayments = payments.filter(p => p.loan === selectedLoan?.id || String(p.loan_code) === String(selectedLoan?.loan_id));
+              // ── BAGO: isama rin ang GCash payment requests na Pending o
+              // Rejected — para makita ang BUONG proseso ng pagbabayad,
+              // hindi lang yung mga na-confirm na. Hindi na kasama ang
+              // "Verified" requests dito dahil may kasama na silang
+              // totoong Payment record sa itaas (maiiwasan ang duplicate). ──
+              const loanGcash = gcashRequests.filter(r => r.loan_id === selectedLoan?.loan_id && r.status !== "Verified");
+              const combined = [
+                ...loanPayments.map(p => ({ kind:"payment", sortDate:p.paid_at, ...p })),
+                ...loanGcash.map(r => ({ kind:"gcash", sortDate:r.created_at, ...r })),
+              ].sort((a,b) => new Date(b.sortDate||0) - new Date(a.sortDate||0));
+
               return (
                 <div className="ml-payments-table-wrap">
                   <table className="ml-payments-table">
                     <thead>
                       <tr>
-                        <th>Date</th><th>TX ID</th><th>Amount Paid</th>
-                        <th>Balance After</th><th>Note</th><th style={{textAlign:"center"}}>Receipt</th>
+                        <th>{t("myloans_th_date")}</th><th>{t("myloans_th_txid")}</th><th>{t("myloans_th_amount_paid")}</th>
+                        <th>{t("myloans_th_balance_after")}</th><th>{t("myloans_th_status")}</th><th>{t("myloans_th_note")}</th><th style={{textAlign:"center"}}>{t("myloans_th_receipt")}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {loanPayments.length === 0 ? (
-                        <tr><td colSpan={6} style={{textAlign:"center",color:"#aaa",padding:24,fontSize:13}}>No payments yet.</td></tr>
-                      ) : loanPayments.map((p, i) => (
-                        <tr key={i}>
-                          <td className="cell-date">{p.paid_at?.slice(0,10)}</td>
-                          <td style={{fontFamily:"monospace",fontSize:10,color:"#888"}}>{p.tx_id}</td>
-                          <td className="green fw">₱{Number(p.amount||0).toLocaleString()}</td>
-                          <td className="blue">₱{Number(p.balance||0).toLocaleString()}</td>
-                          <td style={{fontSize:11,color:"#888"}}>{p.note||"—"}</td>
+                      {combined.length === 0 ? (
+                        <tr><td colSpan={7} style={{textAlign:"center",color:"#aaa",padding:24,fontSize:13}}>{t("myloans_no_payments_yet")}</td></tr>
+                      ) : combined.map((item, i) => item.kind === "payment" ? (
+                        <tr key={`p-${i}`}>
+                          <td className="cell-date">{item.paid_at?.slice(0,10)}</td>
+                          <td style={{fontFamily:"monospace",fontSize:10,color:"#888"}}>{item.tx_id}</td>
+                          <td className="green fw">₱{Number(item.amount||0).toLocaleString()}</td>
+                          <td className="blue">₱{Number(item.balance||0).toLocaleString()}</td>
+                          <td><span style={{background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:20,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{t("myloans_status_completed")}</span></td>
+                          <td style={{fontSize:11,color:"#888"}}>{item.note||"—"}</td>
                           <td style={{textAlign:"center"}}>
-                            <button onClick={() => setReceipt(p)} style={{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:4,margin:"0 auto"}}>
-                              <Eye size={11}/> View
+                            <button onClick={() => setReceipt(item)} style={{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:4,margin:"0 auto"}}>
+                              <Eye size={11}/> {t("myloans_view")}
                             </button>
                           </td>
+                        </tr>
+                      ) : (
+                        <tr key={`g-${i}`}>
+                          <td className="cell-date">{item.created_at?.slice(0,10)}</td>
+                          <td style={{fontFamily:"monospace",fontSize:10,color:"#888"}}>{item.reference_number}</td>
+                          <td className="fw">₱{Number(item.amount||0).toLocaleString()}</td>
+                          <td>—</td>
+                          <td>
+                            {item.status === "Pending" ? (
+                              <span style={{background:"#fff8e1",color:"#e65100",border:"1px solid #ffe082",borderRadius:20,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{t("myloans_status_pending_verification")}</span>
+                            ) : (
+                              <span style={{background:"#fce4ec",color:"#c62828",border:"1px solid #ef9a9a",borderRadius:20,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{t("myloans_status_rejected")}</span>
+                            )}
+                          </td>
+                          <td style={{fontSize:11,color:item.status==="Rejected"?"#c62828":"#888"}}>{item.status==="Rejected" ? (item.reject_reason||"—") : t("myloans_awaiting_verification")}</td>
+                          <td style={{textAlign:"center",color:"#ccc",fontSize:11}}>—</td>
                         </tr>
                       ))}
                     </tbody>
@@ -332,7 +381,7 @@ export default function MyLoans() {
             {tab === "schedule" && (
               <div className="ml-payments-table-wrap">
                 <table className="ml-payments-table">
-                  <thead><tr><th>#</th><th>Due Date</th><th>Amount</th><th>Status</th></tr></thead>
+                  <thead><tr><th>{t("myloans_th_num")}</th><th>{t("myloans_th_due_date")}</th><th>{t("myloans_th_amount")}</th><th>{t("myloans_status")}</th></tr></thead>
                   <tbody>
                     {(() => {
                       const loanPayments = payments.filter(p => p.loan === selectedLoan?.id);
@@ -349,7 +398,7 @@ export default function MyLoans() {
                             <td className="fw">₱{monthlyDue.toLocaleString()}</td>
                             <td>
                               <span className={`ml-sched-badge ${isPaid?"paid":"upcoming"}`}>
-                                {isPaid ? <><CheckCircle2 size={11}/> Paid</> : <><Clock size={11}/> Upcoming</>}
+                                {isPaid ? <><CheckCircle2 size={11}/> {t("myloans_paid")}</> : <><Clock size={11}/> {t("myloans_upcoming")}</>}
                               </span>
                             </td>
                           </tr>
@@ -368,7 +417,7 @@ export default function MyLoans() {
       {mainTab === "history" && (
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {allLoans.length === 0 ? (
-            <div style={{textAlign:"center",padding:"40px",color:"#aaa",background:"#fff",borderRadius:12,border:"1px solid #e8f5e9"}}>No loan history yet.</div>
+            <div style={{textAlign:"center",padding:"40px",color:"#aaa",background:"#fff",borderRadius:12,border:"1px solid #e8f5e9"}}>{t("myloans_no_history")}</div>
           ) : allLoans.map((loan, idx) => {
             const isExpanded   = expandedLoan === loan.loan_id;
             const isPaid       = loan.status === "Completed" || parseFloat(loan.balance||0) === 0;
@@ -388,18 +437,18 @@ export default function MyLoans() {
                     <div style={{fontSize:11,color:"#aaa",marginTop:3}}>{loan.loan_type}</div>
                   </div>
                   <div>
-                    <div style={{fontSize:10,color:"#bbb",fontWeight:600,textTransform:"uppercase"}}>Amount</div>
+                    <div style={{fontSize:10,color:"#bbb",fontWeight:600,textTransform:"uppercase"}}>{t("myloans_amount_label")}</div>
                     <div style={{fontWeight:700,fontSize:14}}>₱{Number(loan.amount||0).toLocaleString()}</div>
                   </div>
                   <div>
-                    <div style={{fontSize:10,color:"#bbb",fontWeight:600,textTransform:"uppercase"}}>Balance</div>
+                    <div style={{fontSize:10,color:"#bbb",fontWeight:600,textTransform:"uppercase"}}>{t("myloans_balance_label")}</div>
                     <div style={{fontWeight:700,fontSize:14,color:isPaid?"#2e7d32":"#c62828"}}>
                       {isPaid?"₱0":`₱${Number(loan.balance||0).toLocaleString()}`}
                     </div>
                   </div>
                   <div>
                     <span style={{background:sb,color:sc,border:`1px solid ${sc}33`,borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}}>
-                      {isPaid?"Completed":loan.status}
+                      {isPaid?t("myloans_completed"):loan.status}
                     </span>
                   </div>
                   <div style={{color:"#bbb"}}>
@@ -409,16 +458,16 @@ export default function MyLoans() {
                 {isExpanded && (
                   <div style={{borderTop:"1px solid #e8f5e9",background:"#f9fef9"}}>
                     <div style={{padding:"12px 20px 6px",fontSize:11,fontWeight:700,color:"#2e7d32",display:"flex",alignItems:"center",gap:6}}>
-                      <CreditCard size={13}/> Payment History — {loan.loan_id}
-                      <span style={{fontWeight:400,color:"#aaa",marginLeft:4}}>({loanPayments.length} payments)</span>
+                      <CreditCard size={13}/> {t("myloans_payment_history_label")} — {loan.loan_id}
+                      <span style={{fontWeight:400,color:"#aaa",marginLeft:4}}>{t("myloans_payments_count", { n: loanPayments.length })}</span>
                     </div>
                     {loanPayments.length === 0 ? (
-                      <div style={{padding:"14px 20px",color:"#bbb",fontSize:13,textAlign:"center"}}>No payments recorded yet.</div>
+                      <div style={{padding:"14px 20px",color:"#bbb",fontSize:13,textAlign:"center"}}>{t("myloans_no_payments_recorded")}</div>
                     ) : (
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:"#e8f5e9"}}>
-                          {["Date","TX ID","Amount","Balance After","Receipt"].map(h=>(
-                            <th key={h} style={{padding:"8px 16px",textAlign:h==="Amount"||h==="Balance After"?"right":h==="Receipt"?"center":"left",color:"#558b2f",fontWeight:700,fontSize:11}}>{h}</th>
+                          {[t("myloans_th_date"),t("myloans_th_txid"),t("myloans_th_amount"),t("myloans_th_balance_after"),t("myloans_th_receipt")].map(h=>(
+                            <th key={h} style={{padding:"8px 16px",textAlign:h===t("myloans_th_amount")||h===t("myloans_th_balance_after")?"right":h===t("myloans_th_receipt")?"center":"left",color:"#558b2f",fontWeight:700,fontSize:11}}>{h}</th>
                           ))}
                         </tr></thead>
                         <tbody>
@@ -428,11 +477,11 @@ export default function MyLoans() {
                               <td style={{padding:"9px 16px",fontFamily:"monospace",color:"#888",fontSize:10}}>{p.tx_id}</td>
                               <td style={{padding:"9px 16px",textAlign:"right",fontWeight:700,color:"#2e7d32"}}>₱{Number(p.amount||0).toLocaleString()}</td>
                               <td style={{padding:"9px 16px",textAlign:"right",color:parseFloat(p.balance||0)===0?"#1565c0":"#c62828"}}>
-                                {parseFloat(p.balance||0)===0?"₱0 — Fully Paid":`₱${Number(p.balance||0).toLocaleString()}`}
+                                {parseFloat(p.balance||0)===0?t("myloans_zero_fully_paid"):`₱${Number(p.balance||0).toLocaleString()}`}
                               </td>
                               <td style={{padding:"9px 16px",textAlign:"center"}}>
                                 <button onClick={() => setReceipt(p)} style={{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:4,margin:"0 auto"}}>
-                                  <Eye size={10}/> View
+                                  <Eye size={10}/> {t("myloans_view")}
                                 </button>
                               </td>
                             </tr>
@@ -441,9 +490,9 @@ export default function MyLoans() {
                       </table>
                     )}
                     <div style={{padding:"10px 20px",fontSize:12,color:"#888",display:"flex",gap:20,borderTop:"1px solid #e8f5e9",flexWrap:"wrap"}}>
-                      <span>Monthly Due: <strong>₱{Number(loan.monthly_due||0).toLocaleString()}</strong></span>
-                      <span>Total Paid: <strong style={{color:"#2e7d32"}}>₱{loanPayments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</strong></span>
-                      <span>Remaining: <strong style={{color:isPaid?"#1565c0":"#c62828"}}>{isPaid?"₱0 — Fully Paid":`₱${Number(loan.balance||0).toLocaleString()}`}</strong></span>
+                      <span>{t("myloans_monthly_due")}: <strong>₱{Number(loan.monthly_due||0).toLocaleString()}</strong></span>
+                      <span>{t("myloans_total_paid")}: <strong style={{color:"#2e7d32"}}>₱{loanPayments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</strong></span>
+                      <span>{t("myloans_remaining")}: <strong style={{color:isPaid?"#1565c0":"#c62828"}}>{isPaid?t("myloans_zero_fully_paid"):`₱${Number(loan.balance||0).toLocaleString()}`}</strong></span>
                     </div>
                   </div>
                 )}
@@ -457,16 +506,16 @@ export default function MyLoans() {
       {mainTab === "all" && (
         <div style={{background:"#fff",borderRadius:14,border:"1px solid #e8f5e9",overflow:"hidden"}}>
           {payments.length === 0 ? (
-            <div style={{textAlign:"center",padding:"40px",color:"#aaa",fontSize:13}}>No payment records yet.</div>
+            <div style={{textAlign:"center",padding:"40px",color:"#aaa",fontSize:13}}>{t("myloans_no_payment_records")}</div>
           ) : (<>
             {/* Summary */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:0,borderBottom:"1px solid #e8f5e9"}}>
               {[
-                ["Total Payments", payments.length,                                                              "#1b5e20"],
-                ["Total Paid",     `₱${payments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}`,      "#2e7d32"],
-                ["Latest Payment", payments[0]?.paid_at?.slice(0,10)||"—",                                      "#555"],
-              ].map(([label,val,color],i) => (
-                <div key={label} style={{padding:"18px",textAlign:"center",borderRight:i<2?"1px solid #e8f5e9":"none"}}>
+                [t("myloans_total_payments"), payments.length,                                                              "#1b5e20"],
+                [t("myloans_total_paid"),     `₱${payments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}`,      "#2e7d32"],
+                [t("myloans_latest_payment"), payments[0]?.paid_at?.slice(0,10)||"—",                                      "#555"],
+              ].map(([label,val,color]) => (
+                <div key={label} style={{padding:"18px",textAlign:"center",borderRight:label!==t("myloans_latest_payment")?"1px solid #e8f5e9":"none"}}>
                   <div style={{fontSize:10,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{label}</div>
                   <div style={{fontSize:20,fontWeight:800,color}}>{val}</div>
                 </div>
@@ -477,8 +526,8 @@ export default function MyLoans() {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{background:"#f9fef9"}}>
-                    {["Date","TX ID","Loan ID","Loan Type","Amount","Balance After","Note","Receipt"].map(h=>(
-                      <th key={h} style={{padding:"12px 16px",textAlign:h==="Amount"||h==="Balance After"?"right":"left",color:"#558b2f",fontWeight:700,borderBottom:"2px solid #e8f5e9",fontSize:11}}>{h}</th>
+                    {[t("myloans_th_date"),t("myloans_th_txid"),t("myloans_th_loan_id"),t("myloans_th_loan_type"),t("myloans_th_amount"),t("myloans_th_balance_after"),t("myloans_th_note"),t("myloans_th_receipt")].map(h=>(
+                      <th key={h} style={{padding:"12px 16px",textAlign:h===t("myloans_th_amount")||h===t("myloans_th_balance_after")?"right":"left",color:"#558b2f",fontWeight:700,borderBottom:"2px solid #e8f5e9",fontSize:11}}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -495,12 +544,12 @@ export default function MyLoans() {
                       </td>
                       <td style={{padding:"11px 16px",textAlign:"right",fontWeight:800,color:"#2e7d32"}}>₱{Number(p.amount||0).toLocaleString()}</td>
                       <td style={{padding:"11px 16px",textAlign:"right",color:parseFloat(p.balance||0)===0?"#1565c0":"#555"}}>
-                        {parseFloat(p.balance||0)===0?"Fully Paid":`₱${Number(p.balance||0).toLocaleString()}`}
+                        {parseFloat(p.balance||0)===0?t("myloans_fully_paid"):`₱${Number(p.balance||0).toLocaleString()}`}
                       </td>
                       <td style={{padding:"11px 16px",color:"#888",fontSize:11}}>{p.note||"—"}</td>
                       <td style={{padding:"11px 16px",textAlign:"center"}}>
                         <button onClick={() => setReceipt(p)} style={{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:4,margin:"0 auto"}}>
-                          <Eye size={11}/> Receipt
+                          <Eye size={11}/> {t("myloans_th_receipt")}
                         </button>
                       </td>
                     </tr>

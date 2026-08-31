@@ -8,6 +8,7 @@ import '../../services/announcements_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
 import 'share_capital_history_screen.dart';
 import '../admin/receipt_screen.dart';
+import '../../utils/page_cache.dart';
 
 class _MDColors {
   static const dark   = Color(0xFF1B5E20);
@@ -49,6 +50,10 @@ class _MemberDashboardState extends State<MemberDashboard> {
   List<dynamic> _loans = [];
   List<dynamic> _payments = [];
   List<dynamic> _notifs = [];
+  // ── BAGO: scope key para sa cache — id ng member, naka-set kapag
+  // available na ang profile (ginagamit din para i-clear kapag
+  // magpalit ng account). ───────────────────────────────────────────
+  String? _scopeKey;
 
   @override
   void initState() {
@@ -59,32 +64,55 @@ class _MemberDashboardState extends State<MemberDashboard> {
   Future<void> _init() async {
     final memberProv = context.read<MemberProvider>();
     if (!memberProv.loading) {
-      await _maybeLoadData(memberProv.isOfficial);
+      await _maybeLoadData(memberProv.isOfficial, memberProv);
     } else {
       await memberProv.load();
-      if (mounted) await _maybeLoadData(context.read<MemberProvider>().isOfficial);
+      if (mounted) await _maybeLoadData(context.read<MemberProvider>().isOfficial, context.read<MemberProvider>());
     }
   }
 
-  Future<void> _maybeLoadData(bool isOfficial) async {
+  Future<void> _maybeLoadData(bool isOfficial, MemberProvider memberProv) async {
     if (!isOfficial) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    setState(() => _loading = true);
+    _scopeKey = '${memberProv.profile?['id']}';
+
+    // ── BAGO: cache-first — kung may naka-save nang datos mula sa
+    // huling pagbisita dito (parehong app session), ipakita agad ito
+    // habang tahimik na nagre-refresh sa likod, imbes na magpakita
+    // ng loading spinner tuwing may bagong pag-navigate. ────────────
+    final cached = PageCache.get<Map<String, dynamic>>('dashboard', _scopeKey);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _loans = cached['loans'] as List<dynamic>? ?? [];
+          _payments = cached['payments'] as List<dynamic>? ?? [];
+          _notifs = cached['notifs'] as List<dynamic>? ?? [];
+          _loading = false;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _loading = true);
+    }
+
     try {
       final results = await Future.wait([
         () async { try { return await LoansService.getLoans(); } catch (_) { return <dynamic>[]; } }(),
         () async { try { return await PaymentsService.getPayments(); } catch (_) { return <dynamic>[]; } }(),
         () async { try { return await AnnouncementsService.getAnnouncements(); } catch (_) { return <dynamic>[]; } }(),
       ]);
+      final newLoans = results[0] as List<dynamic>;
+      final newPayments = results[1] as List<dynamic>;
+      final newNotifs = (results[2] as List<dynamic>).take(3).toList();
       if (mounted) {
         setState(() {
-          _loans = results[0] as List<dynamic>;
-          _payments = results[1] as List<dynamic>;
-          _notifs = (results[2] as List<dynamic>).take(3).toList();
+          _loans = newLoans;
+          _payments = newPayments;
+          _notifs = newNotifs;
         });
       }
+      PageCache.set('dashboard', _scopeKey, {'loans': newLoans, 'payments': newPayments, 'notifs': newNotifs});
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -108,7 +136,7 @@ class _MemberDashboardState extends State<MemberDashboard> {
     return MemberScreenScaffold(
       activeRouteKey: 'dashboard',
       body: RefreshIndicator(
-        onRefresh: () => _maybeLoadData(true),
+        onRefresh: () => _maybeLoadData(true, context.read<MemberProvider>()),
         color: _MDColors.green,
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: _MDColors.green))

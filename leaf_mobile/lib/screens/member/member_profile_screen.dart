@@ -5,6 +5,7 @@ import '../../providers/member_provider.dart';
 import '../../services/members_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/member_scaffold_helpers.dart';
+import '../../utils/page_cache.dart';
 import 'share_capital_history_screen.dart';
 
 class _MPColors {
@@ -93,25 +94,53 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
     final auth = context.read<AuthProvider>();
     _username = auth.username ?? '';
+    // ── BAGO: cache-first — instant na ipinapakita ang huling
+    // nakitang profile/application habang tahimik na nagre-refresh
+    // sa likod. Naka-scope sa username (available na agad mula sa
+    // AuthProvider, hindi async). ────────────────────────────────────
+    final cached = PageCache.get<Map<String, dynamic>>('profile', _username);
+    if (cached != null && mounted) {
+      setState(() {
+        _profile = cached['profile'] as Map<String, dynamic>?;
+        _application = cached['application'] as Map<String, dynamic>?;
+        _isOfficial = cached['isOfficial'] as bool? ?? false;
+        _loading = false;
+      });
+      _contactCtrl.text = cached['contact'] as String? ?? '';
+      _emailCtrl.text = cached['email'] as String? ?? '';
+      _addressCtrl.text = cached['address'] as String? ?? '';
+      _occupationCtrl.text = cached['occupation'] as String? ?? '';
+    } else if (mounted) {
+      setState(() => _loading = true);
+    }
     try {
       final p = await MembersService.getMyProfile();
       final pm = (p['pre_member_info'] as Map?) ?? {};
-      _contactCtrl.text = '${pm['contact_number'] ?? p['contact'] ?? ''}';
-      _emailCtrl.text = '${pm['email'] ?? p['email'] ?? ''}';
-      _addressCtrl.text = '${pm['address'] ?? ''}';
-      _occupationCtrl.text = '${pm['occupation'] ?? ''}';
+      final contact = '${pm['contact_number'] ?? p['contact'] ?? ''}';
+      final email = '${pm['email'] ?? p['email'] ?? ''}';
+      final address = '${pm['address'] ?? ''}';
+      final occupation = '${pm['occupation'] ?? ''}';
+      _contactCtrl.text = contact;
+      _emailCtrl.text = email;
+      _addressCtrl.text = address;
+      _occupationCtrl.text = occupation;
       if (mounted) setState(() { _profile = p; _isOfficial = true; _loading = false; });
+      PageCache.set('profile', _username, {
+        'profile': p, 'isOfficial': true, 'application': null,
+        'contact': contact, 'email': email, 'address': address, 'occupation': occupation,
+      });
     } catch (_) {
       try {
         final app = await MembersService.getMyOnlineApp();
         if (mounted) setState(() { _application = app; _loading = false; });
+        PageCache.set('profile', _username, {'profile': null, 'isOfficial': false, 'application': app});
       } catch (_) {
         try {
           final app = await MembersService.getMyApplication();
           if (mounted) setState(() { _application = app; _loading = false; });
+          PageCache.set('profile', _username, {'profile': null, 'isOfficial': false, 'application': app});
         } catch (_) {
           if (mounted) setState(() => _loading = false);
         }
@@ -135,6 +164,11 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
           _editing = false;
           _saved = true;
           _savingProfile = false;
+        });
+        PageCache.set('profile', _username, {
+          'profile': _profile, 'isOfficial': true, 'application': null,
+          'contact': _contactCtrl.text, 'email': _emailCtrl.text,
+          'address': _addressCtrl.text, 'occupation': _occupationCtrl.text,
         });
         Future.delayed(const Duration(milliseconds: 2500), () { if (mounted) setState(() => _saved = false); });
       }

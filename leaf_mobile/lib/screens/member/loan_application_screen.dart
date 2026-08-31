@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../providers/member_provider.dart';
 import '../../services/members_service.dart';
 import '../../services/loans_service.dart';
@@ -25,10 +26,16 @@ const List<Map<String, dynamic>> kLoanTypes = [
 
 const Map<String, Map<String, dynamic>> kStatusMeta = {
   'For Review': {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'label': '⏳ For Review'},
+  // ── BAGO: hiwalay na type mula sa "Active" — na-approve na pero
+  // hindi pa na-"Confirm Release" (waiting for release sa opisina). ──
+  'Approved':   {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'label': '📦 Approved — For Release'},
   'Active':     {'bg': Color(0xFFE8F5E9), 'color': Color(0xFF2E7D32), 'label': '✅ Active'},
   'Declined':   {'bg': Color(0xFFFCE4EC), 'color': Color(0xFFC62828), 'label': '❌ Declined'},
   'Completed':  {'bg': Color(0xFFE3F2FD), 'color': Color(0xFF1565C0), 'label': '✔ Completed'},
   'Overdue':    {'bg': Color(0xFFFFEBEE), 'color': Color(0xFFB71C1C), 'label': '⚠️ Overdue'},
+  // ── BAGO: kapag ang MEMBER MISMO ang nag-cancel ng sarili niyang
+  // "For Review" application (hiwalay sa "Declined" na galing sa admin). ──
+  'Cancelled':  {'bg': Color(0xFFF5F5F5), 'color': Color(0xFF777777), 'label': '🚫 Cancelled'},
 };
 
 String _peso(num v) {
@@ -70,6 +77,13 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
 
   bool _submitted = false;
   bool _submitting = false;
+
+  // ── BAGO: edit/cancel ng sariling "For Review" application ──────────
+  dynamic _editingId;      // loan['id'] kapag naka-edit mode
+  bool _editedNotice = false; // "Updated!" na screen imbes na "Submitted!"
+  String _formError = '';  // API-level error (hiwalay sa per-field errors)
+  dynamic _checkingId;     // loan['id'] na kasalukuyang chine-check bago Edit/Cancel
+  String _staleNotice = '';
 
   @override
   void initState() {
@@ -114,6 +128,18 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     }
   }
 
+  // ── BAGO: hiwalay na refresh function — ginagamit ng freshness
+  // check bago mag-Edit/Cancel. ───────────────────────────────────────
+  Future<List<dynamic>> _refreshLoans() async {
+    try {
+      final loans = await LoansService.getLoans();
+      if (mounted) setState(() => _myLoans = loans);
+      return loans;
+    } catch (_) {
+      return _myLoans;
+    }
+  }
+
   // ── Eligibility Checker — parehong logic sa web ─────────────────────
   Map<String, dynamic> get _eligibility {
     final issues = <String>[];
@@ -122,6 +148,11 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     final active = _myLoans.where((l) => l['status'] == 'Active').toList();
     final overdue = _myLoans.where((l) => l['status'] == 'Overdue').toList();
     final pending = _myLoans.where((l) => l['status'] == 'For Review').toList();
+    // ── BAGO: "Approved" — na-approve na pero hindi pa na-"Confirm
+    // Release" (waiting for the member to claim funds at the office).
+    // Kailangan itong isama sa blocking statuses, dahil naka-block na
+    // rin ito sa backend (status__in=['Active','For Review','Approved']).
+    final approved = _myLoans.where((l) => l['status'] == 'Approved').toList();
     final completed = _myLoans.where((l) => l['status'] == 'Completed').toList();
 
     if (_shareCapital >= 4000) {
@@ -134,15 +165,23 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     } else {
       issues.add('You have ${overdue.length} overdue loan(s): ${overdue.map((l) => l['loan_id']).join(', ')}. Please settle them first.');
     }
-    if (active.isEmpty && pending.isEmpty) {
+    // ── BAGO: hiwalay ang message para sa "Approved" (for release)
+    // laban sa "Active"/"For Review" — iba ang kailangang gawin ng
+    // member sa bawat isa. ─────────────────────────────────────────
+    if (active.isEmpty && approved.isEmpty && pending.isEmpty) {
       passed.add('No existing active or pending loans');
     } else {
-      final existing = [...active, ...pending];
-      issues.add('You have ${existing.length} active/pending loan(s): ${existing.map((l) => l['loan_id']).join(', ')}. Complete them before applying for a new one.');
+      if (approved.isNotEmpty) {
+        issues.add('📦 You have ${approved.length} approved loan(s) ready for release: ${approved.map((l) => l['loan_id']).join(', ')}. Please visit the LEAF MPC office to claim your funds first.');
+      }
+      final activePending = [...active, ...pending];
+      if (activePending.isNotEmpty) {
+        issues.add('You have ${activePending.length} active/pending loan(s): ${activePending.map((l) => l['loan_id']).join(', ')}. Complete them before applying for a new one.');
+      }
     }
     if (completed.isNotEmpty) passed.add('Good payment history: ${completed.length} completed loan(s)');
 
-    return {'eligible': issues.isEmpty, 'issues': issues, 'passed': passed, 'maxLoanable': maxLoanable};
+    return {'eligible': issues.isEmpty, 'issues': issues, 'passed': passed, 'maxLoanable': maxLoanable, 'approvedLoans': approved};
   }
 
   // ── Loan Recommendation Engine — parehong logic sa web ──────────────
@@ -210,35 +249,174 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     return e;
   }
 
+  // ── BAGO: buksan ang form sa edit mode, prefilled ng existing data
+  // ng loan. Kino-check muna ang pinakabagong status bago buksan —
+  // dahil posibleng na-approve na ito ng admin sa likod habang naka-
+  // open ang page (stale na yung dating fetched list). ────────────────
+  Future<void> _handleEditClick(dynamic loan) async {
+    setState(() { _checkingId = loan['id']; _staleNotice = ''; });
+    final loans = await _refreshLoans();
+    final fresh = loans.firstWhere((l) => l['id'] == loan['id'], orElse: () => null);
+    if (mounted) setState(() => _checkingId = null);
+    if (fresh == null || fresh['status'] != 'For Review') {
+      if (mounted) {
+        setState(() => _staleNotice = '${loan['loan_id']} is no longer "For Review" (current status: ${fresh != null ? fresh['status'] : 'unknown'}). Your loan list has been refreshed.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _editingId = fresh['id'];
+      _selType = fresh['loan_type'];
+      _amountCtrl.text = '${(double.tryParse('${fresh['amount']}') ?? 0).round()}'; // ── buong numero lang
+      _term = int.tryParse('${fresh['term_months']}') ?? 12;
+      _purposeCtrl.text = fresh['purpose'] ?? '';
+      _collateralCtrl.text = fresh['collateral'] ?? '';
+      _noteCtrl.text = '';
+      _errors.clear();
+      _formError = '';
+      _step = 2;
+      _showHistory = false;
+    });
+  }
+
+  void _handleCancelEdit() {
+    setState(() {
+      _editingId = null;
+      _step = 1; _selType = null;
+      _amountCtrl.clear(); _term = 12; _purposeCtrl.clear(); _collateralCtrl.clear(); _noteCtrl.clear();
+      _errors.clear();
+      _formError = '';
+    });
+  }
+
+  // ── BAGO: parehong freshness check bago buksan ang Cancel confirm,
+  // saka lang lalabas ang "Are you sure?" dialog. ─────────────────────
+  Future<void> _handleCancelClick(dynamic loan) async {
+    setState(() { _checkingId = loan['id']; _staleNotice = ''; });
+    final loans = await _refreshLoans();
+    final fresh = loans.firstWhere((l) => l['id'] == loan['id'], orElse: () => null);
+    if (mounted) setState(() => _checkingId = null);
+    if (fresh == null || fresh['status'] != 'For Review') {
+      if (mounted) {
+        setState(() => _staleNotice = '${loan['loan_id']} is no longer "For Review" (current status: ${fresh != null ? fresh['status'] : 'unknown'}). Your loan list has been refreshed.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    _showCancelDialog(fresh);
+  }
+
+  // ── BAGO: "Are you sure?" confirmation bago talaga i-cancel ────────
+  void _showCancelDialog(dynamic loan) {
+    bool cancelling = false;
+    String cancelError = '';
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => StatefulBuilder(builder: (context, setSt) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('⚠️ Cancel this application?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _LAColors.red)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(TextSpan(style: const TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.5), children: [
+                const TextSpan(text: 'Are you sure you want to cancel '),
+                TextSpan(text: '${loan['loan_id']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                TextSpan(text: ' (${_peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0)})? This cannot be undone.'),
+              ])),
+              if (cancelError.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8)),
+                  child: Text(cancelError, style: const TextStyle(fontSize: 12, color: _LAColors.red)),
+                ),
+              ],
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: cancelling ? null : () => Navigator.pop(context),
+                child: const Text('No, keep it'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: _LAColors.red, foregroundColor: Colors.white),
+                onPressed: cancelling ? null : () async {
+                  setSt(() => cancelling = true);
+                  try {
+                    await LoansService.updateLoanStatus(loan['id'], 'Cancelled');
+                    final loans = await LoansService.getLoans();
+                    if (mounted) setState(() => _myLoans = loans);
+                    if (context.mounted) Navigator.pop(context);
+                  } catch (e) {
+                    setSt(() { cancelling = false; cancelError = 'Failed to cancel loan application.'; });
+                  }
+                },
+                child: Text(cancelling ? 'Cancelling...' : 'Yes, cancel it'),
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
   Future<void> _handleSubmit() async {
-    if (!(_eligibility['eligible'] as bool)) return;
+    // ── BAGO: kapag naka-edit mode, hindi kailangan ng eligibility
+    // check ulit (existing application na 'to, hindi bagong apply). ──
+    if (_editingId == null && !(_eligibility['eligible'] as bool)) return;
     final errs = _validate();
     if (errs.isNotEmpty) {
       setState(() => _errors..clear()..addAll(errs));
       return;
     }
-    setState(() => _submitting = true);
+    setState(() { _formError = ''; _submitting = true; });
     try {
-      await LoansService.createLoan({
+      final payload = {
         'loan_type': _selType,
         'amount': _amount,
         'term_months': _term,
         'purpose': _purposeCtrl.text.trim(),
         'collateral': _collateralCtrl.text.trim(),
-      });
-      final loans = await LoansService.getLoans();
-      if (mounted) {
-        setState(() {
-          _myLoans = loans;
-          _submitted = true;
-          _submitting = false;
-        });
+      };
+      if (_editingId != null) {
+        // ── BAGO: generic update — hindi status change, kundi
+        // pag-edit ng loan details habang "For Review" pa. ──────────
+        await LoansService.updateLoan(_editingId, payload);
+        final loans = await LoansService.getLoans();
+        if (mounted) {
+          setState(() {
+            _myLoans = loans;
+            _editedNotice = true;
+            _editingId = null;
+            _submitting = false;
+          });
+        }
+      } else {
+        await LoansService.createLoan(payload);
+        final loans = await LoansService.getLoans();
+        if (mounted) {
+          setState(() {
+            _myLoans = loans;
+            _submitted = true;
+            _submitting = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _submitting = false;
-          _errors['purpose'] = 'Failed to submit application.';
+          _formError = 'Failed to submit application.';
         });
       }
     }
@@ -328,6 +506,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
       return const MemberScreenScaffold(activeRouteKey: 'apply-loan', body: Center(child: CircularProgressIndicator(color: _LAColors.green)));
     }
     if (_submitted) return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildSuccess());
+    if (_editedNotice) return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildEditedSuccess());
 
     return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildForm());
   }
@@ -385,9 +564,47 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     );
   }
 
+  // ── BAGO: Edit Success Screen — hiwalay sa "Submitted" screen ──────
+  Widget _buildEditedSuccess() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _LAColors.border)),
+        child: Column(children: [
+          const Text('✅', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 12),
+          const Text('Application Updated!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _LAColors.dark)),
+          const SizedBox(height: 10),
+          const Text(
+            'Your loan application has been updated and is still For Review.\n\nThe admin will review your updated application.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.7),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _LAColors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+              onPressed: () {
+                setState(() {
+                  _editedNotice = false;
+                  _step = 1; _selType = null;
+                  _amountCtrl.clear(); _term = 12; _purposeCtrl.clear(); _collateralCtrl.clear(); _noteCtrl.clear();
+                });
+              },
+              child: const Text('Back to Apply for Loan', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
   Widget _buildForm() {
     final elig = _eligibility;
     final eligible = elig['eligible'] as bool;
+    final approvedLoans = elig['approvedLoans'] as List;
     final rec = _recommendation;
 
     return SingleChildScrollView(
@@ -398,6 +615,65 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
           const Text('Apply for Loan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _LAColors.dark)),
           const Text('Submit a loan application online. Admin will review and notify you.', style: TextStyle(fontSize: 11, color: _LAColors.sub)),
           const SizedBox(height: 14),
+
+          // ── BAGO: lalabas kapag nag-attempt mag-edit/cancel ng loan
+          // na hindi na pala "For Review" (na-approve na sa likod). ──
+          if (_staleNotice.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFFFF3E0), border: Border.all(color: const Color(0xFFFFB74D)), borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [
+                Expanded(child: Text('⚠️ $_staleNotice', style: const TextStyle(fontSize: 11.5, color: Color(0xFF7A4A00)))),
+                InkWell(onTap: () => setState(() => _staleNotice = ''), child: const Icon(Icons.close, size: 16, color: Color(0xFF7A4A00))),
+              ]),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── BAGO: editing-mode indicator bar ──
+          if (_editingId != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), border: Border.all(color: const Color(0xFF90CAF9)), borderRadius: BorderRadius.circular(10)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('✏️ Editing your submitted application', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _LAColors.blue)),
+                InkWell(onTap: _handleCancelEdit, child: const Text('Cancel Edit', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _LAColors.blue, decoration: TextDecoration.underline))),
+              ]),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── BAGO: prominent na banner — makikita agad kung may loan
+          // na approved at ready for release. ─────────────────────────
+          if (approvedLoans.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFFF3E0), Color(0xFFFFE0B2)]), border: Border.all(color: const Color(0xFFFFB74D)), borderRadius: BorderRadius.circular(12)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('📦', style: TextStyle(fontSize: 26)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                      approvedLoans.length == 1
+                          ? 'Your loan ${approvedLoans.first['loan_id']} is approved and ready for release!'
+                          : 'You have ${approvedLoans.length} approved loans ready for release!',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFFE65100)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Visit the LEAF MPC office (Mon–Fri, 8:00 AM – 5:00 PM) to claim ${approvedLoans.length == 1 ? 'your ${_peso(double.tryParse('${approvedLoans.first['amount'] ?? 0}') ?? 0)} loan proceeds' : 'your loan proceeds'} and sign the necessary documents.',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF7A4A00), height: 1.4),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // ── Eligibility ──────────────────────────────────────────
           Container(
@@ -425,10 +701,15 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                       ]),
                     )),
                 const SizedBox(height: 10),
+                // ── BAGO: hiwalay na "Active Loans" (Active/Overdue lang)
+                // at "For Release" (Approved lang) — dating pinagsama,
+                // na mali/nakakalito dahil "Approved" pa lang, hindi pa
+                // talaga "Active". ─────────────────────────────────────
                 Wrap(spacing: 10, runSpacing: 8, children: [
                   _StatChip('Share Capital', _peso(_shareCapital), _LAColors.dark),
                   _StatChip('Max Loanable (×2)', _peso(elig['maxLoanable'] as double), _LAColors.blue),
                   _StatChip('Active Loans', '${_myLoans.where((l) => ['Active', 'Overdue'].contains(l['status'])).length}', _myLoans.where((l) => ['Active', 'Overdue'].contains(l['status'])).isNotEmpty ? _LAColors.red : _LAColors.green),
+                  _StatChip('For Release', '${approvedLoans.length}', approvedLoans.isNotEmpty ? const Color(0xFFE65100) : _LAColors.green),
                   _StatChip('Completed Loans', '${_myLoans.where((l) => l['status'] == 'Completed').length}', _LAColors.green),
                 ]),
               ],
@@ -529,14 +810,25 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                   if (_myLoans.isEmpty)
                     const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: Text('No loan applications yet.', style: TextStyle(color: _LAColors.sub))))
                   else
-                    ..._myLoans.map((l) => _LoanHistoryItem(loan: l, onTap: () => _openLoanDetail(l))),
+                    // ── BAGO: Edit/Cancel buttons — lalabas lang kapag
+                    // "For Review" ang status ng partikular na loan. ──
+                    ..._myLoans.map((l) => _LoanHistoryItem(
+                          loan: l,
+                          onTap: () => _openLoanDetail(l),
+                          onEdit: () => _handleEditClick(l),
+                          onCancel: () => _handleCancelClick(l),
+                          checking: _checkingId == l['id'],
+                        )),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 14),
 
-          if (!eligible)
+          // ── Block if not eligible — HUWAG i-block kapag naka-edit
+          // mode, dahil ang mismong loan na ino-edit ang siyang
+          // nagdudulot ng "may pending ka na" na eligibility issue. ──
+          if (!eligible && _editingId == null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -607,6 +899,17 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
             );
           }),
           const SizedBox(height: 6),
+          if (_editingId != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: _LAColors.red, side: const BorderSide(color: Color(0xFFEF9A9A)), padding: const EdgeInsets.symmetric(vertical: 12)),
+                onPressed: _handleCancelEdit,
+                child: const Text('Cancel Edit', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -647,6 +950,14 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
           TextField(
             controller: _amountCtrl,
             keyboardType: TextInputType.number,
+            // ── Hindi na basta-basta makakatype nang lalampas sa max
+            // loanable — hinaharang ang bagong digit kapag lalabas ang
+            // resulta sa itaas ng limitasyon (walang auto-clamp, basta
+            // itatanggi lang ang keystroke, gaya rin ng ginawa sa web).
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              _MaxAmountFormatter(() => maxLoanable),
+            ],
             onChanged: (_) { setState(() => _errors.remove('amount')); },
             decoration: InputDecoration(prefixText: '₱ ', hintText: 'Min ₱3,000 — Max ${_peso(maxLoanable)}', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _errors['amount'] != null ? _LAColors.red : const Color(0xFFE0E0E0))), errorText: _errors['amount']),
           ),
@@ -688,6 +999,17 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
           ],
 
           const SizedBox(height: 16),
+          if (_editingId != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: _LAColors.red, side: const BorderSide(color: Color(0xFFEF9A9A))),
+                onPressed: _handleCancelEdit,
+                child: const Text('Cancel Edit', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(children: [
             Expanded(child: OutlinedButton(onPressed: () => setState(() => _step = 1), child: const Text('← Back'))),
             const SizedBox(width: 10),
@@ -803,6 +1125,22 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
               }),
             ),
           ),
+          // ── BAGO: API-level error (hal. "must be For Review" kung
+          // na-approve na ito sa likod bago pa na-submit) — hiwalay sa
+          // per-field errors. ──────────────────────────────────────
+          if (_formError.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFEF9A9A))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.warning_amber_rounded, size: 14, color: _LAColors.red),
+                const SizedBox(width: 6),
+                Expanded(child: Text(_formError, style: const TextStyle(fontSize: 12.5, color: _LAColors.red))),
+              ]),
+            ),
+          ],
           const SizedBox(height: 14),
           Container(
             width: double.infinity,
@@ -811,15 +1149,28 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
             child: const Text('📋 By submitting, you confirm that all information provided is accurate. The admin will evaluate your application and notify you of the result.', style: TextStyle(fontSize: 11.5, color: _LAColors.blue, height: 1.5)),
           ),
           const SizedBox(height: 16),
+          if (_editingId != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: _LAColors.red, side: const BorderSide(color: Color(0xFFEF9A9A))),
+                onPressed: _submitting ? null : _handleCancelEdit,
+                child: const Text('Cancel Edit', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => setState(() => _step = 2), child: const Text('← Back'))),
+            Expanded(child: OutlinedButton(onPressed: _submitting ? null : () => setState(() => _step = 2), child: const Text('← Back'))),
             const SizedBox(width: 10),
             Expanded(
               flex: 2,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: _LAColors.blue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
                 onPressed: _submitting ? null : _handleSubmit,
-                child: _submitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Submit Application', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: _submitting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(_editingId != null ? 'Update Application' : 'Submit Application', style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ]),
@@ -929,34 +1280,82 @@ class _MiniStat extends StatelessWidget {
 class _LoanHistoryItem extends StatelessWidget {
   final dynamic loan;
   final VoidCallback onTap;
-  const _LoanHistoryItem({required this.loan, required this.onTap});
+  // ── BAGO: optional na Edit/Cancel callbacks — kapag walang laman
+  // (hal. sa Success screen), hindi lalabas ang mga buttons kahit
+  // "For Review" ang status. ──────────────────────────────────────
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
+  final bool checking;
+  const _LoanHistoryItem({required this.loan, required this.onTap, this.onEdit, this.onCancel, this.checking = false});
 
   @override
   Widget build(BuildContext context) {
     final st = kStatusMeta[loan['status']] ?? {'bg': const Color(0xFFF5F5F5), 'color': const Color(0xFF888888), 'label': loan['status']};
+    final canManage = loan['status'] == 'For Review' && onEdit != null && onCancel != null;
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF0F4F1)))),
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${loan['loan_id']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _LAColors.green, fontFamily: 'monospace')),
-                Text('${loan['loan_type']}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-                Text('${'${loan['applied_at'] ?? ''}'.split('T').first}', style: const TextStyle(fontSize: 10.5, color: _LAColors.sub)),
-              ],
-            ),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.dark)),
-            const SizedBox(height: 3),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Text('${st['label']}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: st['color'] as Color))),
-          ]),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${loan['loan_id']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _LAColors.green, fontFamily: 'monospace')),
+                    Text('${loan['loan_type']}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
+                    Text('${'${loan['applied_at'] ?? ''}'.split('T').first}', style: const TextStyle(fontSize: 10.5, color: _LAColors.sub)),
+                  ],
+                ),
+              ),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(_peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.dark)),
+                const SizedBox(height: 3),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Text('${st['label']}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: st['color'] as Color))),
+              ]),
+            ]),
+            if (canManage)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(children: [
+                  OutlinedButton(
+                    onPressed: checking ? null : onEdit,
+                    style: OutlinedButton.styleFrom(foregroundColor: _LAColors.blue, side: const BorderSide(color: Color(0xFF90CAF9)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text(checking ? 'Checking...' : 'Edit', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: checking ? null : onCancel,
+                    style: OutlinedButton.styleFrom(foregroundColor: _LAColors.red, side: const BorderSide(color: Color(0xFFEF9A9A)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text(checking ? 'Checking...' : 'Cancel', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                  ),
+                ]),
+              ),
+          ],
+        ),
       ),
     );
+  }
+}
+
+// ── totoong implementation ng _MaxAmountFormatter — habang nagta-type,
+// kapag ang resultang numero ay lalampas sa max loanable, awtomatikong
+// hinaharang ang bagong digit (babalik sa dating value, hindi ito
+// papasok). Pareho ito ngayon sa final na behavior ng web version. ──
+class _MaxAmountFormatter extends TextInputFormatter {
+  final double Function() getMax;
+  _MaxAmountFormatter(this.getMax);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    final parsed = double.tryParse(newValue.text);
+    if (parsed == null) return oldValue;
+    final max = getMax();
+    if (max > 0 && parsed > max) return oldValue;
+    return newValue;
   }
 }

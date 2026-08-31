@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { LanguageProvider, useLanguage } from "../context/LanguageContext";
 import { getMyProfileAPI, getMyOnlineAppAPI } from "../api/members";
-import { LayoutDashboard, CreditCard, Bell, Megaphone, FileText, UserCircle, Lock, PiggyBank } from "lucide-react";
+import { LayoutDashboard, CreditCard, Bell, Megaphone, FileText, UserCircle, Lock, PiggyBank, Globe } from "lucide-react";
 import "./MemberLayout.css";
 import logo from "../assets/logo.png";
 
@@ -14,41 +15,67 @@ const LOCKED_ROUTES = [
 ];
 
 const NAV_ITEMS = [
-  { to: "/member/dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard",      locked: true  },
-  { to: "/member/my-loans",      icon: <CreditCard      size={16}/>, label: "My Loans",       locked: true  },
-  { to: "/member/savings",       icon: <PiggyBank       size={16}/>, label: "My Savings",     locked: true  },
-  { to: "/member/notifications", icon: <Bell            size={16}/>, label: "Notifications",  locked: false },
-  { to: "/member/announcements", icon: <Megaphone       size={16}/>, label: "Announcements",  locked: false },
-  { to: "/member/apply",         icon: <FileText        size={16}/>, label: "Apply for Loan", locked: true  },
-  { to: "/member/profile",       icon: <UserCircle      size={16}/>, label: "My Profile",     locked: false },
+  { to: "/member/dashboard",     icon: <LayoutDashboard size={16}/>, labelKey: "ml_nav_dashboard",     locked: true  },
+  { to: "/member/my-loans",      icon: <CreditCard      size={16}/>, labelKey: "ml_nav_my_loans",       locked: true  },
+  { to: "/member/savings",       icon: <PiggyBank       size={16}/>, labelKey: "ml_nav_my_savings",     locked: true  },
+  { to: "/member/notifications", icon: <Bell            size={16}/>, labelKey: "ml_nav_notifications",  locked: false },
+  { to: "/member/announcements", icon: <Megaphone       size={16}/>, labelKey: "ml_nav_announcements",  locked: false },
+  { to: "/member/apply",         icon: <FileText        size={16}/>, labelKey: "ml_nav_apply_loan",     locked: true  },
+  { to: "/member/profile",       icon: <UserCircle      size={16}/>, labelKey: "ml_nav_profile",        locked: false },
 ];
 
 function OfficialMemberGate({ onClose, onApply }) {
+  const { t } = useLanguage();
   return (
     <div className="ml-gate-overlay" onClick={onClose}>
       <div className="ml-gate-box" onClick={e => e.stopPropagation()}>
         <div className="ml-gate-icon"><Lock size={48} color="#c62828"/></div>
-        <div className="ml-gate-title">Official Members Only</div>
+        <div className="ml-gate-title">{t("ml_gate_title")}</div>
         <div className="ml-gate-text">
-          This feature is only available to official LEAF MPC members.
-          Complete your membership to unlock full access.
+          {t("ml_gate_text")}
         </div>
         <div className="ml-gate-features">
-          <div className="ml-gate-feature-title">Unlock these features:</div>
-          <div className="ml-gate-feature-item">📊 Dashboard & loan overview</div>
-          <div className="ml-gate-feature-item">💳 My Loans & payment history</div>
-          <div className="ml-gate-feature-item">📝 Apply for loans online</div>
+          <div className="ml-gate-feature-title">{t("ml_gate_unlock_title")}</div>
+          <div className="ml-gate-feature-item">{t("ml_gate_feature1")}</div>
+          <div className="ml-gate-feature-item">{t("ml_gate_feature2")}</div>
+          <div className="ml-gate-feature-item">{t("ml_gate_feature3")}</div>
         </div>
         <div className="ml-gate-actions">
-          <button className="ml-gate-btn-apply" onClick={onApply}>Apply for Official Membership</button>
-          <button className="ml-gate-btn-cancel" onClick={onClose}>Maybe Later</button>
+          <button className="ml-gate-btn-apply" onClick={onApply}>{t("dash_apply_membership_btn")}</button>
+          <button className="ml-gate-btn-cancel" onClick={onClose}>{t("ml_gate_maybe_later")}</button>
         </div>
       </div>
     </div>
   );
 }
 
-export default function MemberLayout() {
+// ── BAGO: EN/FIL toggle button — nasa topbar-right, katulad ng
+// pwesto ng mga controls sa admin's topbar (kaliwa ng avatar). ──────
+function LanguageToggle() {
+  const { language, toggleLanguage } = useLanguage();
+  return (
+    <button
+      onClick={toggleLanguage}
+      title={language === "en" ? "Switch to Filipino" : "Switch to English"}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "6px 12px", borderRadius: 20,
+        border: "1px solid #c8e6c9", background: "#f1f8f1",
+        color: "#2e7d32", fontSize: 12, fontWeight: 700,
+        cursor: "pointer", marginRight: 10, fontFamily: "inherit",
+      }}
+    >
+      <Globe size={13}/> {language === "en" ? "ENGLISH" : "FILIPINO"}
+    </button>
+  );
+}
+
+// ── BAGO: nilipat ang buong laman ng MemberLayout papunta sa isang
+// inner component, dahil kailangang naka-loob sa <LanguageProvider>
+// ang useLanguage() hook (hindi puwedeng gamitin sa parehong
+// component na siyang nagpo-provide nito). ──────────────────────────
+function MemberLayoutInner() {
+  const { t } = useLanguage();
   const [sidebarOpen,   setSidebar]    = useState(false);
   const [notifCount,    setNotif]      = useState(0);
   const [showGate,      setShowGate]   = useState(false);
@@ -125,7 +152,7 @@ export default function MemberLayout() {
           <div className="ml-profile-info">
             <div className="ml-profile-name">{member.name}</div>
             <div className="ml-profile-id">
-              {member.memberId !== "—" ? member.memberId : "No Member ID yet"}
+              {member.memberId !== "—" ? member.memberId : t("ml_no_member_id")}
             </div>
           </div>
           <span
@@ -138,7 +165,7 @@ export default function MemberLayout() {
           <div className="ml-unofficial-notice">
             <span>⚠️</span>
             <div className="ml-unofficial-text">
-              You are not yet an official member. Some features are locked.
+              {t("ml_unofficial_notice")}
             </div>
           </div>
         )}
@@ -158,7 +185,7 @@ export default function MemberLayout() {
                 onClick={e => handleNavClick(item, e)}
               >
                 <span className="ml-nav-icon">{item.icon}</span>
-                <span className="ml-nav-label">{item.label}</span>
+                <span className="ml-nav-label">{t(item.labelKey)}</span>
                 {item.to === "/member/notifications" && notifCount > 0 && (
                   <span className="ml-notif-badge">{notifCount}</span>
                 )}
@@ -169,7 +196,7 @@ export default function MemberLayout() {
         </nav>
 
         <div className="ml-sidebar-bottom">
-          <button className="ml-logout-btn" onClick={handleLogout}>Sign Out</button>
+          <button className="ml-logout-btn" onClick={handleLogout}>{t("ml_sign_out")}</button>
         </div>
       </aside>
 
@@ -182,12 +209,11 @@ export default function MemberLayout() {
           >
             <span /><span /><span />
           </button>
-          <div className="ml-topbar-title">MEMBER</div>
+          <div className="ml-topbar-title">{t("ml_topbar_title")}</div>
           <div className="ml-topbar-right">
-            <button className="ml-notif-btn" onClick={() => navigate("/member/notifications")}>
-              <Bell size={20} color="#2d5a1b"/>
-              {notifCount > 0 && <span className="ml-notif-dot">{notifCount}</span>}
-            </button>
+            {/* ── BAGO: EN/FIL language toggle — katabi ng avatar,
+                katulad ng lokasyon ng mga controls sa admin topbar. ── */}
+            <LanguageToggle/>
             <div className="ml-topbar-avatar">{member.initials}</div>
           </div>
         </header>
@@ -197,5 +223,13 @@ export default function MemberLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function MemberLayout() {
+  return (
+    <LanguageProvider>
+      <MemberLayoutInner/>
+    </LanguageProvider>
   );
 }

@@ -15,6 +15,14 @@ export const uploadSystemLogoAPI = (file) => {
 export const resetSystemLogoAPI = () =>
   api.delete("/settings/logo/reset/").then(r => r.data);
 
+// ── BAGO: GCash payment number/account name — dating hardcoded sa
+// GCashPayment.jsx, ngayon nasa database na. ────────────────────────
+export const getGCashSettingsAPI = () =>
+  api.get("/settings/gcash/").then(r => r.data);
+
+export const updateGCashSettingsAPI = (data) =>
+  api.patch("/settings/gcash/", data).then(r => r.data);
+
 // ── Staff Feature Permissions ──────────────────────────────────────
 export const getAvailableFeaturesAPI = () =>
   api.get("/settings/features/").then(r => r.data);

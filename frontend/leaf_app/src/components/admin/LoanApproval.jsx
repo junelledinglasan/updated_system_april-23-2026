@@ -4,11 +4,14 @@ import { Search, Clock, CheckCircle2, XCircle, Wallet } from "lucide-react";
 import "./LoanApproval.css";
 
 const LOAN_TYPES  = ["Regular Loan","Emergency Loan","Salary Loan","Housing Loan","Business Loan","Other Loan"];
-const STATUS_TABS = ["For Review","Declined"];
+const STATUS_TABS = ["For Review","Approved","Declined","Cancelled"];
 const ROWS_PER_PAGE = 8;
-const STATUS_COLOR  = { "For Review":"status-review", "Active":"status-approved", "Declined":"status-declined", "Completed":"status-approved", "Overdue":"status-declined" };
+// NOTE: "Approved" reuses the "status-review" (orange/pending) pill style below.
+// If you want it visually distinct from "For Review", add a new CSS class
+// (e.g. .status-pending-release) in LoanApproval.css and swap it in here.
+const STATUS_COLOR  = { "For Review":"status-review", "Approved":"status-review", "Active":"status-approved", "Declined":"status-declined", "Completed":"status-approved", "Overdue":"status-declined", "Cancelled":"status-declined" };
 
-function ProcessModal({ loan, onClose, onApprove, onDecline }) {
+function ProcessModal({ loan, onClose, onApprove, onDecline, onRelease }) {
   const [declineMode, setDeclineMode] = useState(false);
   const [remarks,     setRemarks]     = useState(loan?.remarks||"");
   const [loading,     setLoading]     = useState(false);
@@ -42,6 +45,11 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
     if (!remarks.trim()) return;
     setLoading(true);
     try { await onDecline(loan.id, remarks); }
+    finally { setLoading(false); }
+  };
+  const handleRelease = async () => {
+    setLoading(true);
+    try { await onRelease(loan.id, remarks); }
     finally { setLoading(false); }
   };
 
@@ -125,6 +133,7 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
             <textarea className={`la-textarea ${declineMode?"decline-mode":""}`} placeholder={declineMode?"State the reason for declining...":"Optional: Add remarks..."} value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3}/>
           </div>
 
+          {loan.status==="Approved" && <div className="la-notice la-notice-approved">This loan has been approved. Waiting for the member to claim the funds at the office — click "Confirm Release" once released.</div>}
           {loan.status==="Active"   && <div className="la-notice la-notice-approved">This loan has been approved and activated.</div>}
           {loan.status==="Declined" && <div className="la-notice la-notice-declined">This loan has been declined.</div>}
         </div>
@@ -138,6 +147,9 @@ function ProcessModal({ loan, onClose, onApprove, onDecline }) {
                   <button className="la-btn-decline-soft" onClick={()=>setDeclineMode(true)}>Decline</button>
                   <button className="la-btn-approve" onClick={handleApprove} disabled={loading}>{loading?"Approving...":"Approve Loan"}</button>
                 </>
+              )}
+              {loan.status==="Approved" && (
+                <button className="la-btn-approve" onClick={handleRelease} disabled={loading}>{loading?"Releasing...":"Confirm Release"}</button>
               )}
             </>
           ) : (
@@ -167,12 +179,15 @@ export default function LoanApproval() {
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      // ── Fetch ONLY For Review and Declined — exclude F2F Active loans ──
-      const [forReview, declined] = await Promise.all([
+      // ── Fetch For Review, Approved (awaiting release), Declined, and
+      // Cancelled (member-initiated) — exclude F2F Active loans ──────
+      const [forReview, approved, declined, cancelled] = await Promise.all([
         getLoansAPI({ status: "For Review" }),
+        getLoansAPI({ status: "Approved"   }),
         getLoansAPI({ status: "Declined"   }),
+        getLoansAPI({ status: "Cancelled"  }),
       ]);
-      setLoans([...forReview, ...declined]);
+      setLoans([...forReview, ...approved, ...declined, ...cancelled]);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -181,6 +196,7 @@ export default function LoanApproval() {
 
   const counts = {
     forReview: loans.filter(l=>l.status==="For Review").length,
+    approved:  loans.filter(l=>l.status==="Approved").length,
     declined:  loans.filter(l=>l.status==="Declined").length,
   };
 
@@ -206,9 +222,17 @@ export default function LoanApproval() {
       await updateLoanStatusAPI(id, "Approved");
       setProcess(null);
       const loan = loans.find(l=>l.id===id);
-      showToast(`Loan approved for ${loan?.member_name}. Monthly: ₱${monthlyAmt.toLocaleString()}`);
+      showToast(`Loan approved for ${loan?.member_name}. Member notified to claim funds at the office.`);
       fetchLoans();
-    } catch { showToast("Failed to approve loan.", "danger"); }
+    } catch (err) {
+      // ── BAGO: ipakita ang totoong backend error (hal. "This loan is
+      // no longer For Review" — bagong guard laban sa race condition
+      // kung na-cancel na pala ng member ang loan na 'to) imbes na
+      // generic message lang. ─────────────────────────────────────
+      const msg = err.response?.data?.error || "Failed to approve loan.";
+      showToast(msg, "danger");
+      fetchLoans(); // i-refresh para makita ang totoong current status
+    }
   };
 
   const handleDecline = async (id, remarks) => {
@@ -218,7 +242,25 @@ export default function LoanApproval() {
       const loan = loans.find(l=>l.id===id);
       showToast(`Loan declined for ${loan?.member_name}.`, "danger");
       fetchLoans();
-    } catch { showToast("Failed to decline loan.", "danger"); }
+    } catch (err) {
+      const msg = err.response?.data?.error || "Failed to decline loan.";
+      showToast(msg, "danger");
+      fetchLoans();
+    }
+  };
+
+  const handleRelease = async (id, remarks) => {
+    try {
+      await updateLoanStatusAPI(id, "Active");
+      setProcess(null);
+      const loan = loans.find(l=>l.id===id);
+      showToast(`Loan released and activated for ${loan?.member_name}.`);
+      fetchLoans();
+    } catch (err) {
+      const msg = err.response?.data?.error || "Failed to release loan.";
+      showToast(msg, "danger");
+      fetchLoans();
+    }
   };
 
   const currentProcess = processLoan ? loans.find(l=>l.id===processLoan.id) : null;
@@ -226,7 +268,7 @@ export default function LoanApproval() {
   return (
     <div className="la-wrapper">
       {toast && <div className={`la-toast la-toast-${toast.type}`}>{toast.msg}</div>}
-      <ProcessModal loan={currentProcess} onClose={()=>setProcess(null)} onApprove={handleApprove} onDecline={handleDecline}/>
+      <ProcessModal loan={currentProcess} onClose={()=>setProcess(null)} onApprove={handleApprove} onDecline={handleDecline} onRelease={handleRelease}/>
 
       <div className="la-page-header">
         <div>
@@ -240,13 +282,17 @@ export default function LoanApproval() {
           <div className="la-sum-icon" style={{background:"#fff8e1",display:"flex",alignItems:"center",justifyContent:"center"}}><Clock size={20} color="#e65100"/></div>
           <div><div className="la-sum-val orange">{counts.forReview}</div><div className="la-sum-label">For Review</div></div>
         </div>
+        <div className="la-summary-card clickable" onClick={()=>{setFilter("Approved");setPage(1);}}>
+          <div className="la-sum-icon" style={{background:"#fff8e1",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={20} color="#e65100"/></div>
+          <div><div className="la-sum-val orange">{counts.approved}</div><div className="la-sum-label">Approved — For Release</div></div>
+        </div>
         <div className="la-summary-card clickable" onClick={()=>{setFilter("Declined");setPage(1);}}>
           <div className="la-sum-icon" style={{background:"#fce4ec",display:"flex",alignItems:"center",justifyContent:"center"}}><XCircle size={20} color="#c62828"/></div>
           <div><div className="la-sum-val red">{counts.declined}</div><div className="la-sum-label">Declined</div></div>
         </div>
         <div className="la-summary-card">
           <div className="la-sum-icon" style={{background:"#e8f5e9",display:"flex",alignItems:"center",justifyContent:"center"}}><CheckCircle2 size={20} color="#2e7d32"/></div>
-          <div><div className="la-sum-val green">{counts.forReview + counts.declined}</div><div className="la-sum-label">Total Applications</div></div>
+          <div><div className="la-sum-val green">{counts.forReview + counts.approved + counts.declined}</div><div className="la-sum-label">Total Applications</div></div>
         </div>
         <div className="la-summary-card">
           <div className="la-sum-icon" style={{background:"#e3f2fd",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={20} color="#1565c0"/></div>
@@ -308,8 +354,8 @@ export default function LoanApproval() {
                   <td className="cell-center">{l.term_months}mo</td>
                   <td><span className={`la-badge ${STATUS_COLOR[l.status]}`}>{l.status}</span></td>
                   <td style={{textAlign:"center"}}>
-                    <button className={`la-process-btn ${l.status==="For Review"?"btn-review":"btn-view"}`} onClick={e=>{e.stopPropagation();setProcess(l);}}>
-                      {l.status==="For Review"?"Process":"View"}
+                    <button className={`la-process-btn ${l.status==="For Review"||l.status==="Approved"?"btn-review":"btn-view"}`} onClick={e=>{e.stopPropagation();setProcess(l);}}>
+                      {l.status==="For Review" ? "Process" : l.status==="Approved" ? "Release" : "View"}
                     </button>
                   </td>
                 </tr>

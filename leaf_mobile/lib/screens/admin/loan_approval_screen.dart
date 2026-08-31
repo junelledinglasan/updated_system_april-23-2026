@@ -22,6 +22,7 @@ Color laStatusColor(String status) {
       return _LAColors.green;
     case 'Declined':
     case 'Overdue':
+    case 'Cancelled':
       return _LAColors.red;
     default:
       return _LAColors.orange;
@@ -35,6 +36,7 @@ Color laStatusBg(String status) {
       return const Color(0xFFE8F5E9);
     case 'Declined':
     case 'Overdue':
+    case 'Cancelled':
       return const Color(0xFFFCE4EC);
     default:
       return const Color(0xFFFFF8E1);
@@ -66,11 +68,15 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   Future<void> _fetchLoans({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
     try {
+      // ── Fetch For Review, Approved (awaiting release), Declined, and
+      // Cancelled (member-initiated) — exclude F2F Active loans ──────
       final results = await Future.wait([
         LoansService.getLoans(status: 'For Review'),
+        LoansService.getLoans(status: 'Approved'),
         LoansService.getLoans(status: 'Declined'),
+        LoansService.getLoans(status: 'Cancelled'),
       ]);
-      if (mounted) setState(() => _loans = [...results[0], ...results[1]]);
+      if (mounted) setState(() => _loans = [...results[0], ...results[1], ...results[2], ...results[3]]);
     } catch (_) {
     } finally {
       if (mounted && !silent) setState(() => _loading = false);
@@ -79,7 +85,9 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
   Map<String, int> get _counts => {
         'forReview': _loans.where((l) => l['status'] == 'For Review').length,
+        'approved': _loans.where((l) => l['status'] == 'Approved').length,
         'declined': _loans.where((l) => l['status'] == 'Declined').length,
+        'cancelled': _loans.where((l) => l['status'] == 'Cancelled').length,
       };
 
   double get _pendingAmount => _loans.where((l) => l['status'] == 'For Review').fold<double>(0, (s, l) => s + (double.tryParse('${l['amount'] ?? 0}') ?? 0));
@@ -137,9 +145,9 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                 childAspectRatio: 1.5,
                 children: [
                   _SummaryCard(icon: Icons.access_time, label: 'For Review', value: '${counts['forReview']}', color: _LAColors.orange, bg: const Color(0xFFFFF8E1), onTap: () => setState(() { _filterStatus = 'For Review'; _page = 1; })),
+                  _SummaryCard(icon: Icons.account_balance_wallet_outlined, label: 'Approved — For Release', value: '${counts['approved']}', color: _LAColors.orange, bg: const Color(0xFFFFF8E1), onTap: () => setState(() { _filterStatus = 'Approved'; _page = 1; })),
                   _SummaryCard(icon: Icons.cancel_outlined, label: 'Declined', value: '${counts['declined']}', color: _LAColors.red, bg: const Color(0xFFFCE4EC), onTap: () => setState(() { _filterStatus = 'Declined'; _page = 1; })),
-                  _SummaryCard(icon: Icons.check_circle_outline, label: 'Total Applications', value: '${(counts['forReview'] ?? 0) + (counts['declined'] ?? 0)}', color: _LAColors.green, bg: const Color(0xFFE8F5E9)),
-                  _SummaryCard(icon: Icons.account_balance_wallet_outlined, label: 'Pending Amount', value: '₱${_pendingAmount.toStringAsFixed(0)}', color: _LAColors.blue, bg: const Color(0xFFE3F2FD)),
+                  _SummaryCard(icon: Icons.check_circle_outline, label: 'Total Applications', value: '${(counts['forReview'] ?? 0) + (counts['approved'] ?? 0) + (counts['declined'] ?? 0)}', color: _LAColors.green, bg: const Color(0xFFE8F5E9)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -174,9 +182,9 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
-                children: ['For Review', 'Declined'].map((s) {
+                children: ['For Review', 'Approved', 'Declined', 'Cancelled'].map((s) {
                   final active = _filterStatus == s;
-                  final color = s == 'Declined' ? _LAColors.red : _LAColors.orange;
+                  final color = (s == 'Declined' || s == 'Cancelled') ? _LAColors.red : _LAColors.orange;
                   return ChoiceChip(
                     label: Text('$s (${_loans.where((l) => l['status'] == s).length})', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF888888))),
                     selected: active,
@@ -275,6 +283,9 @@ class _LoanApplicationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = (loan['status'] ?? '').toString();
     final isForReview = status == 'For Review';
+    final isApproved = status == 'Approved';
+    final isActionable = isForReview || isApproved;
+    final actionLabel = isForReview ? 'Process' : isApproved ? 'Release' : 'View';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -316,11 +327,11 @@ class _LoanApplicationCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isForReview ? _LAColors.orange : Colors.white,
+                    color: isActionable ? _LAColors.orange : Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isForReview ? _LAColors.orange : const Color(0xFFC8E6C9)),
+                    border: Border.all(color: isActionable ? _LAColors.orange : const Color(0xFFC8E6C9)),
                   ),
-                  child: Text(isForReview ? 'Process' : 'View', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: isForReview ? Colors.white : _LAColors.green)),
+                  child: Text(actionLabel, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: isActionable ? Colors.white : _LAColors.green)),
                 ),
               ],
             ),

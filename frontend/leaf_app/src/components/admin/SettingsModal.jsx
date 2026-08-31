@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, RotateCcw, Image as ImageIcon, Check } from "lucide-react";
-import { uploadSystemLogoAPI, resetSystemLogoAPI, getAvailableFeaturesAPI, getStaffPermissionsListAPI, updateStaffPermissionsAPI } from "../../api/settings";
+import { X, Upload, RotateCcw, Image as ImageIcon, Check, Smartphone } from "lucide-react";
+import { uploadSystemLogoAPI, resetSystemLogoAPI, getAvailableFeaturesAPI, getStaffPermissionsListAPI, updateStaffPermissionsAPI, getGCashSettingsAPI, updateGCashSettingsAPI } from "../../api/settings";
 import "./SettingsModal.css";
 
 const STAFF_ROLE_LABELS = {
   cashier: "Cashier", collector: "Collector", bookkeeper: "Bookkeeper", admin_clerk: "Administrative Clerk",
 };
 
-// ─── Settings Modal — Logo Customization + Staff Feature Permissions ──────
+// ─── Settings Modal — Logo Customization + Staff Feature Permissions + GCash ──
 export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
   const [tab,      setTab]      = useState("logo");
   const [preview,  setPreview]  = useState(null);
@@ -25,9 +25,19 @@ export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
   const [savingStaff,  setSavingStaff] = useState(null);
   const [localPerms,   setLocalPerms] = useState({}); // { staffId: [feature keys] }
 
+  // ── BAGO: GCash Payment settings state ──────────────────────────────
+  const [gcashLoading, setGcashLoading] = useState(true);
+  const [gcashNumber,  setGcashNumber]  = useState("");
+  const [gcashName,    setGcashName]    = useState("");
+  const [gcashSaved,   setGcashSaved]   = useState({ gcash_number: "", gcash_name: "" });
+  const [gcashSaving,  setGcashSaving]  = useState(false);
+  const [gcashError,   setGcashError]   = useState("");
+  const [gcashSuccess, setGcashSuccess] = useState("");
+
   const TABS = [
     { key: "logo", label: "🖼️ Logo" },
     { key: "staff-permissions", label: "🔐 Staff Permissions" },
+    { key: "gcash", label: "💳 GCash Payment" },
   ];
 
   useEffect(() => {
@@ -45,6 +55,20 @@ export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
       .finally(() => setStaffLoading(false));
   }, [tab, features.length]);
 
+  // ── BAGO: kunin ang kasalukuyang GCash settings pagkabukas ng tab ──
+  useEffect(() => {
+    if (tab !== "gcash" || (gcashNumber && gcashSaved.gcash_number)) return;
+    setGcashLoading(true);
+    getGCashSettingsAPI()
+      .then(data => {
+        setGcashNumber(data.gcash_number || "");
+        setGcashName(data.gcash_name || "");
+        setGcashSaved(data);
+      })
+      .catch(() => setGcashError("Failed to load current GCash settings."))
+      .finally(() => setGcashLoading(false));
+  }, [tab]);
+
   const toggleFeature = (staffId, key) => {
     setLocalPerms(prev => {
       const current = prev[staffId] || [];
@@ -61,6 +85,27 @@ export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
     } catch { /* silent — pwedeng dagdagan ng error banner kung kailangan */ }
     finally { setSavingStaff(null); }
   };
+
+  // ── BAGO: i-save ang bagong GCash number/account name ───────────────
+  const handleSaveGCash = async () => {
+    setGcashError("");
+    setGcashSuccess("");
+    if (!gcashNumber.trim()) { setGcashError("GCash number is required."); return; }
+    if (!gcashName.trim())   { setGcashError("Account name is required."); return; }
+    setGcashSaving(true);
+    try {
+      const res = await updateGCashSettingsAPI({ gcash_number: gcashNumber.trim(), gcash_name: gcashName.trim() });
+      setGcashSaved(res);
+      setGcashSuccess("GCash payment details updated! Members will see the new number right away.");
+      setTimeout(() => setGcashSuccess(""), 3500);
+    } catch (err) {
+      setGcashError(err.response?.data?.error || "Failed to update GCash settings.");
+    } finally {
+      setGcashSaving(false);
+    }
+  };
+
+  const gcashDirty = gcashNumber.trim() !== (gcashSaved.gcash_number || "") || gcashName.trim() !== (gcashSaved.gcash_name || "");
 
   const handleFileSelect = (f) => {
     if (!f) return;
@@ -217,6 +262,52 @@ export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
                     );
                   })}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── BAGO: GCash Payment tab — para ma-edit ng admin ang
+              GCash number/account name na ipinapakita sa members. ─── */}
+          {tab === "gcash" && (
+            <div className="stg-logo-section">
+              <div className="stg-upload-hint" style={{marginBottom:14, display:"flex", alignItems:"center", gap:8}}>
+                <Smartphone size={15} color="#2e7d32"/>
+                Ito ang numero at pangalan na makikita ng mga member sa "Pay via GCash" na modal kapag nagbabayad sila ng loan.
+              </div>
+
+              {gcashLoading ? (
+                <div style={{textAlign:"center",padding:"30px 0",color:"#aaa",fontSize:12}}>Loading current settings...</div>
+              ) : (
+                <>
+                  <div className="stg-field-label">GCash Number</div>
+                  <input
+                    type="text"
+                    value={gcashNumber}
+                    onChange={e => { setGcashNumber(e.target.value); setGcashError(""); }}
+                    placeholder="e.g. 0967-006-3500"
+                    style={{width:"100%",boxSizing:"border-box",marginTop:6,marginBottom:14,padding:"11px 14px",fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,border:"1.5px solid #e0e0e0",borderRadius:10,outline:"none"}}
+                  />
+
+                  <div className="stg-field-label">Account Name</div>
+                  <input
+                    type="text"
+                    value={gcashName}
+                    onChange={e => { setGcashName(e.target.value); setGcashError(""); }}
+                    placeholder="e.g. LEAF MPC"
+                    style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:"11px 14px",fontSize:14,border:"1.5px solid #e0e0e0",borderRadius:10,outline:"none",fontFamily:"inherit"}}
+                  />
+
+                  {gcashError   && <div className="stg-error-banner">{gcashError}</div>}
+                  {gcashSuccess && <div className="stg-success-banner">{gcashSuccess}</div>}
+
+                  <div className="stg-actions">
+                    <button className="stg-btn-save" style={{marginLeft:"auto"}}
+                      disabled={!gcashDirty || gcashSaving}
+                      onClick={handleSaveGCash}>
+                      {gcashSaving ? "Saving..." : "Save GCash Details"}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

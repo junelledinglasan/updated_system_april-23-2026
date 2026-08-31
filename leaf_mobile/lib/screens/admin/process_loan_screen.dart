@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/loans_service.dart';
+import '../../services/api_client.dart';
 import 'loan_approval_screen.dart';
 
 class _PLColors {
@@ -55,12 +56,20 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
       await LoansService.updateLoanStatus(widget.loan['id'], 'Approved');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Loan approved for ${widget.loan['member_name']}. Monthly: ₱${_monthlyAmort.toStringAsFixed(0)}'), backgroundColor: _PLColors.green),
+          SnackBar(content: Text('Loan approved for ${widget.loan['member_name']}. Member notified to claim funds at the office.'), backgroundColor: _PLColors.green),
         );
         Navigator.pop(context, true);
       }
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to approve loan.'), backgroundColor: _PLColors.red));
+    } catch (e) {
+      // ── BAGO: ipakita ang totoong backend error (hal. "This loan is
+      // no longer For Review" — bagong guard laban sa race condition)
+      // imbes na generic message lang. Bumalik din sa listahan (true)
+      // para awtomatikong ma-refresh ang stale na row. ────────────────
+      final msg = e is ApiException ? e.message : 'Failed to approve loan.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: _PLColors.red));
+        Navigator.pop(context, true);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -77,8 +86,33 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
         );
         Navigator.pop(context, true);
       }
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to decline loan.'), backgroundColor: _PLColors.red));
+    } catch (e) {
+      final msg = e is ApiException ? e.message : 'Failed to decline loan.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: _PLColors.red));
+        Navigator.pop(context, true);
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleRelease() async {
+    setState(() => _loading = true);
+    try {
+      await LoansService.updateLoanStatus(widget.loan['id'], 'Active');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Loan released and activated for ${widget.loan['member_name']}.'), backgroundColor: _PLColors.green),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      final msg = e is ApiException ? e.message : 'Failed to release loan.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: _PLColors.red));
+        Navigator.pop(context, true);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -189,10 +223,16 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
               onChanged: (_) => setState(() {}),
             ),
 
+            if (status == 'Approved')
+              Container(margin: const EdgeInsets.only(top: 14), width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFFE082))), child: const Text('This loan has been approved. Waiting for the member to claim the funds at the office — tap "Confirm Release" once released.', style: TextStyle(fontSize: 11.5, color: _PLColors.orange))),
             if (status == 'Active')
               Container(margin: const EdgeInsets.only(top: 14), width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFC8E6C9))), child: const Text('This loan has been approved and activated.', style: TextStyle(fontSize: 11.5, color: _PLColors.title))),
             if (status == 'Declined')
               Container(margin: const EdgeInsets.only(top: 14), width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFF8BBD0))), child: const Text('This loan has been declined.', style: TextStyle(fontSize: 11.5, color: Color(0xFFB71C1C)))),
+            // ── BAGO: notice para sa "Cancelled" — member mismo ang
+            // nag-cancel ng sarili niyang "For Review" application. ──
+            if (status == 'Cancelled')
+              Container(margin: const EdgeInsets.only(top: 14), width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE0E0E0))), child: const Text('This loan application was cancelled by the member.', style: TextStyle(fontSize: 11.5, color: Color(0xFF616161)))),
           ],
         ),
       ),
@@ -218,6 +258,17 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: _PLColors.green, foregroundColor: Colors.white),
                         onPressed: _loading ? null : _handleApprove,
                         child: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Approve Loan'),
+                      ),
+                    ),
+                  ],
+                  if (status == 'Approved') ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: _PLColors.orange, foregroundColor: Colors.white),
+                        onPressed: _loading ? null : _handleRelease,
+                        child: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Confirm Release'),
                       ),
                     ),
                   ],

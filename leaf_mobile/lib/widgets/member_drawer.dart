@@ -211,6 +211,11 @@ class MemberDrawer extends StatelessWidget {
                   final isActive = item.routeKey == activeRouteKey;
                   final isLocked = item.locked && !isOfficial;
                   final activeAndUnlocked = isActive && !isLocked;
+                  // ── BAGO: red number badge para sa Notifications —
+                  // katumbas ng ginawa na natin sa web sidebar. ──────
+                  final notifCount = item.routeKey == 'notifications'
+                      ? context.watch<MemberProvider>().notifCount
+                      : 0;
                   return Material(
                     color: activeAndUnlocked ? _MLColors.green.withOpacity(0.12) : Colors.transparent,
                     child: InkWell(
@@ -231,6 +236,14 @@ class MemberDrawer extends StatelessWidget {
                             Icon(item.icon, size: 16, color: activeAndUnlocked ? _MLColors.navActive : _MLColors.navIdle),
                             const SizedBox(width: 10),
                             Expanded(child: Text(item.label, style: TextStyle(fontSize: 12.5, fontWeight: activeAndUnlocked ? FontWeight.w700 : FontWeight.w500, color: activeAndUnlocked ? _MLColors.navActive : _MLColors.navIdle))),
+                            if (notifCount > 0)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                constraints: const BoxConstraints(minWidth: 18),
+                                decoration: BoxDecoration(color: const Color(0xFFE53935), borderRadius: BorderRadius.circular(20)),
+                                child: Text('$notifCount', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w800)),
+                              ),
                             if (isLocked) const Icon(Icons.lock_outline, size: 12, color: _MLColors.navIdle),
                           ]),
                         ),
