@@ -402,8 +402,18 @@ class _PostCard extends StatelessWidget {
 }
 
 // ── BAGO: Reaction button — tap = toggle "Like", long-press = pumili ────
-const Map<String, String> _kReactionEmoji = {
-  'Like': '👍', 'Love': '❤️', 'Haha': '😂', 'Wow': '😮', 'Sad': '😢', 'Angry': '😠',
+// ── BAGO: dating naka-emoji ito (👍❤️😂😮😢😠) — ngayon totoong
+// Material icons, tugma sa "walang emoji" na patakaran sa buong system.
+// Walang eksaktong Material icon para sa "surprised/wow" face, kaya
+// "auto_awesome" (parang sparkle) ang ginamit kong pinakamalapit na
+// alternatibo. ─────────────────────────────────────────────────────────
+const Map<String, IconData> _kReactionIcon = {
+  'Like': Icons.thumb_up,
+  'Love': Icons.favorite,
+  'Haha': Icons.sentiment_very_satisfied,
+  'Wow': Icons.auto_awesome,
+  'Sad': Icons.sentiment_dissatisfied,
+  'Angry': Icons.mood_bad,
 };
 const Map<String, Color> _kReactionColor = {
   'Like': Color(0xFF1565C0), 'Love': Color(0xFFC62828), 'Haha': Color(0xFFF57F17),
@@ -431,9 +441,9 @@ class _AdminReactionButton extends StatelessWidget {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10)]),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: _kReactionEmoji.entries.map((e) => GestureDetector(
+              children: _kReactionIcon.entries.map((e) => GestureDetector(
                     onTap: () { onReact(e.key); entry.remove(); },
-                    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(e.value, style: const TextStyle(fontSize: 24))),
+                    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Icon(e.value, size: 22, color: _kReactionColor[e.key])),
                   )).toList(),
             ),
           ),
@@ -469,7 +479,7 @@ class _AdminReactionButton extends StatelessWidget {
                       children: reactions!.map((r) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(children: [
-                              Text(_kReactionEmoji[r['reaction_type']] ?? '👍', style: const TextStyle(fontSize: 16)),
+                              Icon(_kReactionIcon[r['reaction_type']] ?? Icons.thumb_up, size: 16, color: _kReactionColor[r['reaction_type']] ?? const Color(0xFF888888)),
                               const SizedBox(width: 8),
                               Text('${r['posted_by_name'] ?? 'User'}', style: const TextStyle(fontSize: 13, color: Color(0xFF333333))),
                             ]),
@@ -489,7 +499,7 @@ class _AdminReactionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = myReaction != null;
-    final emoji = myReaction != null ? _kReactionEmoji[myReaction!] ?? '👍' : '👍';
+    final iconData = myReaction != null ? _kReactionIcon[myReaction!] ?? Icons.thumb_up : Icons.thumb_up;
     final color = myReaction != null ? (_kReactionColor[myReaction!] ?? _ANColors.green) : const Color(0xFF888888);
     final label = myReaction ?? 'Like';
 
@@ -499,7 +509,7 @@ class _AdminReactionButton extends StatelessWidget {
         child: TextButton.icon(
           onPressed: () => onReact(myReaction ?? 'Like'),
           style: TextButton.styleFrom(foregroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          icon: Text(emoji, style: const TextStyle(fontSize: 12)),
+          icon: Icon(iconData, size: 14, color: color),
           label: Text(label, style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
         ),
       ),

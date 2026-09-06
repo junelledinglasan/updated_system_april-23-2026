@@ -64,6 +64,13 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
   Map<String, dynamic>? _detail;
   final Map<String, dynamic> _form = {};
   final Map<String, TextEditingController> _controllers = {};
+  // ── BAGO: 1x/2x/3x na Loan Multiplier — hiwalay itong maliit na
+  // control (auto-save agad pagpalit, hindi kasama sa buong Edit/Save
+  // flow), dahil desisyon ito ng admin base sa payment history ng
+  // member, hindi bahagi ng profile info. ──────────────────────────
+  int _loanMultiplier = 1;
+  bool _savingMultiplier = false;
+  bool _multiplierSaved = false;
 
   @override
   void initState() {
@@ -124,6 +131,7 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
         'monthly_income': jp['monthly_income']?.toString() ?? '',
         'plain_password': data['plain_password'] ?? '',
       });
+      _loanMultiplier = int.tryParse('${data['loan_multiplier'] ?? 1}') ?? 1;
 
       for (final entry in _form.entries) {
         if (entry.value is! bool) {
@@ -160,6 +168,29 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // ── BAGO: auto-save agad pagpalit ng multiplier — hindi na
+  // kailangang pindutin pa ang "Save" ng buong Edit screen. ───────────
+  Future<void> _handleMultiplierChange(int newVal) async {
+    final prevVal = _loanMultiplier;
+    setState(() { _loanMultiplier = newVal; _savingMultiplier = true; });
+    try {
+      await MembersService.updateMember(widget.member['id'], {'loan_multiplier': newVal});
+      if (mounted) {
+        setState(() => _multiplierSaved = true);
+        Future.delayed(const Duration(seconds: 2), () { if (mounted) setState(() => _multiplierSaved = false); });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loanMultiplier = prevVal); // ── ibalik kung na-fail
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update loan multiplier.'), backgroundColor: Color(0xFFC62828)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingMultiplier = false);
     }
   }
 
@@ -240,12 +271,15 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
     final classification = _form['classification'] ?? 'Employed';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      // ── BAGO: dating plain gray ang background — ginawa nang light
+      // green tint (tugma sa admin theme, hal. Manage Member list). ──
+      backgroundColor: const Color(0xFFD8E8CC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF3EEE0),
         foregroundColor: _VEColors.dark,
-        elevation: 0.5,
+        elevation: 0,
         title: Text(_editMode ? 'Edit Member' : 'Member Profile', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _VEColors.dark)),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: const Color(0xFFE4D9BE))),
         actions: [
           if (!_loading && !_editMode)
             TextButton.icon(
@@ -262,34 +296,40 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Header ────────────────────────────────────────────
+                  // ── BAGO: gradient na header — kaparehong theme ng
+                  // Dashboard/ibang member-facing screens (dating plain
+                  // light-gray box lang, walang kulay). ──────────────────
                   Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: const Color(0xFFF7FAF7), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE4F0E5))),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF1B5E20), Color(0xFF2E7D32), Color(0xFF388E3C)], stops: [0.0, 0.6, 1.0], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: _VEColors.green.withOpacity(0.25), blurRadius: 12, offset: const Offset(0, 4))],
+                    ),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 26,
-                          backgroundColor: _VEColors.green,
-                          child: Text(fullname.isNotEmpty ? fullname[0].toUpperCase() : 'M', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+                          backgroundColor: Colors.white.withOpacity(0.22),
+                          child: Text(fullname.isNotEmpty ? fullname[0].toUpperCase() : 'M', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(fullname, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _VEColors.dark)),
-                              Text('$memberId', style: const TextStyle(fontSize: 10, color: _VEColors.label, fontFamily: 'monospace')),
-                              Text('@$username', style: const TextStyle(fontSize: 11, color: _VEColors.sub)),
+                              Text(fullname, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                              Text('$memberId', style: const TextStyle(fontSize: 10, color: Colors.white70, fontFamily: 'monospace')),
+                              Text('@$username', style: const TextStyle(fontSize: 11, color: Colors.white70)),
                             ],
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: status == 'Active' ? const Color(0xFFE8F5E9) : const Color(0xFFFCE4EC),
+                            color: status == 'Active' ? Colors.white.withOpacity(0.9) : const Color(0xFFFFCDD2),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: status == 'Active' ? const Color(0xFFC8E6C9) : const Color(0xFFF8BBD0)),
                           ),
                           child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: status == 'Active' ? _VEColors.green : const Color(0xFFC62828))),
                         ),
@@ -300,24 +340,111 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
 
                   // ── Tabs (info / finance) — view mode lang ─────────────
                   if (!_editMode) ...[
-                    Row(
-                      children: [
-                        _ProfileTabButton(label: 'Profile Info', icon: Icons.person_outline, active: _profileTab == 'info', onTap: () => setState(() => _profileTab = 'info')),
-                        _ProfileTabButton(label: 'Financial Summary', icon: Icons.account_balance_wallet_outlined, active: _profileTab == 'finance', onTap: () => setState(() => _profileTab = 'finance')),
-                      ],
+                    Container(
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE4F0E5))),
+                      child: Row(
+                        children: [
+                          _ProfileTabButton(label: 'Profile Info', icon: Icons.person_outline, active: _profileTab == 'info', onTap: () => setState(() => _profileTab = 'info')),
+                          _ProfileTabButton(label: 'Financial Summary', icon: Icons.account_balance_wallet_outlined, active: _profileTab == 'finance', onTap: () => setState(() => _profileTab = 'finance')),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 14),
                   ],
 
-                  if (_editMode || _profileTab == 'info') ...[
+                  // ── BAGO: naka-wrap na ngayon sa isang puting card ang
+                  // buong "info" tab (dating direktang nakalatag sa
+                  // background, walang separation/contrast). ──────────
+                  (_editMode || _profileTab == 'info')
+                    ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE4F0E5))),
+                        child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                     // ── Share capital bar ──────────────────────────────
                     Container(
-                      decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE4F0E5)), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF1F8E9), Color(0xFFE8F5E9)]), border: Border.all(color: const Color(0xFFC8E6C9)), borderRadius: BorderRadius.circular(10)),
                       child: Row(
                         children: [
                           Expanded(child: _CapitalBox(label: 'Share Capital', value: '₱${shareCapital.toStringAsFixed(0)}', color: const Color(0xFF222222))),
-                          Container(width: 1, height: 44, color: const Color(0xFFE4F0E5)),
-                          Expanded(child: _CapitalBox(label: 'Max Loanable', value: '₱${(shareCapital * 2).toStringAsFixed(0)}', color: _VEColors.green)),
+                          Container(width: 1, height: 44, color: const Color(0xFFC8E6C9)),
+                          Expanded(child: _CapitalBox(label: 'Max Loanable', value: '₱${(shareCapital * _loanMultiplier).toStringAsFixed(0)}', color: _VEColors.green)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // ── BAGO: editable na Loan Multiplier — 1x (unang
+                    // loan), 2x (masamang payment history), 3x (magandang
+                    // payment history). Direkta ang admin na nagpapasya
+                    // dito, hindi ito awtomatiko. Auto-save agad.
+                    // BAGO: dinagdagan ng espasyo/prominence (icon,
+                    // mas makapal na padding, colored left accent) para
+                    // mas kumapit ito at hindi na-eeng masyadong maiksi. ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FEF9),
+                        border: Border.all(color: const Color(0xFFC8E6C9)),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: _VEColors.green.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(9)),
+                            child: const Icon(Icons.trending_up, size: 18, color: _VEColors.green),
+                          ),
+                          const SizedBox(width: 10),
+                          const Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Loan Multiplier', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _VEColors.dark)),
+                                Text('Base sa payment history', style: TextStyle(fontSize: 10, color: _VEColors.sub)),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_savingMultiplier) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
+                          if (_multiplierSaved && !_savingMultiplier) const Padding(padding: EdgeInsets.only(right: 8), child: Text('✓ Saved', style: TextStyle(fontSize: 11, color: _VEColors.green, fontWeight: FontWeight.w600))),
+                          // ── FIX: dating masyadong mahaba ang naka-
+                          // display kapag sarado ang dropdown (hal. "2×
+                          // — Bad payment history"), kaya nag-o-overflow
+                          // sa makipot na screen. Gamit na ngayon ng
+                          // "selectedItemBuilder" — "1×"/"2×"/"3×" lang
+                          // ang lumalabas kapag sarado, buo pa rin ang
+                          // teksto kapag binuksan ang dropdown menu. ────
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFA5D6A7))),
+                            child: DropdownButton<int>(
+                            value: _loanMultiplier,
+                            underline: const SizedBox.shrink(),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _VEColors.dark),
+                            selectedItemBuilder: (context) => const [
+                              Text('1×', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _VEColors.dark)),
+                              Text('2×', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _VEColors.dark)),
+                              Text('3×', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _VEColors.dark)),
+                            ],
+                            // ── FIX: masikip/nagki-crumple ang text sa
+                            // loob ng dropdown menu popup dahil sumasalig
+                            // ang lapad nito sa maliit na "1×"/"2×"/"3×"
+                            // na naka-display kapag sarado. Binibigyan na
+                            // ngayon ng fixed/generous na width ang bawat
+                            // item para hindi na mag-wrap ang text. ──────
+                            items: const [
+                              DropdownMenuItem(value: 1, child: SizedBox(width: 190, child: Text('1× — First loan', style: TextStyle(fontSize: 12.5)))),
+                              DropdownMenuItem(value: 2, child: SizedBox(width: 190, child: Text('2× — Bad payment history', style: TextStyle(fontSize: 12.5)))),
+                              DropdownMenuItem(value: 3, child: SizedBox(width: 190, child: Text('3× — Good payment history', style: TextStyle(fontSize: 12.5)))),
+                            ],
+                            onChanged: _savingMultiplier ? null : (v) { if (v != null) _handleMultiplierChange(v); },
+                          ),
+                          ),
                         ],
                       ),
                     ),
@@ -404,8 +531,10 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
                       value: _detail?['date_registered'] != null ? '${_detail!['date_registered']}'.split('T').first : '—',
                       full: true,
                     ),
-                  ] else
-                    FinancialSummaryTab(memberId: widget.member['id']),
+                        ],
+                        ),
+                      )
+                    : FinancialSummaryTab(memberId: widget.member['id']),
                 ],
               ),
             ),
@@ -449,11 +578,13 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.only(bottom: 6),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0)))),
-        child: Text(text.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF888888), letterSpacing: 0.6)),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(width: 3, height: 14, decoration: BoxDecoration(color: _VEColors.green, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 6),
+          Text(text.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _VEColors.dark, letterSpacing: 0.6)),
+        ],
       ),
     );
   }
@@ -482,20 +613,34 @@ class _ViewFieldTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = full ? double.infinity : (MediaQuery.of(context).size.width - 42) / 2;
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _VEColors.label, letterSpacing: 0.4)),
-            const SizedBox(height: 2),
-            Text(value, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF222222), fontFamily: mono ? 'monospace' : null)),
-          ],
-        ),
-      ),
+    // ── FIX: dating "MediaQuery.of(context).size.width" (buong laki
+    // ng SCREEN) ang basehan ng "half width" — hindi nito naiisip ang
+    // lahat ng padding sa paligid nito (Scaffold, Container, Card),
+    // kaya mas malaki pa rin ang na-compute kumpara sa aktwal na
+    // available space, at isang column lang ang kumakasya kahit
+    // dapat 2. Gamit na ngayon ng "LayoutBuilder" — TAMANG available
+    // width ang nakukuha nito sa eksaktong posisyon sa tree (galing
+    // mismo sa constraints na ipinapasa ng Wrap parent). ────────────
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = full ? double.infinity : (constraints.maxWidth - 10) / 2;
+        return SizedBox(
+          width: width,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: const Color(0xFFF9FEF9), border: Border.all(color: const Color(0xFFEEF5EA)), borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF7A8A6A), letterSpacing: 0.4)),
+                const SizedBox(height: 3),
+                Text(value, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A1A1A), fontFamily: mono ? 'monospace' : null)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -508,17 +653,27 @@ class _EditFieldWrap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = full ? double.infinity : (MediaQuery.of(context).size.width - 42) / 2;
-    return SizedBox(
-      width: width,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _VEColors.label, letterSpacing: 0.4)),
-          const SizedBox(height: 4),
-          child,
-        ],
-      ),
+    // ── FIX: parehong dahilan/ayos ng _ViewFieldTile sa itaas. ───────
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = full ? double.infinity : (constraints.maxWidth - 10) / 2;
+        return SizedBox(
+          width: width,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: const Color(0xFFF9FEF9), border: Border.all(color: const Color(0xFFEEF5EA)), borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF7A8A6A), letterSpacing: 0.4)),
+                const SizedBox(height: 4),
+                child,
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

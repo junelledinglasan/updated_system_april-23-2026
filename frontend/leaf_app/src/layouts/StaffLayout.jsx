@@ -23,28 +23,24 @@ const ALL_STAFF_NAV = [
   { to: "/staff/reports",       icon: <BarChart2 size={15} />,      label: "Reports",            end: false, featureKey: "reports"          },
 ];
 
-// ─── Topbar actions per page per role ────────────────────────────────────────
-const PAGE_ACTIONS = {
-  cashier: {
-    "/staff/loan-payment": [
-      { label: "+ New F2F Payment", cls: "sl-btn-blue", action: "f2f" },
-    ],
-  },
-  collector: {
-    "/staff/loan-payment": [
-      { label: "+ New F2F Payment", cls: "sl-btn-blue", action: "f2f" },
-    ],
-  },
-  bookkeeper: {},
-  admin_clerk: {
-    "/staff/members": [
-      { label: "+ Register Member", cls: "sl-btn-green", action: "register" },
-    ],
-    "/staff/loan-approval": [],
-    "/staff/applications":  [],
-    "/staff/announcement":  [],
-    "/staff/reports":       [],
-  },
+// ─── Topbar actions per page ──────────────────────────────────────────────────
+// ── FIX: dati, naka-hiwalay ito PER staff_role ({cashier: {...},
+// admin_clerk: {...}}) — kaya kahit bigyan ng admin ng "Manage
+// Members" feature ang isang staff na "cashier"/"collector"/
+// "bookkeeper" ang role, LUMALABAS ang sidebar link (tama namang
+// naka-filter sa allowedFeatures) PERO HINDI lumalabas ang "+
+// Register Member" button sa taas — dahil hiwalay at naka-hardcode
+// ito sa staff_role, hindi sa dynamic na permission. Ngayon, base na
+// lang sa PATH (kung anong page ang kasalukuyang bukas) — kung
+// naka-reach ka doon (ibig sabihin, pinayagan ka na ng
+// allowedFeatures), makikita mo na rin ang kaakibat na action button. ──
+const PAGE_ACTIONS_BY_PATH = {
+  "/staff/members": [
+    { label: "+ Register Member", cls: "sl-btn-green", action: "register" },
+  ],
+  "/staff/loan-payment": [
+    { label: "+ New F2F Payment", cls: "sl-btn-blue", action: "f2f" },
+  ],
 };
 
 const STAFF_ROLE_LABELS = {
@@ -77,9 +73,10 @@ export default function StaffLayout() {
   const roleLabel = STAFF_ROLE_LABELS[user?.staff_role] ?? "Staff";
 
 
-  // Topbar actions based on current page + role
-  const roleActions  = PAGE_ACTIONS[user?.staff_role] ?? {};
-  const pageActions  = roleActions[location.pathname] ?? [];
+  // Topbar actions based on current page — hindi na base sa role,
+  // base na sa path (kaakibat na ng allowedFeatures kung naka-reach
+  // dito ang staff).
+  const pageActions = PAGE_ACTIONS_BY_PATH[location.pathname] ?? [];
 
   // Close sidebar on route change (mobile)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);

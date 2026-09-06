@@ -17,6 +17,16 @@ from django.utils import timezone as tz
 @permission_classes([IsAuthenticated])
 def loan_list_view(request):
     if request.method == 'GET':
+        # ── BAGO: awtomatikong che-check at ia-apply ang 2% penalty
+        # dito, tuwing may humihiling ng listahan ng loans (hal.
+        # binubuksan ang Loan Payment page sa web/mobile) — hindi na
+        # kailangan ng cron job o manual na "python manage.py
+        # apply_loan_penalties" command para gumana ito. Magaan lang
+        # ito dahil "apply_overdue_penalty()" mismo ay may built-in na
+        # early-return kung hindi naman talaga overdue ang isang loan. ──
+        for loan in Loan.objects.filter(status__in=['Active', 'Overdue']):
+            loan.apply_overdue_penalty()
+
         loans = Loan.objects.select_related(
             'member', 'member__pre_member', 'member__user',
         ).all()
@@ -86,6 +96,10 @@ def loan_detail_view(request, pk):
         return Response({'error': 'Not found.'}, status=404)
 
     if request.method == 'GET':
+        # ── BAGO: parehong awtomatikong penalty check, para sa
+        # sitwasyon na direktang binubuksan ang isang loan nang hindi
+        # muna dumaan sa listahan. ────────────────────────────────────
+        loan.apply_overdue_penalty()
         return Response(LoanSerializer(loan).data)
 
     # ══════════════════════════════════════════════════════════════════
@@ -132,9 +146,11 @@ def loan_detail_view(request, pk):
         if amount < 3000:
             return Response({'error': 'Minimum loan amount is ₱3,000.'}, status=400)
 
-        max_loanable = float(loan.member.share_capital) * 2
+        # ── FIX: dating "float(share_capital) * 2" — hindi ginagamit
+        # ang admin-editable na loan_multiplier (1x/2x/3x). ───────────
+        max_loanable = loan.member.max_loanable
         if float(amount) > max_loanable:
-            return Response({'error': f'Amount exceeds your max loanable of ₱{max_loanable:,.2f} (Share Capital × 2).'}, status=400)
+            return Response({'error': f'Amount exceeds your max loanable of ₱{max_loanable:,.2f}.'}, status=400)
 
         if not str(purpose).strip():
             return Response({'error': 'Purpose is required.'}, status=400)
@@ -146,8 +162,17 @@ def loan_detail_view(request, pk):
         else:
             monthly_rate = Decimal('0.01')
 
+        # ── FIX: dating "(amount + interest) / term_months" — dito
+        # NA-DODOBLE ang interest, dahil ISANG BESES na nakukuha ang
+        # interest bilang UPFRONT DEDUCTION (kinaltas na sa Net
+        # Proceeds bago pa man ma-release ang pera sa member). Kung
+        # idadagdag pa rin ito sa monthly_due, parang doble na ang
+        # binabayad ng member — una sa upfront deduction, tapos ulit
+        # sa bawat buwanang hulog. Base na lang ngayon sa PRINCIPAL
+        # LANG hinati sa term — ang interest ay HINDI na idinadagdag
+        # dito dahil nakuha na ito nang isang beses sa release. ────────
         interest      = monthly_rate * amount * term_months
-        monthly_due   = (amount + interest) / term_months
+        monthly_due   = amount / term_months
         interest_rate = monthly_rate * 12 * 100
 
         loan.loan_type     = loan_type

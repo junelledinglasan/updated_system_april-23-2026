@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import { getMyProfileAPI } from "../../api/members";
 import { createLoanAPI, getLoansAPI, updateLoanAPI } from "../../api/loans";
@@ -6,18 +6,30 @@ import { getPaymentsAPI } from "../../api/payments";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { getPageCache, savePageCache } from "../../utils/pageCache";
-import { Home, AlertTriangle, Briefcase, HardHat, Store, CheckCircle, XCircle } from "lucide-react";
+import { Home, Wallet, ShoppingBag, CreditCard, CheckCircle, XCircle, AlertTriangle, X, ClipboardList, PackageCheck, Lightbulb, Calendar, Check, Lock } from "lucide-react";
 import "./LoanApplication.css";
 
 // ── BAGO: "descKey" imbes na "desc" — dahil module-level constant ito
 // (walang access sa t() sa labas ng component), resolve na lang sa
 // render time gamit ang t(lt.descKey). ──────────────────────────────
+// ── BAGO: hindi na naka-cap ng "maxAmt" ang bawat loan type — base sa
+// hiling mismo, ang halagang pwedeng utangin ng miyembro ay depende
+// LAMANG sa kanyang Max Loanable (Share Capital × 2), hindi sa
+// partikular na loan type na pinili. Term limit lang (maxTerm) ang
+// natitirang restriction per type.
+// ── BAGO: 4 na bagong loan types (Regular, Petty Cash, Appliance,
+// ATM) — pinalitan ang dating 5 (Regular, Emergency, Salary, Housing,
+// Business). Ang mga maxTerm dito ay panimulang default lang — sabihin
+// mo kung may ibang gusto kang halaga. ────────────────────────────────
+// ── BAGO: dating may hiwalay na "maxTerm" per loan type (Regular:24,
+// Petty Cash:6, Appliance:24, ATM:12) — ngayon 1-12 buwan na lang
+// para sa LAHAT ng types, tugma na sa admin F2F application. Tinanggal
+// na ang "maxTerm" field dahil hindi na ito ginagamit. ────────────────
 const LOAN_TYPES = [
-  { type:"Regular Loan",   icon:<Home          size={26} color="#2e7d32"/>, color:"#e8f5e9", border:"#a5d6a7", descKey:"la_loan_type_regular_desc",   maxAmt:50000,  maxTerm:24 },
-  { type:"Emergency Loan", icon:<AlertTriangle size={26} color="#c62828"/>, color:"#fce4ec", border:"#ef9a9a", descKey:"la_loan_type_emergency_desc", maxAmt:20000,  maxTerm:12 },
-  { type:"Salary Loan",    icon:<Briefcase     size={26} color="#1565c0"/>, color:"#e3f2fd", border:"#90caf9", descKey:"la_loan_type_salary_desc",    maxAmt:30000,  maxTerm:12 },
-  { type:"Housing Loan",   icon:<HardHat       size={26} color="#e65100"/>, color:"#fff8e1", border:"#ffcc80", descKey:"la_loan_type_housing_desc",   maxAmt:100000, maxTerm:48 },
-  { type:"Business Loan",  icon:<Store         size={26} color="#6a1b9a"/>, color:"#f3e5f5", border:"#ce93d8", descKey:"la_loan_type_business_desc",  maxAmt:80000,  maxTerm:36 },
+  { type:"Regular Loan",     icon:<Home        size={26} color="#2e7d32"/>, color:"#e8f5e9", border:"#a5d6a7", descKey:"la_loan_type_regular_desc"   },
+  { type:"Petty Cash Loan",  icon:<Wallet      size={26} color="#c62828"/>, color:"#fce4ec", border:"#ef9a9a", descKey:"la_loan_type_pettycash_desc" },
+  { type:"Appliance Loan",   icon:<ShoppingBag size={26} color="#1565c0"/>, color:"#e3f2fd", border:"#90caf9", descKey:"la_loan_type_appliance_desc" },
+  { type:"ATM Loan",         icon:<CreditCard  size={26} color="#6a1b9a"/>, color:"#f3e5f5", border:"#ce93d8", descKey:"la_loan_type_atm_desc"       },
 ];
 
 // ── BAGO: "key" imbes na "label" — parehong dahilan, resolve sa
@@ -38,10 +50,13 @@ function getStatusMeta(status, t) {
 }
 
 // ─── Eligibility Checker ───────────────────────────────────────────────────────
-function checkEligibility(loans, shareCapital, t) {
+function checkEligibility(loans, shareCapital, loanMultiplier, t) {
   const issues = [];
   const passed = [];
-  const maxLoanable = shareCapital * 2;
+  // ── FIX: dating naka-hardcode na "shareCapital * 2" — gamit na ngayon
+  // ang admin-editable na loanMultiplier (1x/2x/3x, mula sa Manage
+  // Member). ─────────────────────────────────────────────────────────
+  const maxLoanable = shareCapital * loanMultiplier;
 
   const activeLoans   = loans.filter(l => l.status === "Active");
   const overdueLoans  = loans.filter(l => l.status === "Overdue");
@@ -61,15 +76,47 @@ function checkEligibility(loans, shareCapital, t) {
     issues.push(t("la_issue_overdue", { n: overdueLoans.length, ids: overdueLoans.map(l => l.loan_id).join(", ") }));
   }
 
+  // ── BAGO: hindi na basta na lang hinaharang ang bagong application
+  // kapag may aktibong loan — kung "at least half" (≥50%) na nabayaran
+  // ANG LAHAT ng aktibong loan, puwede pa ring mag-apply, PERO ang
+  // matitirang "loanable capacity" (Share Capital × 2 minus natitirang
+  // balanse ng aktibong loan) ang magiging bagong hangganan — hindi na
+  // ang buong Share Capital × 2. ─────────────────────────────────────
+  // ── FIX: dating "l.balance" (natitirang di-pa-bayad na balanse) ang
+  // ginagamit dito — pero ang totoong ibig sabihin ng "loanable
+  // capacity" ay base sa ORIGINAL na halaga ng aktibong loan (hindi sa
+  // balanse), dahil ang buong halaga ng loan (kahit paunti-unti nang
+  // nababayaran) ay itinuturing pa ring "nagamit" na bahagi ng max
+  // loanable hangga't hindi pa ito Completed. Halimbawa: Max Loanable
+  // ₱18,220, may active loan na ₱14,000 (kahit 50%+ na nabayaran) —
+  // ang matitira ay ₱18,220 − ₱14,000 = ₱4,220, HINDI ₱18,220 minus
+  // natitirang balanse. ─────────────────────────────────────────────
+  const outstandingActiveBalance = activeLoans.reduce((s, l) => s + parseFloat(l.amount || 0), 0);
+  const availableToBorrow = Math.max(0, maxLoanable - outstandingActiveBalance);
+  const allActiveHalfPaid = activeLoans.every(l => {
+    const amt = parseFloat(l.amount || 0);
+    const bal = parseFloat(l.balance || 0);
+    if (amt <= 0) return true;
+    return (amt - bal) / amt >= 0.5;
+  });
+
   if (activeLoans.length === 0 && approvedLoans.length === 0 && pendingLoans.length === 0) {
     passed.push(t("la_pass_no_pending"));
   } else {
     if (approvedLoans.length > 0) {
       issues.push(t("la_issue_for_release", { n: approvedLoans.length, ids: approvedLoans.map(l => l.loan_id).join(", ") }));
     }
-    const activePending = [...activeLoans, ...pendingLoans];
-    if (activePending.length > 0) {
-      issues.push(t("la_issue_active_pending", { n: activePending.length, ids: activePending.map(l => l.loan_id).join(", ") }));
+    if (pendingLoans.length > 0) {
+      issues.push(t("la_issue_active_pending", { n: pendingLoans.length, ids: pendingLoans.map(l => l.loan_id).join(", ") }));
+    }
+    if (activeLoans.length > 0) {
+      if (!allActiveHalfPaid) {
+        issues.push(t("la_issue_active_not_half_paid", { n: activeLoans.length, ids: activeLoans.map(l => l.loan_id).join(", ") }));
+      } else if (availableToBorrow < 3000) {
+        issues.push(t("la_issue_no_capacity"));
+      } else {
+        passed.push(t("la_pass_active_half_paid", { amt: `₱${availableToBorrow.toLocaleString()}` }));
+      }
     }
   }
 
@@ -77,14 +124,38 @@ function checkEligibility(loans, shareCapital, t) {
     passed.push(t("la_pass_good_history", { n: completedLoans.length }));
   }
 
-  return { eligible: issues.length === 0, issues, passed, maxLoanable, approvedLoans };
+  // ── "loanableCap" — ito na ang totoong hangganan ng bagong
+  // application (hindi na basta maxLoanable) kapag may aktibong loan
+  // pa na kasalukuyang binabayaran. ───────────────────────────────────
+  const loanableCap = activeLoans.length > 0 && allActiveHalfPaid ? availableToBorrow : maxLoanable;
+
+  // ── BAGO: "restrictedType" — kapag may aktibong loan na (kahit
+  // 50%+ na nabayaran, kwalipikado nang mag-apply ulit), dapat
+  // KAPAREHONG uri ng loan ang susunod na application — hindi puwedeng
+  // lumipat sa ibang klase habang may aktibo pa. Kung magkaiba-iba ang
+  // type ng mga aktibong loan (bihirang senaryo), gagamitin na lang
+  // ang type ng unang aktibong loan. ───────────────────────────────────
+  const restrictedType = activeLoans.length > 0 ? activeLoans[0].loan_type : null;
+
+  return { eligible: issues.length === 0, issues, passed, maxLoanable, loanableCap, approvedLoans, restrictedType };
 }
 
 // ─── Loan Recommendation Engine ───────────────────────────────────────────────
-function getLoanRecommendation(shareCapital, classification, monthlyIncome, loans) {
-  const maxLoanable    = shareCapital * 2;
+function getLoanRecommendation(shareCapital, loanMultiplier, classification, monthlyIncome, loans, loanableCap, restrictedType) {
+  const roomCap = loanableCap ?? (shareCapital * loanMultiplier);
   const completedLoans = loans.filter(l => l.status === "Completed");
   const hasGoodHistory = completedLoans.length > 0;
+
+  // ── BAGO: piliin ang recommended TYPE — kung may "restrictedType"
+  // (may aktibong loan na ang miyembro), KAILANGANG kaparehong type
+  // ang irekomenda, hindi na base sa classification. Kung wala pang
+  // aktibong loan, "Regular Loan" na lang ang default (wala nang
+  // "Emergency"/"Salary" na klase sa bagong 4 na loan types). Walang
+  // cap na kinukuha mula sa type mismo (wala nang "maxAmt" per type),
+  // dahil ang halagang pwedeng utangin ay depende LAMANG sa Max
+  // Loanable (Share Capital × 2 / natitirang room). ────────────────────
+  const recType = restrictedType || "Regular Loan";
+  const maxLoanable = roomCap;
 
   let recAmtPct  = hasGoodHistory ? 0.8 : 0.5;
   let recAmount  = Math.floor(maxLoanable * recAmtPct / 1000) * 1000;
@@ -105,16 +176,11 @@ function getLoanRecommendation(shareCapital, classification, monthlyIncome, loan
     }
   }
 
-  let recType = "Regular Loan";
-  if (classification === "Student")  recType = "Emergency Loan";
-  if (classification === "Senior")   recType = "Regular Loan";
-  if (classification === "Employed") {
-    if (monthlyIncome >= 15000)      recType = "Salary Loan";
-    else                             recType = "Regular Loan";
-  }
-
   const interest    = rate * recAmount * recTerm;
-  const monthlyDue  = (recAmount + interest) / recTerm;
+  // ── FIX: parehong ayos ng monthlyEst sa itaas — hindi na idinadagdag
+  // ang interest dahil upfront deduction na ito, hindi bahagi ng
+  // buwanang hulog. ───────────────────────────────────────────────────
+  const monthlyDue  = recAmount / recTerm;
   const debtRatio   = monthlyIncome > 0 ? (monthlyDue / monthlyIncome) * 100 : 0;
 
   return {
@@ -142,6 +208,10 @@ export default function LoanApplication() {
 
   const [step,           setStep]          = useState(1);
   const [shareCapital,   setShareCapital]  = useState(cached?.shareCapital || 0);
+  // ── BAGO: admin-editable na Loan Multiplier (1x/2x/3x) — dating
+  // naka-hardcode na "× 2" ang Max Loanable, ngayon galing na sa
+  // member profile (na sine-set ng admin sa Manage Member). ──────────
+  const [loanMultiplier, setLoanMultiplier]= useState(cached?.loanMultiplier || 1);
   const [monthlyIncome,  setMonthlyIncome] = useState(cached?.monthlyIncome || 0);
   const [classification, setClassification]= useState(cached?.classification || "Employed");
   const [loadingProfile, setLoadingProfile]= useState(!cached);
@@ -167,10 +237,11 @@ export default function LoanApplication() {
 
   useEffect(() => {
     Promise.allSettled([getMyProfileAPI(), getLoansAPI()]).then(([profRes, loansRes]) => {
-      let newShareCapital = 0, newIncome = 0, newClassification = "Employed";
+      let newShareCapital = 0, newIncome = 0, newClassification = "Employed", newMultiplier = 1;
       if (profRes.status === "fulfilled") {
         const p = profRes.value;
         newShareCapital = parseFloat(p.share_capital || 0);
+        newMultiplier = parseInt(p.loan_multiplier || 1);
         newIncome = parseFloat(
           p.job_profile?.monthly_income ||
           p.senior_profile?.pension_income ||
@@ -179,6 +250,7 @@ export default function LoanApplication() {
         );
         newClassification = p.pre_member_info?.classification || p.classification || "Employed";
         setShareCapital(newShareCapital);
+        setLoanMultiplier(newMultiplier);
         setMonthlyIncome(newIncome);
         setClassification(newClassification);
       } else {
@@ -191,14 +263,26 @@ export default function LoanApplication() {
       setLoadingLoans(false);
 
       savePageCache("apply-loan", scopeKey, {
-        shareCapital: newShareCapital, monthlyIncome: newIncome,
+        shareCapital: newShareCapital, loanMultiplier: newMultiplier, monthlyIncome: newIncome,
         classification: newClassification, myLoans: newMyLoans,
       });
     });
   }, [scopeKey]);
 
-  const eligibility   = checkEligibility(myLoans, shareCapital, t);
-  const recommendation= getLoanRecommendation(shareCapital, classification, monthlyIncome, myLoans);
+  const eligibility   = checkEligibility(myLoans, shareCapital, loanMultiplier, t);
+  const recommendation= getLoanRecommendation(shareCapital, loanMultiplier, classification, monthlyIncome, myLoans, eligibility.loanableCap, eligibility.restrictedType);
+
+  // ── BAGO: awtomatikong piliin ang restricted type kapag may aktibong
+  // loan na (kwalipikado nang mag-apply ulit) at wala pang napipiling
+  // type — para hindi na kailangang pang i-click pa ng member ang
+  // nag-iisang available na choice. Hindi ito ginagawa habang naka-edit
+  // mode (may sarili nang type na ang loan na ino-edit). ──────────────
+  useEffect(() => {
+    if (eligibility.restrictedType && !selType && !editingId) {
+      setSelType(eligibility.restrictedType);
+    }
+  }, [eligibility.restrictedType, editingId]);
+
   const amount       = parseFloat(form.amount) || 0;
   const term         = parseInt(form.term) || 12;
   const selectedType = LOAN_TYPES.find(l => l.type === selType);
@@ -212,9 +296,20 @@ export default function LoanApplication() {
   const sc           = amount * 0.03;
   const totalDed     = interest + serviceFee + filingFee + insurance + sd + sc;
   const netProceeds  = amount - totalDed;
-  const monthlyEst   = amount > 0 ? (amount + interest) / term : 0;
+  // ── FIX: dating "(amount + interest) / term" — DITO ang aktwal na
+  // BUG, hindi lang sa display. Na-dodouble ang interest kasi ISANG
+  // BESES na nito nakukuha bilang UPFRONT DEDUCTION. Kaparehong ayos
+  // ng ginawa sa backend (serializers.py). ───────────────────────────
+  const monthlyEst   = amount > 0 ? amount / term : 0;
 
-  const maxLoanable     = shareCapital * 2;
+  // ── FIX: dating "shareCapital * 2" lang ang ginagamit dito — hindi
+  // pa naka-wire yung "loanableCap" mula sa eligibility check kahit
+  // na-compute na ito. Ibig sabihin, kahit may active loan na 50%+
+  // nabayaran (na dapat may BAWAS na hangganan), puwede pa ring
+  // mag-type ng hanggang FULL max loanable — bypass ang buong
+  // "remaining room" na logic. Gamit na ngayon ang totoong hangganan
+  // (eligibility.loanableCap) sa lahat ng lugar sa form. ─────────────
+  const maxLoanable     = eligibility.loanableCap;
   const showComputation = amount >= 3000 && amount <= maxLoanable && selType && step === 2;
 
   const handle = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
@@ -327,11 +422,30 @@ export default function LoanApplication() {
     return e;
   };
 
+  // ── BAGO: refs para sa "scroll-to-error" — kapag may hindi na-fill
+  // na required field, awtomatikong mag-s-scroll at mag-fo-focus dito
+  // imbes na basta magpakita ng error text sa ibaba na baka hindi
+  // mapansin. ─────────────────────────────────────────────────────────
+  const amountRef  = useRef(null);
+  const purposeRef = useRef(null);
+  const fieldRefs  = { amount: amountRef, purpose: purposeRef };
+
+  const scrollToFirstError = (errs) => {
+    // Sundin ang pagkakasunod-sunod sa form (amount muna, tapos purpose).
+    const order = ["amount", "purpose"];
+    const firstKey = order.find(k => errs[k]);
+    const ref = firstKey && fieldRefs[firstKey];
+    if (ref?.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      ref.current.focus({ preventScroll: true });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!editingId && !eligibility.eligible) return;
     if (loading) return;
     const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(e); return; }
     setFormError("");
     setLoading(true);
     try {
@@ -380,7 +494,7 @@ export default function LoanApplication() {
               <div style={{fontSize:14,fontWeight:700,color:"#1b5e20"}}>{selectedLoan.loan_id}</div>
               <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{selectedLoan.loan_type} · {selectedLoan.applied_at?.slice(0,10)}</div>
             </div>
-            <button onClick={() => setSelectedLoan(null)} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#aaa"}}>✕</button>
+            <button onClick={() => setSelectedLoan(null)} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#aaa"}}><X size={18}/></button>
           </div>
           <div style={{padding:"12px 20px",background:"#f9fef9",borderBottom:"1px solid #f0f4f1",display:"flex",gap:16,flexWrap:"wrap"}}>
             {[[t("la_review_amount"),`₱${Number(selectedLoan.amount).toLocaleString()}`],[t("myloans_balance_label"),`₱${Number(selectedLoan.balance).toLocaleString()}`],[t("gc_monthly_due"),`₱${Number(selectedLoan.monthly_due).toLocaleString()}`]].map(([k,v])=>(
@@ -395,7 +509,7 @@ export default function LoanApplication() {
             </div>
           </div>
           <div style={{padding:"12px 20px 4px",borderBottom:"1px solid #f0f4f1"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#555"}}>💳 {t("myloans_tab_payments")}</div>
+            <div style={{fontSize:12,fontWeight:700,color:"#555",display:"flex",alignItems:"center",gap:6}}><CreditCard size={13}/> {t("myloans_tab_payments")}</div>
           </div>
           <div style={{overflowY:"auto",flex:1,padding:"0 20px 16px"}}>
             {loadingPay
@@ -434,7 +548,7 @@ export default function LoanApplication() {
   if (editedNotice) return (
     <div className="la-wrapper">
       <div className="la-success-card">
-        <div className="la-success-icon">✅</div>
+        <div className="la-success-icon" style={{display:"flex",justifyContent:"center"}}><CheckCircle size={48} color="#2e7d32"/></div>
         <div className="la-success-title">{t("la_updated_title")}</div>
         <div className="la-success-text">{t("la_updated_text")}</div>
         <button className="la-new-btn" style={{marginTop:16}} onClick={() => {
@@ -454,7 +568,7 @@ export default function LoanApplication() {
         onClick={() => !cancelling && setCancelTarget(null)}>
         <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:400,padding:"24px 22px",textAlign:"center"}}
           onClick={e => e.stopPropagation()}>
-          <div style={{fontSize:36,marginBottom:8}}>⚠️</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><AlertTriangle size={30} color="#e65100"/></div>
           <div style={{fontWeight:800,fontSize:15,color:"#c62828",marginBottom:8}}>{t("la_cancel_confirm_title")}</div>
           <div style={{fontSize:13,color:"#666",lineHeight:1.6,marginBottom:4}}>
             {t("la_cancel_confirm_text", { id: cancelTarget.loan_id, amount: `₱${Number(cancelTarget.amount).toLocaleString()}` })}
@@ -477,14 +591,14 @@ export default function LoanApplication() {
   if (submitted) return (
     <div className="la-wrapper">
       <div className="la-success-card">
-        <div className="la-success-icon">✅</div>
+        <div className="la-success-icon" style={{display:"flex",justifyContent:"center"}}><CheckCircle size={48} color="#2e7d32"/></div>
         <div className="la-success-title">{t("la_submitted_title")}</div>
         <div className="la-success-text">
           {t("la_submitted_text", { type: selType, amount: `₱${parseFloat(form.amount).toLocaleString()}` })}
         </div>
         {myLoans.length > 0 && (
           <div className="la-history-box" style={{marginTop:16,textAlign:"left"}}>
-            <div className="la-history-title">📋 {t("la_page_title")}</div>
+            <div className="la-history-title" style={{display:"flex",alignItems:"center",gap:6}}><ClipboardList size={14}/> {t("la_page_title")}</div>
             {myLoans.map((l, i) => {
               const st = getStatusMeta(l.status, t);
               return (
@@ -525,8 +639,8 @@ export default function LoanApplication() {
 
       {staleNotice && (
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,background:"#fff3e0",border:"1px solid #ffb74d",borderRadius:10,padding:"10px 16px",marginBottom:16}}>
-          <span style={{fontSize:12.5,color:"#7a4a00"}}>⚠️ {staleNotice}</span>
-          <button onClick={() => setStaleNotice("")} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",color:"#7a4a00",flexShrink:0}}>✕</button>
+          <span style={{fontSize:12.5,color:"#7a4a00",display:"inline-flex",alignItems:"center",gap:6}}><AlertTriangle size={13}/> {staleNotice}</span>
+          <button onClick={() => setStaleNotice("")} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",color:"#7a4a00",flexShrink:0}}><X size={14}/></button>
         </div>
       )}
 
@@ -543,7 +657,7 @@ export default function LoanApplication() {
           padding:"16px 18px", marginBottom:16,
           display:"flex", alignItems:"center", gap:14, flexWrap:"wrap",
         }}>
-          <div style={{fontSize:28,flexShrink:0}}>📦</div>
+          <div style={{flexShrink:0}}><PackageCheck size={28} color="#e65100"/></div>
           <div style={{flex:1,minWidth:220}}>
             <div style={{fontWeight:800,fontSize:14,color:"#e65100"}}>
               {eligibility.approvedLoans.length === 1
@@ -589,7 +703,7 @@ export default function LoanApplication() {
         <div style={{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"}}>
           {[
             [t("la_stat_share_capital"),  `₱${shareCapital.toLocaleString()}`,                                          "#1b5e20"],
-            [t("la_stat_max_loanable"),   `₱${maxLoanable.toLocaleString()}`,                                          "#1565c0"],
+            [t("la_stat_max_loanable", { mult: loanMultiplier }), `₱${eligibility.maxLoanable.toLocaleString()}`,                                "#1565c0"],
             [t("la_stat_active_loans"),   myLoans.filter(l=>["Active","Overdue"].includes(l.status)).length,            myLoans.filter(l=>["Active","Overdue"].includes(l.status)).length>0?"#c62828":"#2e7d32"],
             [t("la_stat_for_release"),    eligibility.approvedLoans.length,                                             eligibility.approvedLoans.length>0?"#e65100":"#2e7d32"],
             [t("la_stat_completed_loans"),myLoans.filter(l=>l.status==="Completed").length,                             "#2e7d32"],
@@ -611,7 +725,7 @@ export default function LoanApplication() {
         }}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,padding:6,display:"flex"}}>
-              <span style={{fontSize:16}}>💡</span>
+              <Lightbulb size={16} color="#fff"/>
             </div>
             <div>
               <div style={{color:"#fff",fontWeight:800,fontSize:14}}>{t("la_recommendation_title")}</div>
@@ -627,13 +741,13 @@ export default function LoanApplication() {
                 label:t("la_rec_type"),
                 value:recommendation.type,
                 sub:t("la_rec_type_sub"),
-                icon:"📋",
+                icon: ClipboardList,
               },
               {
                 label:t("la_rec_amount"),
                 value:`₱${recommendation.amount.toLocaleString()}`,
                 sub:t("la_rec_amount_sub", { amt: `₱${recommendation.maxLoanable.toLocaleString()}` }),
-                icon:"💰",
+                icon: Wallet,
               },
               {
                 label:t("la_rec_term"),
@@ -641,11 +755,11 @@ export default function LoanApplication() {
                 sub:recommendation.monthlyIncome > 0
                   ? t("la_rec_term_sub_income", { amt: `₱${recommendation.monthlyDue.toLocaleString()}` })
                   : t("la_rec_term_sub"),
-                icon:"📅",
+                icon: Calendar,
               },
             ].map((c,i) => (
               <div key={i} style={{background:"rgba(255,255,255,0.12)",borderRadius:10,padding:"12px 14px"}}>
-                <div style={{fontSize:16,marginBottom:4}}>{c.icon}</div>
+                <div style={{marginBottom:4}}><c.icon size={16} color="#fff"/></div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:2}}>{c.label}</div>
                 <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{c.value}</div>
                 <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>{c.sub}</div>
@@ -765,7 +879,7 @@ export default function LoanApplication() {
         <div className="la-steps">
           {[t("la_step_type"),t("la_step_details"),t("la_step_review")].map((s,i) => (
             <div key={i} className={`la-step ${step >= i+1?"active":""} ${step > i+1?"done":""}`}>
-              <div className="la-step-dot">{step > i+1 ? "✓" : i+1}</div>
+              <div className="la-step-dot">{step > i+1 ? <Check size={13}/> : i+1}</div>
               <div className="la-step-label">{s}</div>
             </div>
           ))}
@@ -774,8 +888,16 @@ export default function LoanApplication() {
         {step === 1 && (
           <div className="la-card">
             <div className="la-card-title">{t("la_choose_loan_type")}</div>
+            {/* ── BAGO: kapag may aktibong loan na (kwalipikado nang
+                mag-apply ulit dahil 50%+ na nabayaran), dapat kaparehong
+                type lang ang pinipili sa susunod na loan. ──────────── */}
+            {eligibility.restrictedType && (
+              <div style={{background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12.5,color:"#1565c0",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                <Lock size={13}/> {t("la_type_locked_notice", { type: eligibility.restrictedType })}
+              </div>
+            )}
             <div className="la-loan-types">
-              {LOAN_TYPES.map(lt => (
+              {(eligibility.restrictedType ? LOAN_TYPES.filter(lt => lt.type === eligibility.restrictedType) : LOAN_TYPES).map(lt => (
                 <div key={lt.type} className={`la-type-card ${selType===lt.type?"selected":""}`}
                   onClick={() => setSelType(lt.type)}
                   style={selType===lt.type ? {borderColor:lt.border,background:lt.color} : {}}>
@@ -784,7 +906,7 @@ export default function LoanApplication() {
                   </div>
                   <div className="la-type-name">{lt.type}</div>
                   <div className="la-type-desc">{t(lt.descKey)}</div>
-                  <div className="la-type-max">{t("la_up_to_months", { amt: `₱${lt.maxAmt.toLocaleString()}`, term: lt.maxTerm })}</div>
+                  <div className="la-type-max">{t("la_up_to_months", { term: 12 })}</div>
                 </div>
               ))}
             </div>
@@ -809,24 +931,28 @@ export default function LoanApplication() {
                 <label className="la-label">{t("la_loan_amount")} <span className="la-req">*</span></label>
                 <div className="la-amount-wrap">
                   <span className="la-peso">₱</span>
-                  <input className={`la-amount-input ${errors.amount?"la-err":""}`} type="text" inputMode="numeric" pattern="[0-9]*" name="amount"
+                  <input ref={amountRef} className={`la-amount-input ${errors.amount?"la-err":""}`} type="text" inputMode="numeric" pattern="[0-9]*" name="amount"
                     value={form.amount} onChange={handleAmountChange}
                     placeholder={t("la_amount_placeholder", { amt: `₱${maxLoanable.toLocaleString()}` })}/>
                 </div>
                 {errors.amount && <div className="la-field-err">{errors.amount}</div>}
-                <div style={{fontSize:10,color:"#888",marginTop:4}}>{t("la_max_loanable_share", { amt: `₱${maxLoanable.toLocaleString()}` })}</div>
+                <div style={{fontSize:10,color:"#888",marginTop:4}}>{t("la_max_loanable_share", { amt: `₱${maxLoanable.toLocaleString()}`, mult: loanMultiplier })}</div>
               </div>
               <div className="la-field">
                 <label className="la-label">{t("la_loan_term")}</label>
+                {/* ── BAGO: dating "jump" na options (3,6,9,12,18,24,
+                    36,48) na may hiwalay na limitasyon per loan type —
+                    ngayon sunod-sunod na 1-12 buwan, tugma na sa admin
+                    F2F application. ────────────────────────────────── */}
                 <select className="la-select" name="term" value={form.term} onChange={handle}>
-                  {[3,6,9,12,18,24,36,48].filter(t2 => t2 <= selectedType.maxTerm).map(t2 => (
+                  {Array.from({length:12}, (_,i) => i+1).map(t2 => (
                     <option key={t2} value={t2}>{t("la_months_option", { n: t2 })}</option>
                   ))}
                 </select>
               </div>
               <div className="la-field la-full">
                 <label className="la-label">{t("la_purpose")} <span className="la-req">*</span></label>
-                <textarea className={`la-textarea ${errors.purpose?"la-err":""}`} name="purpose" rows={3}
+                <textarea ref={purposeRef} className={`la-textarea ${errors.purpose?"la-err":""}`} name="purpose" rows={3}
                   placeholder={t("la_purpose_placeholder")} value={form.purpose}
                   onChange={e => { handle(e); setErrors(p => ({...p,purpose:""})); }}/>
                 {errors.purpose && <div className="la-field-err">{errors.purpose}</div>}
@@ -844,7 +970,12 @@ export default function LoanApplication() {
               <div className="la-computation">
                 <div className="la-comp-title">{t("la_computation_title")}</div>
                 <div className="la-comp-summary">
-                  <div className="la-comp-row"><span>{t("la_interest_rate")}</span><span className="fw">{(monthlyRate*100).toFixed(3)}% / mo × {term} months</span></div>
+                  {/* ── FIX: dating may hiwalay na "Interest Rate" row
+                      dito PLUS rate details na nasa loob na rin ng
+                      "Interest" deduction row sa ibaba — nagmumukhang
+                      naka-doble ang kaltas kahit hindi naman. Tinanggal
+                      na ang linyang ito, nasa "Interest" deduction row
+                      na lang ang rate info. ─────────────────────────── */}
                   <div className="la-comp-row"><span>{t("la_total_interest")}</span><span className="orange fw">₱{interest.toFixed(2)}</span></div>
                   <div className="la-comp-row highlight"><span>{t("la_monthly_amortization")}</span><span className="green fw">₱{monthlyEst.toFixed(2)}</span></div>
                 </div>
@@ -868,7 +999,7 @@ export default function LoanApplication() {
               <button className="la-btn-back" onClick={() => setStep(1)}>{t("la_back")}</button>
               <button className="la-btn-next" onClick={() => {
                 const e = validate();
-                if (Object.keys(e).length) { setErrors(e); return; }
+                if (Object.keys(e).length) { setErrors(e); scrollToFirstError(e); return; }
                 setStep(3);
               }}>{t("la_next_review")}</button>
             </div>

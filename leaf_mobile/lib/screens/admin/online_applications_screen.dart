@@ -244,7 +244,9 @@ class _AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = (app['application_status'] ?? 'Pending').toString();
     final fullname = app['fullname'] ?? '${app['first_name'] ?? ''} ${app['last_name'] ?? ''}';
-    final hasId = (app['id_front_url'] != null) || (app['id_back_url'] != null);
+    // ── BAGO: dating "Valid ID" (id_front_url/id_back_url) — ngayon
+    // "Birth Certificate" na lang (id_front_url lang). ─────────────────
+    final hasBirthCert = app['id_front_url'] != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -286,7 +288,7 @@ class _AppCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Icon(hasId ? Icons.verified_user_outlined : Icons.no_accounts_outlined, size: 15, color: hasId ? _OAColors.green : const Color(0xFFCCCCCC)),
+                    Icon(hasBirthCert ? Icons.verified_user_outlined : Icons.no_accounts_outlined, size: 15, color: hasBirthCert ? _OAColors.green : const Color(0xFFCCCCCC)),
                     const SizedBox(height: 4),
                     Text('${app['created_at'] ?? ''}'.split('T').first, style: const TextStyle(fontSize: 9, color: _OAColors.sub)),
                   ],

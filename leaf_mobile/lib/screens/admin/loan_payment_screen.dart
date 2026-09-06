@@ -44,6 +44,11 @@ class _LoanPaymentScreenState extends State<LoanPaymentScreen> {
   void initState() {
     super.initState();
     _fetchData();
+    // ── BAGO: dating tinatawag lang ito kapag binisita ang "Loan
+    // History" tab — kaya kung nagbukas agad ng receipt mula sa "Daily
+    // View"/"All Transactions" (Payment History tab), wala pang Loan
+    // Type/Amount data. Kinukuha na ito agad sa simula, sa likod. ────
+    _fetchAllLoans();
   }
 
   Future<void> _fetchData() async {
@@ -176,8 +181,12 @@ class _LoanPaymentScreenState extends State<LoanPaymentScreen> {
     );
     if (result != null) {
       await _fetchData();
+      // ── BAGO: proactive na kinukuha ang "_allLoans" (kasama ang mga
+      // Completed) bago buksan ang receipt — para may makikitang Loan
+      // Type/Amount kahit hindi pa binisita ang "Loan History" tab. ──
+      await _fetchAllLoans();
       if (mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: result)));
+        Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: result, allLoansForLookup: [..._loans, ..._allLoans])));
       }
     }
   }
@@ -191,7 +200,8 @@ class _LoanPaymentScreenState extends State<LoanPaymentScreen> {
     final result = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (context) => const F2fPaymentScreen()));
     if (result != null) {
       await _fetchData();
-      if (mounted) Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: result)));
+      await _fetchAllLoans();
+      if (mounted) Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: result, allLoansForLookup: [..._loans, ..._allLoans])));
     }
   }
 
@@ -342,7 +352,7 @@ class _LoanPaymentScreenState extends State<LoanPaymentScreen> {
     if (groups.isEmpty) {
       return [const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No transactions found.', style: TextStyle(color: _LPColors.sub))))];
     }
-    return groups.entries.map((entry) => _DailyGroupCard(dateLabel: _dateLabel(entry.key), dateStr: entry.key, txList: entry.value, onViewTx: (tx) => Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: tx))))).toList();
+    return groups.entries.map((entry) => _DailyGroupCard(dateLabel: _dateLabel(entry.key), dateStr: entry.key, txList: entry.value, onViewTx: (tx) => Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: tx, allLoansForLookup: [..._loans, ..._allLoans]))))).toList();
   }
 
   List<Widget> _buildAllTxView() {
@@ -350,7 +360,7 @@ class _LoanPaymentScreenState extends State<LoanPaymentScreen> {
     if (list.isEmpty) {
       return [const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No transactions found.', style: TextStyle(color: _LPColors.sub))))];
     }
-    return list.map<Widget>((tx) => _TxCard(tx: tx, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: tx))))).toList();
+    return list.map<Widget>((tx) => _TxCard(tx: tx, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReceiptScreen(tx: tx, allLoansForLookup: [..._loans, ..._allLoans]))))).toList();
   }
 
   List<Widget> _buildLoanHistoryTab() {
@@ -526,8 +536,11 @@ class _LoanCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(children: [
                   Expanded(child: _MiniStat('Amount', '₱${(double.tryParse('${loan['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}', const Color(0xFF333333))),
-                  Expanded(child: _MiniStat('Balance', isPaid ? '₱0 ✓' : '₱${balance.toStringAsFixed(0)}', isPaid ? _LPColors.green : _LPColors.red)),
+                  Expanded(child: _MiniStat('Balance', isPaid ? '₱0' : '₱${balance.toStringAsFixed(0)}', isPaid ? _LPColors.green : _LPColors.red)),
                   Expanded(child: _MiniStat('Monthly', '₱${(double.tryParse('${loan['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)}', _LPColors.green)),
+                  // ── BAGO: Term — kulang dati dito, tulad ng nakita sa
+                  // web (LoanPayment.jsx) na kailangang idagdag din. ────
+                  Expanded(child: _MiniStat('Term', '${loan['term_months'] ?? '—'} months', const Color(0xFF333333))),
                   IconButton(
                     onPressed: onViewHistory,
                     icon: Icon(showChevron ? Icons.chevron_right : Icons.history, size: 17, color: _LPColors.blue),
@@ -535,6 +548,27 @@ class _LoanCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                   ),
                 ]),
+                // ── BAGO: penalty breakdown — 2% ng Monthly Due kada
+                // buwang naliban, naka-dagdag na sa Balance sa itaas.
+                // Ipinapakita lang ito kapag may naipong penalty. ──────
+                if ((double.tryParse('${loan['total_penalty'] ?? 0}') ?? 0) > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8)),
+                      child: Row(children: [
+                        const Icon(Icons.warning_amber_rounded, size: 12, color: Color(0xFFC62828)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Includes ₱${(double.tryParse('${loan['total_penalty']}') ?? 0).toStringAsFixed(0)} penalty (${loan['months_overdue_penalized'] ?? 0} month${(loan['months_overdue_penalized'] ?? 0) != 1 ? "s" : ""} overdue × 2% of Monthly Due)',
+                            style: const TextStyle(fontSize: 10.5, color: Color(0xFFC62828), fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -556,7 +590,7 @@ class _MiniStat extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: const TextStyle(fontSize: 8.5, color: Color(0xFF999999))),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
       ],
     );
   }

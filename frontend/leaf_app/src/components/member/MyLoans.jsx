@@ -149,9 +149,17 @@ export default function MyLoans() {
 
   const principal  = parseFloat(selectedLoan?.amount || 0);
   const balance    = parseFloat(selectedLoan?.balance || 0);
-  const totalPaid  = principal - balance;
+  // ── FIX: dating "principal - balance" — nasira ito ngayon dahil
+  // puwede nang LUMAKI ang balance (dahil sa 2% penalty), hindi na
+  // laging lumiliit lang (dahil sa pagbabayad). Nagreresulta ito ng
+  // NEGATIVE na "Total Paid" (hal. ₱10,000 - ₱10,066.67 = -₱66.67)
+  // kapag may naipong penalty. Ang tamang paraan: i-sum ang AKTWAL na
+  // mga payment record ng loan na 'to, hindi ang pagkakaiba lang ng
+  // principal at balance. ─────────────────────────────────────────────
+  const loanPaymentsForTotal = payments.filter(p => p.loan === selectedLoan?.id || String(p.loan_code) === String(selectedLoan?.loan_id));
+  const totalPaid  = loanPaymentsForTotal.reduce((s,p) => s + parseFloat(p.amount||0), 0);
   const monthlyDue = parseFloat(selectedLoan?.monthly_due || 0);
-  const paidPct    = principal > 0 ? Math.round((totalPaid / principal) * 100) : 0;
+  const paidPct    = principal > 0 ? Math.max(0, Math.round((totalPaid / principal) * 100)) : 0;
 
   const statusColor = { Active:"#2e7d32", Overdue:"#c62828", Completed:"#1565c0", Declined:"#757575" };
   const statusBg    = { Active:"#e8f5e9", Overdue:"#ffebee", Completed:"#e3f2fd", Declined:"#f5f5f5" };
@@ -219,7 +227,12 @@ export default function MyLoans() {
             {loans.map(loan => {
               const lp  = parseFloat(loan.amount || 0);
               const lb  = parseFloat(loan.balance || 0);
-              const pct = lp > 0 ? Math.round(((lp - lb) / lp) * 100) : 0;
+              // ── FIX: parehong ayos sa itaas — i-sum ang aktwal na
+              // mga payment ng loan na 'to, hindi ang "(lp-lb)/lp" na
+              // nagiging negative kapag may naipong penalty (lumalaki
+              // ang balance). ─────────────────────────────────────────
+              const loanPaidAmt = payments.filter(p => p.loan === loan.id || String(p.loan_code) === String(loan.loan_id)).reduce((s,p) => s + parseFloat(p.amount||0), 0);
+              const pct = lp > 0 ? Math.max(0, Math.round((loanPaidAmt / lp) * 100)) : 0;
               const pending = hasPendingGCash(loan.loan_id);
               return (
                 <div key={loan.loan_id} className={`ml-loan-card ${selectedLoan?.loan_id === loan.loan_id ? "selected" : ""}`}
@@ -229,6 +242,11 @@ export default function MyLoans() {
                     <span className={`ml-lc-status ${(loan.status||"").toLowerCase()}`}>{loan.status}</span>
                   </div>
                   <div className="ml-lc-id">{loan.loan_id}</div>
+                  {parseFloat(loan.total_penalty||0) > 0 && (
+                    <div style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fce4ec",color:"#c62828",borderRadius:20,padding:"2px 8px",fontSize:9.5,fontWeight:700,marginTop:4}}>
+                      <AlertTriangle size={10}/> +₱{Number(loan.total_penalty).toLocaleString()} penalty
+                    </div>
+                  )}
                   <div className="ml-lc-balance">₱{Number(loan.balance).toLocaleString()}</div>
                   <div className="ml-lc-label">{t("myloans_remaining_balance")}</div>
                   <div className="ml-lc-bar"><div className="ml-lc-fill" style={{width:pct+"%"}}/></div>
@@ -276,7 +294,13 @@ export default function MyLoans() {
             </div>
 
             {/* Details */}
-            {tab === "details" && (
+            {tab === "details" && (<>
+              {parseFloat(selectedLoan?.total_penalty||0) > 0 && (
+                <div style={{margin:"0 24px 14px",padding:"10px 14px",background:"#fce4ec",border:"1px solid #f8bbd0",borderRadius:10,fontSize:12.5,color:"#c62828",display:"flex",alignItems:"center",gap:8}}>
+                  <AlertTriangle size={15}/>
+                  <span>You have a <strong>₱{Number(selectedLoan.total_penalty).toLocaleString()} penalty</strong> for {selectedLoan.months_overdue_penalized} month{selectedLoan.months_overdue_penalized!==1?"s":""} of late payment (2% of your Monthly Due per month). This is already included in your Remaining Balance. Pay as soon as possible to avoid further penalties.</span>
+                </div>
+              )}
               <div style={{padding:"20px 24px"}}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:0,borderRadius:10,overflow:"hidden",border:"1px solid #e8f5e9"}}>
                   {[
@@ -312,7 +336,7 @@ export default function MyLoans() {
                   <span>₱{balance.toLocaleString()} {t("myloans_remaining_label")}</span>
                 </div>
               </div>
-            )}
+            </>)}
 
             {/* Payments */}
             {tab === "payments" && (() => {
@@ -434,7 +458,12 @@ export default function MyLoans() {
                 }}>
                   <div>
                     <div style={{fontFamily:"monospace",color:"#1b5e20",fontWeight:800,fontSize:13}}>{loan.loan_id}</div>
-                    <div style={{fontSize:11,color:"#aaa",marginTop:3}}>{loan.loan_type}</div>
+                    {/* ── BAGO: dating "Loan Type" lang — idinagdag ang
+                        Term at Date (kailan kinuha ang loan) para
+                        alam agad ng member. ─────────────────────────── */}
+                    <div style={{fontSize:11,color:"#aaa",marginTop:3}}>
+                      {loan.loan_type} · {loan.term_months ? t("myloans_term_months", { n: loan.term_months }) : "—"} · {loan.applied_at?.slice(0,10)||"—"}
+                    </div>
                   </div>
                   <div>
                     <div style={{fontSize:10,color:"#bbb",fontWeight:600,textTransform:"uppercase"}}>{t("myloans_amount_label")}</div>
@@ -493,6 +522,9 @@ export default function MyLoans() {
                       <span>{t("myloans_monthly_due")}: <strong>₱{Number(loan.monthly_due||0).toLocaleString()}</strong></span>
                       <span>{t("myloans_total_paid")}: <strong style={{color:"#2e7d32"}}>₱{loanPayments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</strong></span>
                       <span>{t("myloans_remaining")}: <strong style={{color:isPaid?"#1565c0":"#c62828"}}>{isPaid?t("myloans_zero_fully_paid"):`₱${Number(loan.balance||0).toLocaleString()}`}</strong></span>
+                      {parseFloat(loan.total_penalty||0) > 0 && (
+                        <span style={{color:"#c62828",display:"inline-flex",alignItems:"center",gap:4}}><AlertTriangle size={12}/> Penalty: <strong>₱{Number(loan.total_penalty).toLocaleString()}</strong> ({loan.months_overdue_penalized} mo. late)</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -526,22 +558,29 @@ export default function MyLoans() {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{background:"#f9fef9"}}>
-                    {[t("myloans_th_date"),t("myloans_th_txid"),t("myloans_th_loan_id"),t("myloans_th_loan_type"),t("myloans_th_amount"),t("myloans_th_balance_after"),t("myloans_th_note"),t("myloans_th_receipt")].map(h=>(
+                    {/* ── BAGO: idinagdag ang "Term" at "Loan Date"
+                        column — para malaman agad ng member kung
+                        ilang buwan ang loan at kailan ito kinuha. ──── */}
+                    {[t("myloans_th_date"),t("myloans_th_txid"),t("myloans_th_loan_id"),t("myloans_th_loan_type"),t("myloans_th_term"),t("myloans_th_loan_date"),t("myloans_th_amount"),t("myloans_th_balance_after"),t("myloans_th_note"),t("myloans_th_receipt")].map(h=>(
                       <th key={h} style={{padding:"12px 16px",textAlign:h===t("myloans_th_amount")||h===t("myloans_th_balance_after")?"right":"left",color:"#558b2f",fontWeight:700,borderBottom:"2px solid #e8f5e9",fontSize:11}}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p,idx) => (
+                  {payments.map((p,idx) => {
+                    const matchedLoan = allLoans.find(l=>l.loan_id===p.loan_code);
+                    return (
                     <tr key={idx} style={{background:idx%2===0?"#fff":"#f9fef9",borderBottom:"1px solid #f0f0f0"}}>
                       <td style={{padding:"11px 16px",color:"#555"}}>{p.paid_at?.slice(0,10)}</td>
                       <td style={{padding:"11px 16px",fontFamily:"monospace",color:"#888",fontSize:10}}>{p.tx_id}</td>
                       <td style={{padding:"11px 16px",fontFamily:"monospace",color:"#1b5e20",fontSize:11,fontWeight:700}}>{p.loan_code}</td>
                       <td style={{padding:"11px 16px"}}>
                         <span style={{background:"#f3e5f5",color:"#6a1b9a",borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700}}>
-                          {allLoans.find(l=>l.loan_id===p.loan_code)?.loan_type||"—"}
+                          {matchedLoan?.loan_type||"—"}
                         </span>
                       </td>
+                      <td style={{padding:"11px 16px",color:"#555",fontSize:11}}>{matchedLoan?.term_months ? t("myloans_term_months", { n: matchedLoan.term_months }) : "—"}</td>
+                      <td style={{padding:"11px 16px",color:"#555",fontSize:11}}>{matchedLoan?.applied_at?.slice(0,10)||"—"}</td>
                       <td style={{padding:"11px 16px",textAlign:"right",fontWeight:800,color:"#2e7d32"}}>₱{Number(p.amount||0).toLocaleString()}</td>
                       <td style={{padding:"11px 16px",textAlign:"right",color:parseFloat(p.balance||0)===0?"#1565c0":"#555"}}>
                         {parseFloat(p.balance||0)===0?t("myloans_fully_paid"):`₱${Number(p.balance||0).toLocaleString()}`}
@@ -553,7 +592,8 @@ export default function MyLoans() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

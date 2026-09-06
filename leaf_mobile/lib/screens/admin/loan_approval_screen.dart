@@ -13,7 +13,9 @@ class _LAColors {
   static const blue   = Color(0xFF1565C0);
 }
 
-const List<String> kLoanTypes = ['Regular Loan', 'Emergency Loan', 'Salary Loan', 'Housing Loan', 'Business Loan', 'Other Loan'];
+// ── BAGO: 4 na bagong loan types — tugma na sa binago natin sa
+// buong system (Regular, Petty Cash, Appliance, ATM). ────────────────
+const List<String> kLoanTypes = ['Regular Loan', 'Petty Cash Loan', 'Appliance Loan', 'ATM Loan'];
 
 Color laStatusColor(String status) {
   switch (status) {
@@ -149,6 +151,24 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                   _SummaryCard(icon: Icons.cancel_outlined, label: 'Declined', value: '${counts['declined']}', color: _LAColors.red, bg: const Color(0xFFFCE4EC), onTap: () => setState(() { _filterStatus = 'Declined'; _page = 1; })),
                   _SummaryCard(icon: Icons.check_circle_outline, label: 'Total Applications', value: '${(counts['forReview'] ?? 0) + (counts['approved'] ?? 0) + (counts['declined'] ?? 0)}', color: _LAColors.green, bg: const Color(0xFFE8F5E9)),
                 ],
+              ),
+              const SizedBox(height: 10),
+              // ── BAGO: "Pending Amount" — kabuuang halaga ng lahat ng
+              // "For Review" na loan applications. Wala pa dati sa
+              // mobile (4 lang na cards), katumbas na ito ng ika-5 card
+              // sa web. Ginawa itong buong-lapad (full-width) sa halip
+              // na idagdag na lang sa 2-column grid, para maiwasan ang
+              // parehong "nag-iisa sa hiwalay na row" na isyu na na-
+              // ayos na natin sa web. ────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: _SummaryCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Pending Amount',
+                  value: '₱${_pendingAmount.toStringAsFixed(0)}',
+                  color: const Color(0xFF1565C0),
+                  bg: const Color(0xFFE3F2FD),
+                ),
               ),
               const SizedBox(height: 14),
 
@@ -319,7 +339,7 @@ class _LoanApplicationCard extends StatelessWidget {
                       Row(children: [
                         Text('₱${(double.tryParse('${loan['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w700, color: _LAColors.green, fontSize: 12.5)),
                         const SizedBox(width: 8),
-                        Text('· ${loan['term_months'] ?? loan['term'] ?? ''}mo', style: const TextStyle(fontSize: 11, color: _LAColors.sub)),
+                        Text('· ${loan['term_months'] ?? loan['term'] ?? ''} months', style: const TextStyle(fontSize: 11, color: _LAColors.sub)),
                       ]),
                     ],
                   ),

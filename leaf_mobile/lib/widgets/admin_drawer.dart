@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/member_provider.dart';
 import '../services/settings_service.dart';
+import '../screens/admin/savings_deposit_screen.dart';
+import '../screens/admin/share_capital_deposit_screen.dart';
 
 // ─── Colors matched to AdminLayout.css ───────────────────────────────────────
 class _AdminColors {
@@ -23,13 +25,22 @@ class AdminNavItem {
   final IconData icon;
   final String label;
   final String routeKey; // used to mark active state
-  const AdminNavItem({required this.icon, required this.label, required this.routeKey});
+  // ── BAGO: kung true, hindi ito isang route — direktang nagbubukas
+  // ng screen ang tap (Savings/Deposit, Share Capital Deposit),
+  // imbes na tumawag sa widget.onNavTap. ─────────────────────────────
+  final bool isAction;
+  const AdminNavItem({required this.icon, required this.label, required this.routeKey, this.isAction = false});
 }
 
 // ── Same order/labels as web's NAV_ITEMS ────────────────────────────────────
 const List<AdminNavItem> kAdminNavItems = [
   AdminNavItem(icon: Icons.dashboard_outlined,       label: 'Dashboard',          routeKey: 'dashboard'),
   AdminNavItem(icon: Icons.people_outline,           label: 'Manage Member',      routeKey: 'members'),
+  // ── BAGO: dating mga FloatingActionButton lang ito sa Manage
+  // Members screen (limitado doon lang) — ngayon nasa drawer na,
+  // accessible mula sa KAHIT ANONG admin screen. ─────────────────────
+  AdminNavItem(icon: Icons.savings_outlined,         label: 'Savings/Deposit',       routeKey: 'savings',  isAction: true),
+  AdminNavItem(icon: Icons.account_balance_outlined, label: 'Share Capital Deposit', routeKey: 'sharecap', isAction: true),
   AdminNavItem(icon: Icons.manage_accounts_outlined, label: 'Manage Staff',       routeKey: 'staff'),
   AdminNavItem(icon: Icons.description_outlined,     label: 'Online Application', routeKey: 'applications'),
   AdminNavItem(icon: Icons.credit_card_outlined,     label: 'Loan Payment',       routeKey: 'loan-payment'),
@@ -138,7 +149,19 @@ class _AdminDrawerState extends State<AdminDrawer> {
                         borderRadius: BorderRadius.circular(8),
                         onTap: () {
                           Navigator.pop(context); // close drawer
-                          widget.onNavTap(item.routeKey);
+                          // ── BAGO: kung action-type ang item
+                          // (Savings/Deposit, Share Capital Deposit),
+                          // direktang buksan ang screen — hindi
+                          // dumadaan sa onNavTap/routing. ─────────────
+                          if (item.isAction) {
+                            if (item.routeKey == 'savings') {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const SavingsDepositScreen()));
+                            } else if (item.routeKey == 'sharecap') {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ShareCapitalDepositScreen()));
+                            }
+                          } else {
+                            widget.onNavTap(item.routeKey);
+                          }
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

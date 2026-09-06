@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/members_service.dart';
+import '../../widgets/admin/admin_scaffold_helpers.dart';
 
 class _SCColors {
   static const blue = Color(0xFF1565C0);
@@ -33,6 +34,9 @@ class _ShareCapitalDepositScreenState extends State<ShareCapitalDepositScreen> {
   List<dynamic> _history = [];
   bool _histLoading = false;
   String _histSearch = '';
+  // ── BAGO: dating flat na listahan lang — ngayon naka-group per
+  // member, i-tap para makita ang kanilang mga record. ────────────────
+  String? _expandedMember;
 
   @override
   void initState() {
@@ -72,7 +76,9 @@ class _ShareCapitalDepositScreenState extends State<ShareCapitalDepositScreen> {
   double get _currentSC => double.tryParse('${_selected?['share_capital'] ?? 0}') ?? 0;
   double get _parsed => double.tryParse(_amountCtrl.text) ?? 0;
   double get _newSC => _currentSC + _parsed;
-  double get _newMaxLoan => _newSC * 2;
+  // ── FIX: dating naka-hardcode na "_newSC * 2" — hindi ginagamit
+  // ang totoong Loan Multiplier (1x/2x/3x) ng partikular na member. ──
+  double get _newMaxLoan => _newSC * (double.tryParse('${_selected?['loan_multiplier'] ?? 1}') ?? 1);
   bool get _isValid => _parsed > 0 && _selected != null;
 
   Future<void> _handleSave() async {
@@ -102,28 +108,43 @@ class _ShareCapitalDepositScreenState extends State<ShareCapitalDepositScreen> {
         return (t['member_name'] ?? '').toString().toLowerCase().contains(q) || (t['member_id'] ?? '').toString().toLowerCase().contains(q);
       }).toList();
 
+  // ── BAGO: i-group ang mga transaction per member. ────────────────
+  List<Map<String, dynamic>> get _memberGroups {
+    final Map<String, Map<String, dynamic>> groups = {};
+    for (final t in _filteredHistory) {
+      final key = '${t['member_id'] ?? t['member_name']}';
+      groups.putIfAbsent(key, () => {
+            'member_name': t['member_name'],
+            'member_id': t['member_id'],
+            'txs': <dynamic>[],
+          });
+      (groups[key]!['txs'] as List<dynamic>).add(t);
+    }
+    return groups.values.toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFD8E8CC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: _SCColors.dark,
-        elevation: 0.5,
-        title: const Text('Share Capital', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _SCColors.dark)),
-      ),
+    // ── FIX: dating sariling plain Scaffold+AppBar lang ito (walang
+    // drawer) — kaya "back" arrow lang ang lumalabas, walang access sa
+    // hamburger/drawer menu papunta sa ibang admin sections. Gamit na
+    // ngayon ang parehong AdminScreenScaffold na ginagamit ng ibang
+    // admin screens, para consistent ang navigation access. ──────────
+    return AdminScreenScaffold(
+      activeRouteKey: 'sharecap',
+      title: 'Share Capital',
       body: Column(
         children: [
           Container(
             color: Colors.white,
             child: Row(
               children: [
-                _MainTab(label: 'New Deposit', active: _mainTab == 'new', color: _SCColors.blue, onTap: () => setState(() { _mainTab = 'new'; _done = false; _step = 1; })),
+                _MainTab(label: 'New Deposit', active: _mainTab == 'new', color: _SCColors.blue, onTap: () => setState(() { _mainTab = 'new'; _done = false; _step = 1; _expandedMember = null; })),
                 _MainTab(
                   label: 'History${_history.isNotEmpty ? " (${_history.length})" : ""}',
                   active: _mainTab == 'history',
                   color: _SCColors.blue,
-                  onTap: () { setState(() => _mainTab = 'history'); if (_history.isEmpty) _loadHistory(); },
+                  onTap: () { setState(() { _mainTab = 'history'; _expandedMember = null; }); if (_history.isEmpty) _loadHistory(); },
                 ),
               ],
             ),
@@ -214,11 +235,17 @@ class _ShareCapitalDepositScreenState extends State<ShareCapitalDepositScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))),
-                const SizedBox(width: 10),
-                Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: _SCColors.blue, foregroundColor: Colors.white), onPressed: _selected != null ? () => setState(() => _step = 2) : null, child: const Text('Next →'))),
-              ]),
+              // ── FIX: tinanggal ang "Cancel" button — hindi na
+              // kailangan, wala nang back arrow, at meron nang hamburger
+              // menu papunta sa ibang sections. ────────────────────────
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _SCColors.blue, foregroundColor: Colors.white),
+                  onPressed: _selected != null ? () => setState(() => _step = 2) : null,
+                  child: const Text('Next →'),
+                ),
+              ),
             ),
           ),
         ],
@@ -303,22 +330,64 @@ class _ShareCapitalDepositScreenState extends State<ShareCapitalDepositScreen> {
         Expanded(
           child: _histLoading
               ? const Center(child: CircularProgressIndicator())
-              : _filteredHistory.isEmpty
+              : _memberGroups.isEmpty
                   ? const Center(child: Text('No share capital transactions found.', style: TextStyle(color: _SCColors.sub)))
+                  // ── BAGO: dating flat na ListView lang — ngayon
+                  // naka-group per MEMBER, i-tap para makita ang
+                  // kanilang mga record. ────────────────────────────
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filteredHistory.length,
+                      itemCount: _memberGroups.length,
                       itemBuilder: (context, i) {
-                        final t = _filteredHistory[i];
+                        final g = _memberGroups[i];
+                        final txs = g['txs'] as List<dynamic>;
+                        final code = '${g['member_id'] ?? g['member_name']}';
+                        final isOpen = _expandedMember == code;
+                        final memberTotal = txs.fold<double>(0, (s, t) => s + (double.tryParse('${t['amount']}') ?? 0));
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFF0F0F0))),
-                          child: Row(children: [
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: _SCColors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text('${t['txn_type'] ?? 'Deposit'}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _SCColors.blue))),
-                            const SizedBox(width: 8),
-                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${t['member_name'] ?? ''}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)), Text('${t['member_id'] ?? ''} · ${t['created_at'] ?? ''}', style: const TextStyle(fontSize: 9.5, color: _SCColors.sub))])),
-                            Text('+₱${(double.tryParse('${t['amount']}') ?? 0).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w700, color: _SCColors.blue, fontSize: 12)),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: isOpen ? _SCColors.blue : const Color(0xFFF0F0F0))),
+                          child: Column(children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => setState(() => _expandedMember = isOpen ? null : code),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(children: [
+                                  CircleAvatar(radius: 18, backgroundColor: const Color(0xFFE3F2FD), child: Text('${g['member_name'] ?? 'M'}'.isNotEmpty ? '${g['member_name']}'[0].toUpperCase() : 'M', style: const TextStyle(color: _SCColors.blue, fontWeight: FontWeight.w800))),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                      Text('${g['member_name'] ?? ''}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                      Text('$code · ${txs.length} transaction${txs.length != 1 ? 's' : ''}', style: const TextStyle(fontSize: 10, color: _SCColors.sub)),
+                                    ]),
+                                  ),
+                                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                    Text('+₱${memberTotal.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _SCColors.blue)),
+                                    const Text('total', style: TextStyle(fontSize: 8, color: Color(0xFFBBBBBB))),
+                                  ]),
+                                  Icon(isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: const Color(0xFFBBBBBB)),
+                                ]),
+                              ),
+                            ),
+                            if (isOpen)
+                              Container(
+                                decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE3F2FD)))),
+                                child: Column(
+                                  children: txs.map<Widget>((t) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFFAFAFA)))),
+                                      child: Row(children: [
+                                        Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: _SCColors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text('${t['txn_type'] ?? 'Deposit'}', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _SCColors.blue))),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: Text('${t['created_at'] ?? ''}${t['note'] != null && '${t['note']}'.isNotEmpty ? " · ${t['note']}" : ""}', style: const TextStyle(fontSize: 10, color: _SCColors.sub))),
+                                        Text('+₱${(double.tryParse('${t['amount']}') ?? 0).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w700, color: _SCColors.blue, fontSize: 12)),
+                                      ]),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
                           ]),
                         );
                       },

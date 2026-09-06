@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Users, UserCog, FileText,
   CreditCard, CheckSquare, Megaphone, BarChart2,
-  GraduationCap, UserRound, BriefcaseBusiness, Smartphone
+  GraduationCap, UserRound, BriefcaseBusiness, Smartphone,
+  PiggyBank, Landmark
 } from "lucide-react";
 import { getLoansAPI, createLoanAPI, updateLoanStatusAPI, getGCashRequestsAPI } from "../api/loans";
-import { getMembersAPI, registerMemberAPI, recordSavingsAPI, getMemberSavingsAPI } from "../api/members";
+import { getMembersAPI, registerMemberAPI } from "../api/members";
 import { recordPaymentAPI } from "../api/payments";
 import { getSystemLogoAPI } from "../api/settings";
 import SettingsModal from "../components/admin/SettingsModal";
@@ -24,6 +25,16 @@ const CLASS_OPTIONS = [
 const NAV_ITEMS = [
   { to: "/admin/dashboard",    icon: <LayoutDashboard size={15} />, label: "Dashboard"          },
   { to: "/admin/members",      icon: <Users           size={15} />, label: "Manage Member"      },
+  // ── BAGO: dating top-bar buttons lang ito (sa Manage Members page
+  // lang lumalabas) — ngayon nasa sidebar na, accessible mula sa
+  // KAHIT ANONG page, para madaling mahanap. "action" (hindi "to") —
+  // hindi nag-na-navigate, nagbubukas lang ng modal. ──────────────────
+  // ── BAGO: dating "action" na buttons (nagbubukas ng modal via
+  // state) — ngayon totoong ROUTES na sila, kaya "to" na ang ginamit
+  // (NavLink), tulad ng ibang totoong pages — makakakuha na rin sila
+  // ng "active" highlighting kapag nandoon ang admin. ──────────────────
+  { to: "/admin/savings-deposit",       icon: <PiggyBank size={15} />, label: "Savings/Deposit"       },
+  { to: "/admin/share-capital-deposit", icon: <Landmark  size={15} />, label: "Share Capital Deposit" },
   { to: "/admin/staff",        icon: <UserCog         size={15} />, label: "Manage Staff"       },
   { to: "/admin/applications", icon: <FileText        size={15} />, label: "Online Application" },
   { to: "/admin/loan-payment", icon: <CreditCard      size={15} />, label: "Loan Payment"       },
@@ -44,8 +55,9 @@ const PAGE_CONFIG = {
     title: "Manage Members",
     sub:   "View, edit, and manage all registered LEAF MPC members.",
     actions: [
-      { label: "Savings/Deposit",        cls: "btn-savings",  action: "savings"      },
-      { label: "Share Capital Deposit",  cls: "btn-sharecap", action: "sharecap"     },
+      // ── BAGO: inalis ang "Savings/Deposit" at "Share Capital
+      // Deposit" dito — nasa sidebar na sila ngayon (tingnan ang
+      // NAV_ITEMS), accessible mula sa kahit anong page. ─────────────
       { label: "+ Register Member",          cls: "btn-green",    action: "register"     },
     ],
   },
@@ -88,6 +100,17 @@ actions: [],
     actions: [
       { label: "⬇ Export Excel", cls: "btn-outline", action: "export" },
     ],
+  },
+  // ── BAGO: entries para sa dalawang bagong routes (dating modals). ──
+  "/admin/savings-deposit": {
+    title: "Savings Transaction",
+    sub:   "Record deposits and withdrawals for member savings accounts.",
+    actions: [],
+  },
+  "/admin/share-capital-deposit": {
+    title: "Share Capital",
+    sub:   "Record share capital deposits for members.",
+    actions: [],
   },
 };
 
@@ -248,332 +271,6 @@ function F2FModal({ onClose }) {
 }
 
 // ─── Savings Modal ────────────────────────────────────────────────────────────
-function SavingsModal({ onClose }) {
-  const [mainTab,  setMainTab] = useState("new");
-  const [step,     setStep]    = useState(1);
-  const [members,  setMembers] = useState([]);
-  // balances fetched on-demand when member is selected
-  const [selected, setSelect]  = useState(null);
-  const [type,     setType]    = useState("Deposit");
-  const [amount,   setAmount]  = useState("");
-  const [note,     setNote]    = useState("");
-  const [error,    setError]   = useState("");
-  const [done,     setDone]    = useState(false);
-  const [loading,  setLoad]    = useState(false);
-  const [fetching, setFetch]   = useState(true);
-  const [search,   setSearch]  = useState("");
-  const [balance,  setBalance] = useState(0);
-  const [allSavings,  setAllSavings] = useState([]);
-  const [histSearch,  setHistSearch] = useState("");
-  const [histLoading, setHistLoading]= useState(false);
-
-  useEffect(() => {
-    getMembersAPI()
-      .then(data => setMembers(data))
-      .catch(e => console.error(e))
-      .finally(() => setFetch(false));
-  }, []);
-
-  useEffect(() => {
-    if (mainTab !== "history") return;
-    setHistLoading(true);
-    import("../api/axiosInstance").then(({ default: api }) =>
-      api.get("/members/savings/?limit=100&ordering=-created_at")
-    )
-      .then(res => setAllSavings(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setAllSavings([]))
-      .finally(() => setHistLoading(false));
-  }, [mainTab]);
-
-  useEffect(() => {
-    if (!selected) return;
-    // ── Fetch savings balance only for the selected member ──
-    getMemberSavingsAPI(selected.id)
-      .then(s => setBalance(s.balance || 0))
-      .catch(() => setBalance(0));
-  }, [selected]);
-
-  const filtered = members.filter(m =>
-    (m.fullname||"").toLowerCase().includes(search.toLowerCase()) ||
-    (m.member_id||"").toLowerCase().includes(search.toLowerCase())
-  );
-
-  const filteredHist = allSavings.filter(tx =>
-    (tx.member_name||"").toLowerCase().includes(histSearch.toLowerCase()) ||
-    (tx.member_code||"").toLowerCase().includes(histSearch.toLowerCase())
-  );
-
-  const totalDeposit  = allSavings.filter(t => t.transaction_type === "Deposit").reduce((s,t) => s + parseFloat(t.amount||0), 0);
-  const totalWithdraw = allSavings.filter(t => t.transaction_type === "Withdraw").reduce((s,t) => s + parseFloat(t.amount||0), 0);
-
-  const parsed  = parseFloat(amount) || 0;
-  const isValid = parsed > 0 && selected && (type === "Deposit" || parsed <= balance);
-  const newBal  = type === "Deposit" ? balance + parsed : balance - parsed;
-
-  const handleSave = async () => {
-    if (!parsed || parsed <= 0) { setError("Enter a valid amount."); return; }
-    if (type === "Withdraw" && parsed > balance) {
-      setError(`Insufficient balance. Current: ₱${balance.toLocaleString()}`);
-      return;
-    }
-    setLoad(true);
-    try {
-      await recordSavingsAPI({ member: selected.id, transaction_type: type, amount: parsed, note });
-      setDone(true);
-    } catch(e) {
-      setError(e.response?.data?.error || "Failed to record transaction.");
-    } finally { setLoad(false); }
-  };
-
-  if (done) return (
-    <div className="al-overlay" onClick={onClose}>
-      <div className="al-modal al-modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="al-modal-body" style={{alignItems:"center",textAlign:"center",padding:"32px 24px",gap:12}}>
-          <div style={{fontSize:40}}>{type === "Deposit" ? "💰" : "💸"}</div>
-          <div style={{fontSize:15,fontWeight:700,color:"#1b5e20"}}>{type} Recorded!</div>
-          <div style={{fontSize:12,color:"#888"}}>
-            ₱{parsed.toLocaleString()} {type.toLowerCase()} for <strong>{selected.fullname}</strong>.
-            New balance: <strong>₱{newBal.toLocaleString()}</strong>
-          </div>
-        </div>
-        <div className="al-modal-footer">
-          <button className="al-btn-save" onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="al-overlay" onClick={onClose}>
-      <div className="al-modal" style={{maxWidth: mainTab === "history" ? 620 : 480}} onClick={e => e.stopPropagation()}>
-        <div className="al-modal-header">
-          <div>
-            <div className="al-modal-title">🏦 Savings Transaction</div>
-            <div className="al-modal-sub">
-              {mainTab === "new"
-                ? `Step ${step} of 2 — ${step === 1 ? "Select Member" : "Transaction Details"}`
-                : "All savings transactions"}
-            </div>
-          </div>
-          <button className="al-modal-close" onClick={onClose}>✕</button>
-        </div>
-
-        <div style={{display:"flex",borderBottom:"2px solid #f0f0f0",flexShrink:0}}>
-          {[
-            {key:"new",     label:"💰 New Transaction"},
-            {key:"history", label:`📋 History${allSavings.length > 0 ? " ("+allSavings.length+")" : ""}`},
-          ].map(t => (
-            <button key={t.key} onClick={() => { setMainTab(t.key); setDone(false); setStep(1); }} style={{
-              flex:1, padding:"10px 8px", fontSize:12, fontWeight:600, cursor:"pointer",
-              border:"none", background:"none",
-              color: mainTab===t.key ? "#e65100" : "#aaa",
-              borderBottom: mainTab===t.key ? "2px solid #f57f17" : "2px solid transparent",
-              marginBottom:-2, transition:"all 0.15s",
-            }}>{t.label}</button>
-          ))}
-        </div>
-
-        {mainTab === "new" && (<>
-          {step === 1 && (
-            <>
-              <div className="al-modal-body">
-                <div className="al-search-wrap">
-                  <span>🔍</span>
-                  <input className="al-search-in" placeholder="Search by name or member ID..."
-                    value={search} onChange={e => setSearch(e.target.value)} autoFocus />
-                </div>
-                <div className="al-loan-list">
-                  {fetching
-                    ? <div style={{textAlign:"center",padding:24,color:"#aaa",fontSize:13}}>Loading members...</div>
-                    : filtered.length === 0
-                    ? <div style={{textAlign:"center",padding:24,color:"#aaa",fontSize:13}}>No members found.</div>
-                    : filtered.map(m => {
-                      const isSelected = selected?.id === m.id;
-                      return (
-                        <div key={m.id} className={`al-loan-item ${isSelected ? "selected" : ""}`}
-                          onClick={() => { setSelect(m); setError(""); }}>
-                          <div className="al-loan-avatar" style={{
-                            background: isSelected ? "#f57f17" : "#fff3e0",
-                            color: isSelected ? "#fff" : "#f57f17",
-                            border: `2px solid ${isSelected ? "#f57f17" : "#ffe0b2"}`,
-                          }}>{(m.fullname||"M")[0]}</div>
-                          <div className="al-loan-info">
-                            <div className="al-loan-name">{m.fullname}</div>
-                            <div className="al-loan-meta">{m.member_id}</div>
-                          </div>
-                          {isSelected && (
-                            <div style={{textAlign:"right",flexShrink:0}}>
-                              <div style={{fontSize:13,fontWeight:800,color:"#f57f17"}}>✓ Selected</div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  }
-                </div>
-              </div>
-              <div className="al-modal-footer">
-                <button className="al-btn-cancel" onClick={onClose}>Cancel</button>
-                <button className="al-btn-save" style={{background:"#f57f17",borderColor:"#f57f17"}}
-                  onClick={() => setStep(2)} disabled={!selected}>Next →</button>
-              </div>
-            </>
-          )}
-          {step === 2 && (
-            <>
-              <div className="al-modal-body">
-                <div className="al-borrower-strip" style={{background:"#fff8e1",borderColor:"#ffe082"}}>
-                  <div className="al-loan-avatar" style={{background:"#f57f17",color:"#fff",border:"2px solid #ffe082"}}>
-                    {(selected.fullname||"M")[0]}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div className="al-loan-name">{selected.fullname}</div>
-                    <div className="al-loan-meta">{selected.member_id}</div>
-                  </div>
-                  <div style={{background:"#fff3e0",border:"1px solid #ffe0b2",borderRadius:10,padding:"6px 14px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:"#f57f17",fontWeight:600,textTransform:"uppercase"}}>Balance</div>
-                    <div style={{fontSize:16,fontWeight:800,color:"#e65100"}}>₱{balance.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div className="al-field">
-                  <label className="al-label">Transaction Type</label>
-                  <div style={{display:"flex",gap:8}}>
-                    {["Deposit","Withdraw"].map(t => (
-                      <button key={t} onClick={() => { setType(t); setError(""); }} style={{
-                        flex:1, padding:"12px",
-                        border:`2px solid ${type===t?(t==="Deposit"?"#2e7d32":"#c62828"):"#e0e0e0"}`,
-                        borderRadius:10, cursor:"pointer",
-                        background: type===t?(t==="Deposit"?"#e8f5e9":"#fce4ec"):"#fafafa",
-                        fontWeight:700, fontSize:13,
-                        color: type===t?(t==="Deposit"?"#1b5e20":"#c62828"):"#aaa",
-                        transition:"all 0.2s",
-                      }}>{t === "Deposit" ? "💰 Deposit" : "💸 Withdraw"}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="al-field">
-                  <label className="al-label">Amount (₱) <span className="al-req">*</span></label>
-                  <div className="al-amount-wrap">
-                    <span className="al-peso">₱</span>
-                    <input className="al-amount-in" type="number" min="1"
-                      value={amount} onChange={e => { setAmount(e.target.value); setError(""); }} autoFocus />
-                  </div>
-                </div>
-                <div className="al-field">
-                  <label className="al-label">Note (optional)</label>
-                  <input className="al-input" type="text" value={note}
-                    onChange={e => setNote(e.target.value)}
-                    placeholder="e.g. Monthly deposit, emergency withdrawal..." maxLength={100} />
-                </div>
-                {error && <div className="al-error">⚠ {error}</div>}
-                {isValid && (
-                  <div className="al-preview">
-                    <div className="al-prev-row"><span>Current Balance</span><span>₱{balance.toLocaleString()}</span></div>
-                    <div className="al-prev-row deduct">
-                      <span>{type === "Deposit" ? "Deposit" : "Withdrawal"}</span>
-                      <span style={{color:type==="Deposit"?"#2e7d32":"#c62828",fontWeight:700}}>
-                        {type === "Deposit" ? "+" : "−"} ₱{parsed.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="al-prev-divider"/>
-                    <div className="al-prev-row result">
-                      <span>New Balance</span>
-                      <span style={{color:"#e65100",fontWeight:800}}>₱{newBal.toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="al-modal-footer">
-                <button className="al-btn-cancel" onClick={() => setStep(1)}>← Back</button>
-                <button className="al-btn-save"
-                  style={{background:type==="Deposit"?"#2e7d32":"#c62828",borderColor:type==="Deposit"?"#2e7d32":"#c62828"}}
-                  onClick={handleSave} disabled={!isValid || loading}>
-                  {loading ? "Saving..." : type === "Deposit" ? "💰 Record Deposit" : "💸 Record Withdrawal"}
-                </button>
-              </div>
-            </>
-          )}
-        </>)}
-
-        {mainTab === "history" && (
-          <>
-            <div className="al-modal-body" style={{gap:10}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                <div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,color:"#558b2f",fontWeight:600}}>Total Deposits</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#1b5e20"}}>₱{totalDeposit.toLocaleString()}</div>
-                </div>
-                <div style={{background:"#fce4ec",borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,color:"#c62828",fontWeight:600}}>Total Withdrawals</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#c62828"}}>₱{totalWithdraw.toLocaleString()}</div>
-                </div>
-                <div style={{background:"#fff8e1",borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
-                  <div style={{fontSize:10,color:"#f57f17",fontWeight:600}}>Transactions</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#e65100"}}>{allSavings.length}</div>
-                </div>
-              </div>
-              <div className="al-search-wrap">
-                <span>🔍</span>
-                <input className="al-search-in" placeholder="Search by member name or ID..."
-                  value={histSearch} onChange={e => setHistSearch(e.target.value)} />
-              </div>
-              {histLoading ? (
-                <div style={{textAlign:"center",padding:24,color:"#aaa",fontSize:13}}>Loading history...</div>
-              ) : filteredHist.length === 0 ? (
-                <div style={{textAlign:"center",padding:24,color:"#bbb",fontSize:13}}>No savings transactions found.</div>
-              ) : (
-                <div style={{borderRadius:8,overflow:"hidden",border:"1px solid #ffe082",maxHeight:320,overflowY:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead style={{position:"sticky",top:0,zIndex:1}}>
-                      <tr style={{background:"#fff8e1"}}>
-                        <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Date</th>
-                        <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Member</th>
-                        <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Type</th>
-                        <th style={{padding:"8px 10px",textAlign:"right",fontWeight:600,color:"#777",fontSize:10}}>Amount</th>
-                        <th style={{padding:"8px 10px",textAlign:"right",fontWeight:600,color:"#777",fontSize:10}}>Balance After</th>
-                        <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredHist.map((tx, idx) => (
-                        <tr key={tx.id} style={{background:idx%2===0?"#fff":"#fffde7",borderTop:"1px solid #f5f5f5"}}>
-                          <td style={{padding:"7px 10px",color:"#888",fontSize:10,whiteSpace:"nowrap"}}>{tx.created_at?.split("T")[0]}</td>
-                          <td style={{padding:"7px 10px"}}>
-                            <div style={{fontWeight:600,fontSize:11,color:"#222"}}>{tx.member_name}</div>
-                            <div style={{fontSize:9,color:"#aaa",fontFamily:"monospace"}}>{tx.member_code}</div>
-                          </td>
-                          <td style={{padding:"7px 10px"}}>
-                            <span style={{
-                              background:tx.transaction_type==="Deposit"?"#e8f5e9":"#fce4ec",
-                              color:tx.transaction_type==="Deposit"?"#2e7d32":"#c62828",
-                              padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,
-                            }}>
-                              {tx.transaction_type==="Deposit"?"💰":"💸"} {tx.transaction_type}
-                            </span>
-                          </td>
-                          <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:tx.transaction_type==="Deposit"?"#2e7d32":"#c62828"}}>
-                            {tx.transaction_type==="Deposit"?"+":"−"}₱{Number(tx.amount).toLocaleString()}
-                          </td>
-                          <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#333"}}>₱{Number(tx.balance_after).toLocaleString()}</td>
-                          <td style={{padding:"7px 10px",color:"#888",fontSize:10}}>{tx.note||"—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            <div className="al-modal-footer">
-              <button className="al-btn-cancel" onClick={onClose}>Close</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Philippine Address Hook ──────────────────────────────────────────────────
 function usePhAddress() {
   const [regions,    setRegions]    = useState([]);
   const [provinces,  setProvinces]  = useState([]);
@@ -814,7 +511,7 @@ function RegisterModal({ onClose }) {
           ))}
         </div>
 
-        <div className="al-modal-body">
+        <div>
 
           {/* ── TAB 1: Personal Info ── */}
           {tab === "personal" && (
@@ -969,7 +666,11 @@ function RegisterModal({ onClose }) {
                 </div>
                 {form.share_capital > 0 && (
                   <div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-                    Share Capital = ₱{(parseFloat(form.share_capital||0)).toLocaleString()} · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
+                    {/* ── FIX: dating naka-hardcode na "× 2" — pero
+                        default na 1× (unang loan) ang bagong
+                        naka-register na member sa Loan Multiplier
+                        system natin, hindi 2×. ──────────────────────── */}
+                    Share Capital = ₱{(parseFloat(form.share_capital||0)).toLocaleString()} · Max Loanable = ₱{(parseFloat(form.share_capital||0)).toLocaleString()} (1× — first loan)
                   </div>
                 )}
               </div>
@@ -1096,7 +797,7 @@ function RegisterModal({ onClose }) {
           )}
         </div>
 
-        <div className="al-modal-footer">
+        <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:16}}>
           {!done ? (<>
             {tab !== "personal" && (
               <button className="al-btn-cancel" onClick={() => {
@@ -1126,10 +827,21 @@ function RegisterModal({ onClose }) {
 
 
 // ─── New F2F Loan Application Modal ──────────────────────────────────────────
-const LOAN_TYPES_LIST = ["Regular Loan","Emergency Loan","Salary Loan","Housing Loan","Business Loan"];
-const MAX_TERM = { "Regular Loan":24,"Emergency Loan":12,"Salary Loan":12,"Housing Loan":48,"Business Loan":36 };
+// ── BAGO: 4 na bagong loan types (Regular, Petty Cash, Appliance,
+// ATM) — pinalitan ang dating 5 (Regular, Emergency, Salary, Housing,
+// Business), tugma na sa binago nating LOAN_TYPES sa member-side
+// LoanApplication.jsx. ──────────────────────────────────────────────
+const LOAN_TYPES_LIST = ["Regular Loan","Petty Cash Loan","Appliance Loan","ATM Loan"];
 
 function NewLoanModal({ onClose }) {
+  // ── BAGO: para awtomatikong ma-navigate papunta sa Loan Approval
+  // page pagkatapos mag-submit — dati, ang "Done" ay basta nagsasara
+  // lang ng modal, walang refresh sa listahan (ibang route/component
+  // ang Loan Approval page, hindi kilala ng AdminLayout modal na 'to
+  // ang fetch function nito). Sa pag-navigate, awtomatikong tatakbo
+  // ang sariling fetch effect ng Loan Approval page sa mount, kaya
+  // makikita agad ang bagong loan. ─────────────────────────────────
+  const navigate = useNavigate();
   const [step,          setStep]         = useState(1);
   const [selMember,     setMember]        = useState(null);
   const [search,        setSearch]        = useState("");
@@ -1162,7 +874,13 @@ function NewLoanModal({ onClose }) {
   );
 
   const shareCapital = selMember ? parseFloat(selMember.share_capital||0) : 0;
-  const maxLoanable  = shareCapital;
+  // ── FIX: dating "maxLoanable = shareCapital" lang — WALANG
+  // multiplier man lang (hindi man lang yung lumang "× 2"). Gamit na
+  // ngayon ang totoong "max_loanable" field mula sa member data (na
+  // kumukuha na sa admin-editable na Loan Multiplier). May fallback
+  // pa rin sa shareCapital kung sakaling wala talagang "max_loanable"
+  // sa response (hal. luma pang cached data). ─────────────────────────
+  const maxLoanable  = selMember ? parseFloat(selMember.max_loanable || selMember.share_capital || 0) : 0;
   const amount       = parseFloat(form.amount) || 0;
   const term         = parseInt(form.term) || 12;
   const defaultRate  = amount <= 50000 ? 0.0125 : amount <= 150000 ? 0.01125 : 0.01;
@@ -1175,21 +893,55 @@ function NewLoanModal({ onClose }) {
   const sc           = amount * (rates.scPct / 100);
   const totalDed     = interest + serviceFee + filingFee + insurance + sd + sc;
   const netProceeds  = amount - totalDed;
-  const monthly      = amount > 0 ? ((amount + interest) / term).toFixed(2) : 0;
+  // ── FIX: dating "(amount + interest) / term" — dito ang aktwal na
+  // bug, hindi lang sa display. Kaparehong ayos ng backend
+  // (serializers.py) at member-side LoanApplication.jsx. ─────────────
+  const monthly      = amount > 0 ? (amount / term).toFixed(2) : 0;
 
   const validate = () => {
     const e = {};
     if (!form.amount || parseFloat(form.amount) <= 0) e.amount  = "Enter a valid amount.";
-    if (parseFloat(form.amount) < 3000) e.amount = "Minimum loan amount is ₱3,000.";
+    // ── BAGO: tinanggal ang fixed na ₱3,000 minimum — desisyon na
+    // lang ng admin/member kung magkano, basta hindi lalagpas sa max
+    // loanable (na ino-enforce na rin habang nagta-type, hindi lang
+    // sa submit). ───────────────────────────────────────────────────
+    else if (parseFloat(form.amount) > maxLoanable) e.amount = `Amount exceeds max loanable of ₱${maxLoanable.toLocaleString()}.`;
     if (!form.purpose.trim())           e.purpose = "Purpose is required.";
     return e;
   };
 
+  // ── BAGO: refs para sa "scroll-to-error" — kapag may hindi na-fill
+  // na required field, awtomatikong mag-s-scroll at mag-fo-focus dito
+  // imbes na basta magpakita ng error text na baka hindi mapansin. ─────
+  const amountRef  = useRef(null);
+  const purposeRef = useRef(null);
+  const fieldRefs  = { amount: amountRef, purpose: purposeRef };
+
+  const scrollToFirstError = (errs) => {
+    const order = ["amount", "purpose"];
+    const firstKey = order.find(k => errs[k]);
+    const ref = firstKey && fieldRefs[firstKey];
+    if (ref?.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      ref.current.focus({ preventScroll: true });
+    }
+  };
+
   const handleSubmit = async () => {
     const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(e); return; }
     setLoadingSubmit(true);
     try {
+      // ── FIX: dating walang "is_f2f: true" na ipinapadala — kaya sa
+      // backend, "For Review" ang default na status, tapos manual pang
+      // ino-override papuntang "Approved" (na para sa PENDING-RELEASE
+      // queue, ginagamit ng ONLINE applications na kailangan pang i-
+      // approve/i-release). Pero F2F ito — kasama na ang member sa
+      // opisina, ibinibigay na agad ang pera doon mismo — dapat
+      // DERETSO sa "Active" status, hindi dumaan pa sa For Release.
+      // Sa pagpasa ng "is_f2f: true", awtomatiko nang gagawing "Active"
+      // ng backend serializer, KASAMA na ang auto 1% savings deposit
+      // (na dati rin nale-skip dahil hindi na-trigger ang F2F path). ──
       const result = await createLoanAPI({
         member:      selMember.id,
         loan_type:   form.loanType,
@@ -1197,8 +949,8 @@ function NewLoanModal({ onClose }) {
         term_months: parseInt(form.term),
         purpose:     form.purpose,
         collateral:  form.collateral,
+        is_f2f:      true,
       });
-      await updateLoanStatusAPI(result.id, "Approved");
       setRefNo(result.loan_id);
       setMonthlyResult(result.monthly_due);
       setDone(true);
@@ -1207,12 +959,22 @@ function NewLoanModal({ onClose }) {
     } finally { setLoadingSubmit(false); }
   };
 
+  // ── FIX: dating "/admin/loan-approval" ang tinutungo — mali, dahil
+  // yun ay para sa mga loan na "For Review"/"Approved" pa (naghihintay
+  // ng aksyon), na para sa ONLINE applications. Ang F2F loan (Active
+  // na agad) ay dapat DERETSO makita sa "Loan Payment" page (kung
+  // saan naka-list ang mga Active loans). ─────────────────────────────
+  const handleDone = () => {
+    onClose();
+    navigate("/admin/loan-payment");
+  };
+
   if (done) return (
-    <div className="al-overlay" onClick={onClose}>
+    <div className="al-overlay" onClick={handleDone}>
       <div className="al-modal al-modal-sm" onClick={e => e.stopPropagation()}>
         <div className="al-modal-header">
           <div className="al-modal-title">✅ Application Recorded!</div>
-          <button className="al-modal-close" onClick={onClose}>✕</button>
+          <button className="al-modal-close" onClick={handleDone}>✕</button>
         </div>
         <div className="al-modal-body" style={{gap:12}}>
           <div style={{fontSize:12,color:"#666",lineHeight:1.6}}>
@@ -1226,10 +988,10 @@ function NewLoanModal({ onClose }) {
             <div className="al-cred-row"><span className="al-cred-label">Amount</span><span className="al-cred-val">₱{parseFloat(form.amount).toLocaleString()}</span></div>
             <div className="al-cred-row"><span className="al-cred-label">Monthly</span><span className="al-cred-val">₱{parseFloat(monthlyResult||monthly).toLocaleString()}</span></div>
           </div>
-          <div className="al-cred-notice">Go to Loan Approval page to process this application.</div>
+          <div className="al-cred-notice">Redirecting you to Loan Payment — this loan is now Active and ready for collection.</div>
         </div>
         <div className="al-modal-footer">
-          <button className="al-btn-save" onClick={onClose}>Done</button>
+          <button className="al-btn-save" onClick={handleDone}>Go to Loan Payment →</button>
         </div>
       </div>
     </div>
@@ -1265,7 +1027,12 @@ function NewLoanModal({ onClose }) {
                       <div className="al-loan-meta">{m.member_id}</div>
                     </div>
                     <div className="al-loan-bal">
-                      <div className="al-bal-val" style={{color:"#2e7d32"}}>₱{Number(m.share_capital||0).toLocaleString()}</div>
+                      {/* ── FIX: dating "m.share_capital" ang ipinapakita
+                          bilang "max loanable" — mali, walang
+                          multiplier. Gamit na ngayon ang totoong
+                          "max_loanable" field, may fallback pa rin sa
+                          share_capital kung wala talaga. ──────────── */}
+                      <div className="al-bal-val" style={{color:"#2e7d32"}}>₱{Number(m.max_loanable || m.share_capital || 0).toLocaleString()}</div>
                       <div className="al-bal-label">max loanable</div>
                     </div>
                   </div>
@@ -1300,22 +1067,45 @@ function NewLoanModal({ onClose }) {
                   <label className="al-label">Amount (₱) <span className="al-req">*</span></label>
                   <div className="al-amount-wrap">
                     <span className="al-peso">₱</span>
-                    <input className="al-amount-in" type="number" name="amount" min="1" placeholder="Min ₱3,000"
-                      value={form.amount} onChange={e => { handle(e); setErrors(p=>({...p,amount:""})); }} />
+                    {/* ── FIX: dating "min"/"max" HTML attributes lang —
+                        HINDI talaga pinipigilan ng mga 'yan ang direktang
+                        pag-type sa keyboard (spinner buttons/validation
+                        styling lang ang epekto nila, hindi input mismo).
+                        Kaya kahit ₱8,000 lang ang max, puwede pa ring
+                        mag-type ng ₱15,000. Gumagamit na ngayon ng
+                        custom na onChange handler na TUMATANGGI sa
+                        keystroke mismo kapag lalagpas na sa max —
+                        kaparehong pattern ng member-side LoanApplication.jsx. ──
+                        BAGO RIN: tinanggal ang ₱3,000 minimum — desisyon
+                        na lang ng admin/member kung magkano, basta
+                        hindi lalagpas sa max. ─────────────────────────── */}
+                    <input ref={amountRef} className="al-amount-in" type="text" inputMode="numeric" name="amount" placeholder="Enter amount"
+                      value={form.amount} onChange={e => {
+                        const digitsOnly = e.target.value.replace(/[^0-9]/g, "");
+                        if (digitsOnly === "") { setForm(p => ({...p, amount: ""})); setErrors(p=>({...p,amount:""})); return; }
+                        const parsed = parseInt(digitsOnly, 10);
+                        if (maxLoanable > 0 && parsed > maxLoanable) return; // tanggihan, huwag baguhin
+                        setForm(p => ({...p, amount: digitsOnly}));
+                        setErrors(p=>({...p,amount:""}));
+                      }} />
                   </div>
+                  <div style={{fontSize:10,color:"#888",marginTop:4}}>Max Loanable: ₱{maxLoanable.toLocaleString()}</div>
                   {errors.amount && <div className="al-error" style={{marginTop:4}}>{errors.amount}</div>}
                 </div>
                 <div className="al-field">
                   <label className="al-label">Term (months)</label>
+                  {/* ── BAGO: dating "jump" na options (3,6,9,12,18,24,
+                      36,48) — ngayon sunod-sunod na 1-12 buwan, dahil
+                      dito na lang talaga pipili ang admin. ─────────── */}
                   <select className="al-input" name="term" value={form.term} onChange={handle}>
-                    {[3,6,9,12,18,24,36,48].filter(t => t <= (MAX_TERM[form.loanType]||24)).map(t => (
-                      <option key={t} value={t}>{t} months</option>
+                    {Array.from({length:12}, (_,i) => i+1).map(t => (
+                      <option key={t} value={t}>{t} month{t!==1?"s":""}</option>
                     ))}
                   </select>
                 </div>
                 <div className="al-field al-full">
                   <label className="al-label">Purpose <span className="al-req">*</span></label>
-                  <textarea className={`al-input ${errors.purpose?"border-red":""}`} name="purpose" rows={2}
+                  <textarea ref={purposeRef} className={`al-input ${errors.purpose?"border-red":""}`} name="purpose" rows={2}
                     placeholder="Reason for the loan..." value={form.purpose}
                     onChange={e => { handle(e); setErrors(p=>({...p,purpose:""})); }} style={{resize:"none"}} />
                   {errors.purpose && <div className="al-error" style={{marginTop:4}}>{errors.purpose}</div>}
@@ -1378,11 +1168,17 @@ function NewLoanModal({ onClose }) {
                   )}
                   <div className="al-deduct-box">
                     <div className="al-deduct-row"><span className="al-deduct-label">Loan Amount</span><span className="al-deduct-val">₱{amount.toLocaleString()}</span></div>
-                    <div className="al-deduct-row"><span className="al-deduct-label">Interest Rate</span><span className="al-deduct-val">{(effectiveRate*100).toFixed(3)}%/mo × {term} months{rates.interestOverride>0?" (custom)":""}</span></div>
                     <div className="al-deduct-row"><span className="al-deduct-label">Monthly Amortization</span><span className="al-deduct-val" style={{color:"#2e7d32",fontWeight:700}}>₱{parseFloat(monthly).toLocaleString(undefined,{minimumFractionDigits:2})}</span></div>
                     <div className="al-deduct-divider"/>
                     <div style={{fontSize:11,fontWeight:600,color:"#555",margin:"4px 0 4px"}}>Upfront Deductions from Loan Release:</div>
-                    <div className="al-deduct-row"><span className="al-deduct-label">Interest</span><span className="al-deduct-val al-deduct-red">− ₱{interest.toFixed(2)}</span></div>
+                    {/* ── FIX: dating hiwalay na "Interest Rate" row sa
+                        itaas + "Interest" deduction row sa ibaba —
+                        parehong nagpapakita ng interest, kaya nagmumu-
+                        khang naka-doble ang kaltas kahit hindi naman
+                        (isa lang talaga ang aktwal na binabawas). Ngayon
+                        isang linya na lang — ang rate info ay nailipat
+                        dito sa loob ng "Interest" deduction mismo. ────── */}
+                    <div className="al-deduct-row"><span className="al-deduct-label">Interest <span style={{fontSize:10,color:"#999",fontWeight:400}}>({(effectiveRate*100).toFixed(3)}%/mo × {term} months{rates.interestOverride>0?" (custom)":""})</span></span><span className="al-deduct-val al-deduct-red">− ₱{interest.toFixed(2)}</span></div>
                     <div className="al-deduct-row"><span className="al-deduct-label">Service Fee ({rates.serviceFeePct}%)</span><span className="al-deduct-val al-deduct-red">− ₱{serviceFee.toFixed(2)}</span></div>
                     <div className="al-deduct-row"><span className="al-deduct-label">Filing Fee (₱{rates.filingFeeAmt})</span><span className="al-deduct-val al-deduct-red">− ₱{filingFee.toFixed(2)}</span></div>
                     <div className="al-deduct-row"><span className="al-deduct-label">Insurance ({rates.insurancePct}%)</span><span className="al-deduct-val al-deduct-red">− ₱{insurance.toFixed(2)}</span></div>
@@ -1398,8 +1194,23 @@ function NewLoanModal({ onClose }) {
               )}
             </div>
             <div className="al-modal-footer">
-              <button className="al-btn-cancel" onClick={() => setStep(1)}>← Back</button>
-              <button className="al-btn-save" onClick={handleSubmit}>Submit Application</button>
+              <button className="al-btn-cancel" onClick={() => setStep(1)} disabled={loadingSubmit}>← Back</button>
+              {/* ── BAGO: dating walang loading indicator man lang habang
+                  nagsu-submit — walang paraan para malaman ng admin na
+                  na-click na nang tama ang button, puwedeng ma-double-
+                  click. Ngayon, naka-disable ang button at may spinner +
+                  "Submitting..." text habang nagpo-proseso. ────────── */}
+              <button className="al-btn-save" onClick={handleSubmit} disabled={loadingSubmit} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                {loadingSubmit && (
+                  <span style={{
+                    display:"inline-block", width:13, height:13,
+                    border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"#fff",
+                    borderRadius:"50%", animation:"al-spin 0.7s linear infinite",
+                  }}/>
+                )}
+                {loadingSubmit ? "Submitting..." : "Submit Application"}
+              </button>
+              <style>{`@keyframes al-spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           </>
         )}
@@ -1410,314 +1221,15 @@ function NewLoanModal({ onClose }) {
 
 
 // ─── Share Capital Deposit Modal ──────────────────────────────────────────────
-function ShareCapitalModal({ onClose }) {
-  const [mainTab,     setMainTab]  = useState("new");
-  const [step,        setStep]     = useState(1);
-  const [members,     setMembers]  = useState([]);
-  const [selected,    setSelect]   = useState(null);
-  const [amount,      setAmount]   = useState("");
-  const [note,        setNote]     = useState("");
-  const [error,       setError]    = useState("");
-  const [done,        setDone]     = useState(false);
-  const [loading,     setLoad]     = useState(false);
-  const [fetching,    setFetch]    = useState(true);
-  const [search,      setSearch]   = useState("");
-  const [allHistory,  setAllHistory]  = useState([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histSearch,  setHistSearch]  = useState("");
-
-  useEffect(() => {
-    getMembersAPI()
-      .then(data => setMembers(data))
-      .catch(e => console.error(e))
-      .finally(() => setFetch(false));
-  }, []);
-
-  useEffect(() => {
-    if (mainTab !== "history") return;
-    setHistLoading(true);
-    import("../api/axiosInstance").then(({ default: api }) =>
-      api.get("/members/share-capital-history/")
-    )
-      .then(res => setAllHistory(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setAllHistory([]))
-      .finally(() => setHistLoading(false));
-  }, [mainTab]);
-
-  const filtered = members.filter(m =>
-    (m.fullname||"").toLowerCase().includes(search.toLowerCase()) ||
-    (m.member_id||"").toLowerCase().includes(search.toLowerCase())
-  );
-
-  const filteredHist = allHistory.filter(t =>
-    (t.member_name||"").toLowerCase().includes(histSearch.toLowerCase()) ||
-    (t.member_id||"").toLowerCase().includes(histSearch.toLowerCase())
-  );
-
-  const totalDeposits = allHistory.reduce((s,t) => s + t.amount, 0);
-
-  const parsed   = parseFloat(amount) || 0;
-  const isValid  = parsed > 0 && selected;
-  const newSC    = parseFloat(selected?.share_capital || 0) + parsed;
-  const newMaxLoan = newSC * 2;
-
-  const handleSave = async () => {
-    if (!parsed || parsed <= 0) { setError("Enter a valid amount."); return; }
-    setLoad(true);
-    try {
-      await import("../api/axiosInstance").then(({ default: api }) =>
-        api.post(`/members/${selected.id}/share-capital-deposit/`, {
-          amount: parsed,
-          note: note || "Share capital deposit",
-          txn_type: "Deposit",
-        })
-      );
-      setDone(true);
-    } catch(e) {
-      setError(e.response?.data?.error || "Failed to record deposit.");
-    } finally { setLoad(false); }
-  };
-
-  if (done) return (
-    <div className="al-overlay" onClick={onClose}>
-      <div className="al-modal al-modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="al-modal-body" style={{alignItems:"center",textAlign:"center",padding:"32px 24px",gap:12}}>
-          <div style={{fontSize:40}}>💰</div>
-          <div style={{fontSize:15,fontWeight:700,color:"#1565c0"}}>Share Capital Deposit Recorded!</div>
-          <div style={{fontSize:12,color:"#888"}}>
-            ₱{parsed.toLocaleString()} deposited for <strong>{selected.fullname}</strong>.<br/>
-            New Share Capital: <strong style={{color:"#1565c0"}}>₱{newSC.toLocaleString()}</strong><br/>
-            New Max Loanable: <strong style={{color:"#2e7d32"}}>₱{newMaxLoan.toLocaleString()}</strong>
-          </div>
-        </div>
-        <div className="al-modal-footer">
-          <button className="al-btn-save" style={{background:"#1565c0",borderColor:"#1565c0"}} onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="al-overlay" onClick={onClose}>
-      <div className="al-modal" onClick={e => e.stopPropagation()}>
-        <div className="al-modal-header">
-          <div>
-            <div className="al-modal-title">💰 Share Capital</div>
-            <div className="al-modal-sub">
-              {mainTab==="new"
-                ? `Step ${step} of 2 — ${step===1?"Select Member":"Deposit Details"}`
-                : "Share capital transaction history"}
-            </div>
-          </div>
-          <button className="al-modal-close" onClick={onClose}>✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",borderBottom:"2px solid #f0f0f0",flexShrink:0}}>
-          {[
-            {key:"new",     label:"💰 New Deposit"},
-            {key:"history", label:`📋 History${allHistory.length > 0 ? " ("+allHistory.length+")" : ""}`},
-          ].map(t => (
-            <button key={t.key} onClick={() => { setMainTab(t.key); setDone(false); setStep(1); }} style={{
-              flex:1, padding:"10px 8px", fontSize:12, fontWeight:600, cursor:"pointer",
-              border:"none", background:"none",
-              color: mainTab===t.key ? "#1565c0" : "#aaa",
-              borderBottom: mainTab===t.key ? "2px solid #1565c0" : "2px solid transparent",
-              marginBottom:-2, transition:"all 0.15s",
-            }}>{t.label}</button>
-          ))}
-        </div>
-
-        {mainTab === "new" && step === 1 && (<>
-          <div className="al-modal-body">
-            <div className="al-step-info">Select the member to record share capital deposit.</div>
-            <div className="al-search-wrap">
-              <span>🔍</span>
-              <input className="al-search-in" placeholder="Search by name or member ID..."
-                value={search} onChange={e => setSearch(e.target.value)} autoFocus/>
-            </div>
-            <div className="al-loan-list">
-              {fetching
-                ? <div style={{textAlign:"center",padding:24,color:"#aaa"}}>Loading members...</div>
-                : filtered.length===0
-                ? <div style={{textAlign:"center",padding:24,color:"#aaa"}}>No members found.</div>
-                : filtered.map(m => {
-                  const sc = parseFloat(m.share_capital||0);
-                  const isSelected = selected?.id === m.id;
-                  return (
-                    <div key={m.id} className={`al-loan-item ${isSelected?"selected":""}`}
-                      onClick={() => { setSelect(m); setError(""); }}>
-                      <div className="al-loan-avatar" style={{
-                        background: isSelected?"#1565c0":"#e3f2fd",
-                        color: isSelected?"#fff":"#1565c0",
-                        border:`2px solid ${isSelected?"#1565c0":"#bbdefb"}`,
-                      }}>{(m.fullname||"M")[0]}</div>
-                      <div className="al-loan-info">
-                        <div className="al-loan-name">{m.fullname}</div>
-                        <div className="al-loan-meta">{m.member_id}</div>
-                      </div>
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{fontSize:13,fontWeight:800,color:"#1565c0"}}>₱{sc.toLocaleString()}</div>
-                        <div style={{fontSize:9,color:"#aaa",textTransform:"uppercase"}}>share capital</div>
-                      </div>
-                    </div>
-                  );
-                })
-              }
-            </div>
-          </div>
-          <div className="al-modal-footer">
-            <button className="al-btn-cancel" onClick={onClose}>Cancel</button>
-            <button className="al-btn-save" style={{background:"#1565c0",borderColor:"#1565c0"}}
-              onClick={() => setStep(2)} disabled={!selected}>Next →</button>
-          </div>
-        </>)}
-
-        {mainTab === "new" && step === 2 && (<>
-          <div className="al-modal-body">
-            <div className="al-borrower-strip" style={{background:"#e3f2fd",borderColor:"#90caf9"}}>
-              <div className="al-loan-avatar" style={{background:"#1565c0",color:"#fff",border:"2px solid #90caf9"}}>
-                {(selected.fullname||"M")[0]}
-              </div>
-              <div style={{flex:1}}>
-                <div className="al-loan-name">{selected.fullname}</div>
-                <div className="al-loan-meta">{selected.member_id}</div>
-              </div>
-              <div style={{background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:10,padding:"6px 14px",textAlign:"center"}}>
-                <div style={{fontSize:10,color:"#1565c0",fontWeight:600,textTransform:"uppercase"}}>Current SC</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#0d47a1"}}>₱{Number(selected.share_capital||0).toLocaleString()}</div>
-              </div>
-            </div>
-
-            <div className="al-field">
-              <label className="al-label">Deposit Amount (₱) <span className="al-req">*</span></label>
-              <div className="al-amount-wrap">
-                <span className="al-peso">₱</span>
-                <input className="al-amount-in" type="number" min="1"
-                  value={amount} onChange={e => { setAmount(e.target.value); setError(""); }} autoFocus/>
-              </div>
-            </div>
-            <div className="al-field">
-              <label className="al-label">Note (optional)</label>
-              <input className="al-input" type="text" value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="e.g. Additional share capital, membership fee..." maxLength={100}/>
-            </div>
-            {error && <div className="al-error">⚠ {error}</div>}
-            {isValid && (
-              <div className="al-preview">
-                <div className="al-prev-row"><span>Current Share Capital</span><span>₱{Number(selected.share_capital||0).toLocaleString()}</span></div>
-                <div className="al-prev-row deduct">
-                  <span>Deposit</span>
-                  <span style={{color:"#1565c0",fontWeight:700}}>+ ₱{parsed.toLocaleString()}</span>
-                </div>
-                <div className="al-prev-divider"/>
-                <div className="al-prev-row result">
-                  <span>New Share Capital</span>
-                  <span style={{color:"#1565c0",fontWeight:800}}>₱{newSC.toLocaleString()}</span>
-                </div>
-                <div className="al-prev-row" style={{fontSize:11,color:"#888"}}>
-                  <span>New Max Loanable</span>
-                  <span style={{color:"#2e7d32",fontWeight:700}}>₱{newMaxLoan.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="al-modal-footer">
-            <button className="al-btn-cancel" onClick={() => setStep(1)}>← Back</button>
-            <button className="al-btn-save" style={{background:"#1565c0",borderColor:"#1565c0"}}
-              onClick={handleSave} disabled={!isValid||loading}>
-              {loading?"Saving...":"💰 Record Deposit"}
-            </button>
-          </div>
-        </>)}
-
-        {/* History Tab */}
-        {mainTab === "history" && (<>
-          <div className="al-modal-body" style={{gap:10}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-              <div style={{background:"#e3f2fd",borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:10,color:"#1565c0",fontWeight:600}}>Total Deposited</div>
-                <div style={{fontSize:15,fontWeight:800,color:"#0d47a1"}}>₱{totalDeposits.toLocaleString()}</div>
-              </div>
-              <div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:10,color:"#2e7d32",fontWeight:600}}>Transactions</div>
-                <div style={{fontSize:15,fontWeight:800,color:"#1b5e20"}}>{allHistory.length}</div>
-              </div>
-            </div>
-            <div className="al-search-wrap">
-              <span>🔍</span>
-              <input className="al-search-in" placeholder="Search by member name or ID..."
-                value={histSearch} onChange={e => setHistSearch(e.target.value)}/>
-            </div>
-            {histLoading ? (
-              <div style={{textAlign:"center",padding:24,color:"#aaa",fontSize:13}}>Loading history...</div>
-            ) : filteredHist.length === 0 ? (
-              <div style={{textAlign:"center",padding:24,color:"#bbb",fontSize:13}}>No share capital transactions found.</div>
-            ) : (
-              <div style={{borderRadius:8,overflow:"hidden",border:"1px solid #90caf9",maxHeight:320,overflowY:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead style={{position:"sticky",top:0,zIndex:1}}>
-                    <tr style={{background:"#e3f2fd"}}>
-                      <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Date</th>
-                      <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Member</th>
-                      <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Type</th>
-                      <th style={{padding:"8px 10px",textAlign:"right",fontWeight:600,color:"#777",fontSize:10}}>Amount</th>
-                      <th style={{padding:"8px 10px",textAlign:"right",fontWeight:600,color:"#777",fontSize:10}}>Balance After</th>
-                      <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>Note</th>
-                      <th style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#777",fontSize:10}}>By</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredHist.map((t, idx) => (
-                      <tr key={t.id} style={{background:idx%2===0?"#fff":"#e3f2fd22",borderTop:"1px solid #f5f5f5"}}>
-                        <td style={{padding:"7px 10px",color:"#888",fontSize:10,whiteSpace:"nowrap"}}>{t.created_at}</td>
-                        <td style={{padding:"7px 10px"}}>
-                          <div style={{fontWeight:600,fontSize:11,color:"#222"}}>{t.member_name}</div>
-                          <div style={{fontSize:9,color:"#aaa",fontFamily:"monospace"}}>{t.member_id}</div>
-                        </td>
-                        <td style={{padding:"7px 10px"}}>
-                          <span style={{
-                            background: t.txn_type==="CBU"?"#e8f5e9":t.txn_type==="Initial"?"#fff8e1":"#e3f2fd",
-                            color: t.txn_type==="CBU"?"#2e7d32":t.txn_type==="Initial"?"#f57f17":"#1565c0",
-                            padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,
-                          }}>
-                            {t.txn_type==="CBU"?"📈 CBU":t.txn_type==="Initial"?"🌱 Initial":"💰 Deposit"}
-                          </span>
-                        </td>
-                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#1565c0"}}>
-                          +₱{Number(t.amount).toLocaleString()}
-                        </td>
-                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#0d47a1"}}>
-                          ₱{Number(t.balance_after).toLocaleString()}
-                        </td>
-                        <td style={{padding:"7px 10px",color:"#888",fontSize:10}}>{t.note||"—"}</td>
-                        <td style={{padding:"7px 10px",color:"#888",fontSize:10}}>{t.recorded_by||"—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          <div className="al-modal-footer">
-            <button className="al-btn-cancel" onClick={onClose}>Close</button>
-          </div>
-        </>)}
-
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Layout ──────────────────────────────────────────────────────────────
 export default function AdminLayout() {
   const [clock,       setClock]   = useState("");
   const [showF2F,     setF2F]     = useState(false);
   const [showReg,     setReg]     = useState(false);
   const [showLoan,    setLoan]    = useState(false);
-  const [showSavings, setShowSav]    = useState(false);
-  const [showShareCap,  setShareCap]     = useState(false);
+  // ── BAGO: tinanggal ang "showSavings"/"showShareCap" state — mga
+  // tunay na ROUTES na ito ngayon (SavingsDeposit.jsx,
+  // ShareCapitalDeposit.jsx), hindi na modal na naka-toggle dito. ─────
   const [sidebarOpen,   setSidebar]      = useState(false);
   const [gcashPending,  setGcashPending] = useState(0);
   const [logoUrl,       setLogoUrl]      = useState(null);
@@ -1766,8 +1278,6 @@ export default function AdminLayout() {
     if (action === "f2f")      setF2F(true);
     if (action === "register") setReg(true);
     if (action === "newloan")  setLoan(true);
-    if (action === "savings")   setShowSav(true);
-    if (action === "sharecap")  setShareCap(true);
     if (action === "export")   alert("Export feature will be connected to the backend.");
   };
 
@@ -1778,8 +1288,6 @@ export default function AdminLayout() {
       {showF2F     && <F2FModal      onClose={() => setF2F(false)}     />}
       {showReg     && <RegisterModal onClose={() => setReg(false)}     />}
       {showLoan    && <NewLoanModal  onClose={() => setLoan(false)}    />}
-      {showSavings  && <SavingsModal       onClose={() => setShowSav(false)}   />}
-      {showShareCap && <ShareCapitalModal onClose={() => setShareCap(false)} />}
 
       <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebar(false)} />
 
@@ -1791,15 +1299,25 @@ export default function AdminLayout() {
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}>
-            <span className="nav-icon">{item.icon}</span>
-            {item.label}
-            {item.to === "/admin/gcash-verification" && gcashPending > 0 && (
-            <span style={{marginLeft:"auto",background:"#c62828",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:800}}>
-            {gcashPending}
-            </span>
-            )}
-            </NavLink>
+            // ── BAGO: kung "action" (hindi "to") ang meron, button na
+            // nagbubukas ng modal ito (Savings/Deposit, Share Capital
+            // Deposit) imbes na NavLink na nag-na-navigate. ──────────
+            item.action ? (
+              <button key={item.action} onClick={() => handleAction(item.action)} className="nav-item" style={{width:"100%",textAlign:"left",background:"none",border:"none",cursor:"pointer"}}>
+                <span className="nav-icon">{item.icon}</span>
+                {item.label}
+              </button>
+            ) : (
+              <NavLink key={item.to} to={item.to} className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}>
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+              {item.to === "/admin/gcash-verification" && gcashPending > 0 && (
+              <span style={{marginLeft:"auto",background:"#c62828",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:800}}>
+              {gcashPending}
+              </span>
+              )}
+              </NavLink>
+            )
           ))}
         </nav>
         <div className="sidebar-bottom">

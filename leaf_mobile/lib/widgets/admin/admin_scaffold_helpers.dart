@@ -25,6 +25,17 @@ class AdminScreenScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final int gcashPendingCount;
   final String? title; // opsyonal lang, hindi ginagamit sa topbar (laging "ADMIN")
+  // ── FIX: dating "Navigator.canPop(context)" ang ginamit para malaman
+  // kung kailangan ng extra menu button — pero HINDI ito maaasahan,
+  // dahil puwedeng "true" pa rin ito kahit sa mga top-level screens
+  // (hal. Dashboard) kung may mga screen pa sa ilalim nito sa navigation
+  // stack (login/splash, atbp.) — kaya doble pa ring lumalabas ang
+  // hamburger doon. Ngayon, EXPLICIT na flag na lang — ang BAWAT SCREEN
+  // MISMO ang nagsasabi kung kailangan niya ng dagdag na button (i.e.
+  // mga screen na binubuksan via Navigator.push, tulad ng
+  // SavingsDeposit/ShareCapitalDeposit), hindi na basta ambient
+  // detection. ─────────────────────────────────────────────────────────
+  final bool showMenuButton;
 
   const AdminScreenScaffold({
     super.key,
@@ -33,6 +44,7 @@ class AdminScreenScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.gcashPendingCount = 0,
     this.title,
+    this.showMenuButton = false,
   });
 
   void _onNavTap(BuildContext context, String routeKey) {
@@ -94,6 +106,17 @@ class AdminScreenScaffold extends StatelessWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         titleSpacing: 4,
+        // ── FIX: kapag may "drawer:" na naka-set, AWTOMATIKONG
+        // hamburger (hindi back arrow) ang ipinapakita ni Flutter sa
+        // "leading" — kahit poppable ang route. Dahil dito, nagiging
+        // DALAWANG HAMBURGER (magkatulad na icon) sa mga screen na
+        // "showMenuButton: true" (Savings/ShareCapital) sa halip na
+        // back+menu — dahil ang auto-leading ay hamburger pa rin,
+        // hindi back arrow, kaya doblado. Ngayon, kapag
+        // "showMenuButton: true", pinipilit nang explicit ang back
+        // arrow sa "leading" — ito ang nagbibigay-daan para magkasama
+        // ang back arrow (kaliwa) at hamburger (kanan, actions). ─────
+        leading: showMenuButton ? const BackButton() : null,
         title: const Text(
           'ADMIN',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _ScaffoldColors.brand, letterSpacing: -0.5),
@@ -103,6 +126,17 @@ class AdminScreenScaffold extends StatelessWidget {
           child: Container(height: 1, color: _ScaffoldColors.border),
         ),
         actions: [
+          // ── Ginagamit na ang explicit na "showMenuButton" flag
+          // (tingnan ang paliwanag sa itaas ng klase) sa halip na
+          // Navigator.canPop(context). ─────────────────────────────
+          if (showMenuButton)
+            Builder(
+              builder: (innerContext) => IconButton(
+                icon: const Icon(Icons.menu),
+                tooltip: 'Menu',
+                onPressed: () => Scaffold.of(innerContext).openDrawer(),
+              ),
+            ),
           PopupMenuButton<String>(
             tooltip: 'Account',
             offset: const Offset(0, 44),

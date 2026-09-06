@@ -114,7 +114,32 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               Expanded(child: _BalBox(label: 'Balance', value: '₱${_balance.toStringAsFixed(0)}', color: _RPColors.red, highlight: true)),
               const SizedBox(width: 6),
               Expanded(child: _BalBox(label: 'Monthly Due', value: '₱${(double.tryParse('${loan['monthly_due'] ?? 0}') ?? 0).toStringAsFixed(0)}', color: _RPColors.green)),
+              const SizedBox(width: 6),
+              // ── BAGO: Term — kulang dati dito, tulad ng nakita sa
+              // web (LoanPayment.jsx RecordModal) na kailangang idagdag. ──
+              Expanded(child: _BalBox(label: 'Term', value: '${loan['term_months'] ?? '—'} months', color: const Color(0xFF333333))),
             ]),
+            // ── BAGO: penalty breakdown — 2% ng Monthly Due kada
+            // buwang naliban, naka-dagdag na sa Balance sa itaas.
+            // Ipinapakita lang ito kapag may naipong penalty. ──────────
+            if ((double.tryParse('${loan['total_penalty'] ?? 0}') ?? 0) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFFCE4EC), border: Border.all(color: const Color(0xFFF8BBD0)), borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFC62828)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Includes ₱${(double.tryParse('${loan['total_penalty']}') ?? 0).toStringAsFixed(0)} penalty (${loan['months_overdue_penalized'] ?? 0} month${(loan['months_overdue_penalized'] ?? 0) != 1 ? "s" : ""} overdue × 2% of Monthly Due)',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFFC62828), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
             const SizedBox(height: 16),
 
             const Text('Payment Amount (₱) *', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _RPColors.sub)),
@@ -162,7 +187,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                   _PrevRow('Current balance', '₱${_balance.toStringAsFixed(0)}'),
                   _PrevRow('Payment', '− ₱${_parsed.toStringAsFixed(0)}', color: _RPColors.red),
                   const Divider(),
-                  _PrevRow('New balance', _newBalance == 0 ? '₱0 — FULLY PAID 🎉' : '₱${_newBalance.toStringAsFixed(0)}', bold: true, color: _newBalance == 0 ? _RPColors.green : _RPColors.title),
+                  _PrevRow('New balance', _newBalance == 0 ? '₱0 — FULLY PAID' : '₱${_newBalance.toStringAsFixed(0)}', bold: true, color: _newBalance == 0 ? _RPColors.green : _RPColors.title, icon: _newBalance == 0 ? Icons.celebration : null),
                 ]),
               ),
             ],
@@ -220,7 +245,8 @@ class _PrevRow extends StatelessWidget {
   final String value;
   final bool bold;
   final Color? color;
-  const _PrevRow(this.label, this.value, {this.bold = false, this.color});
+  final IconData? icon;
+  const _PrevRow(this.label, this.value, {this.bold = false, this.color, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +254,10 @@ class _PrevRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: TextStyle(fontSize: bold ? 13 : 12, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: bold ? (color ?? _RPColors.title) : const Color(0xFF555555))),
-        Text(value, style: TextStyle(fontSize: bold ? 13 : 12, fontWeight: FontWeight.w700, color: color ?? const Color(0xFF333333))),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(value, style: TextStyle(fontSize: bold ? 13 : 12, fontWeight: FontWeight.w700, color: color ?? const Color(0xFF333333))),
+          if (icon != null) ...[const SizedBox(width: 5), Icon(icon, size: 15, color: color)],
+        ]),
       ]),
     );
   }

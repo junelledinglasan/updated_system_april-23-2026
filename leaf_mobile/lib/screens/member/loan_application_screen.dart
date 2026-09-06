@@ -16,26 +16,38 @@ class _LAColors {
   static const border = Color(0xFFE4F0E5);
 }
 
+// ── BAGO: hindi na naka-cap ng "maxAmt" ang bawat loan type — base sa
+// hiling mismo, ang halagang pwedeng utangin ng miyembro ay depende
+// LAMANG sa kanyang Max Loanable (Share Capital × 2 / natitirang
+// room), hindi sa partikular na loan type na pinili. Term limit lang
+// (maxTerm) ang natitirang restriction per type.
+// ── BAGO: 4 na bagong loan types (Regular, Petty Cash, Appliance,
+// ATM) — pinalitan ang dating 5 (Regular, Emergency, Salary, Housing,
+// Business). Ang mga maxTerm dito ay panimulang default lang — sabihin
+// kung may ibang gusto ng halaga. ─────────────────────────────────────
+// ── BAGO: dating may hiwalay na "maxTerm" per loan type (Regular:24,
+// Petty Cash:6, Appliance:24, ATM:12) — ngayon 1-12 buwan na lang para
+// sa LAHAT ng types, tugma na sa admin F2F application. Tinanggal na
+// ang "maxTerm" field dahil hindi na ito ginagamit. ────────────────────
 const List<Map<String, dynamic>> kLoanTypes = [
-  {'type': 'Regular Loan', 'icon': Icons.home_outlined, 'color': Color(0xFF2E7D32), 'bg': Color(0xFFE8F5E9), 'border': Color(0xFFA5D6A7), 'desc': 'For personal or household needs', 'maxAmt': 50000, 'maxTerm': 24},
-  {'type': 'Emergency Loan', 'icon': Icons.warning_amber_rounded, 'color': Color(0xFFC62828), 'bg': Color(0xFFFCE4EC), 'border': Color(0xFFEF9A9A), 'desc': 'For urgent and unexpected expenses', 'maxAmt': 20000, 'maxTerm': 12},
-  {'type': 'Salary Loan', 'icon': Icons.work_outline, 'color': Color(0xFF1565C0), 'bg': Color(0xFFE3F2FD), 'border': Color(0xFF90CAF9), 'desc': 'Based on your monthly salary', 'maxAmt': 30000, 'maxTerm': 12},
-  {'type': 'Housing Loan', 'icon': Icons.construction_outlined, 'color': Color(0xFFE65100), 'bg': Color(0xFFFFF8E1), 'border': Color(0xFFFFCC80), 'desc': 'For home repair or construction', 'maxAmt': 100000, 'maxTerm': 48},
-  {'type': 'Business Loan', 'icon': Icons.storefront_outlined, 'color': Color(0xFF6A1B9A), 'bg': Color(0xFFF3E5F5), 'border': Color(0xFFCE93D8), 'desc': 'For business capital or expansion', 'maxAmt': 80000, 'maxTerm': 36},
+  {'type': 'Regular Loan', 'icon': Icons.home_outlined, 'color': Color(0xFF2E7D32), 'bg': Color(0xFFE8F5E9), 'border': Color(0xFFA5D6A7), 'desc': 'For personal or household needs'},
+  {'type': 'Petty Cash Loan', 'icon': Icons.account_balance_wallet_outlined, 'color': Color(0xFFC62828), 'bg': Color(0xFFFCE4EC), 'border': Color(0xFFEF9A9A), 'desc': 'For small, immediate cash needs'},
+  {'type': 'Appliance Loan', 'icon': Icons.shopping_bag_outlined, 'color': Color(0xFF1565C0), 'bg': Color(0xFFE3F2FD), 'border': Color(0xFF90CAF9), 'desc': 'For purchasing home appliances'},
+  {'type': 'ATM Loan', 'icon': Icons.credit_card_outlined, 'color': Color(0xFF6A1B9A), 'bg': Color(0xFFF3E5F5), 'border': Color(0xFFCE93D8), 'desc': 'Quick cash loan released via ATM/card'},
 ];
 
 const Map<String, Map<String, dynamic>> kStatusMeta = {
-  'For Review': {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'label': '⏳ For Review'},
+  'For Review': {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'icon': Icons.hourglass_empty, 'label': 'For Review'},
   // ── BAGO: hiwalay na type mula sa "Active" — na-approve na pero
   // hindi pa na-"Confirm Release" (waiting for release sa opisina). ──
-  'Approved':   {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'label': '📦 Approved — For Release'},
-  'Active':     {'bg': Color(0xFFE8F5E9), 'color': Color(0xFF2E7D32), 'label': '✅ Active'},
-  'Declined':   {'bg': Color(0xFFFCE4EC), 'color': Color(0xFFC62828), 'label': '❌ Declined'},
-  'Completed':  {'bg': Color(0xFFE3F2FD), 'color': Color(0xFF1565C0), 'label': '✔ Completed'},
-  'Overdue':    {'bg': Color(0xFFFFEBEE), 'color': Color(0xFFB71C1C), 'label': '⚠️ Overdue'},
+  'Approved':   {'bg': Color(0xFFFFF8E1), 'color': Color(0xFFE65100), 'icon': Icons.inventory_2_outlined, 'label': 'Approved — For Release'},
+  'Active':     {'bg': Color(0xFFE8F5E9), 'color': Color(0xFF2E7D32), 'icon': Icons.check_circle_outline, 'label': 'Active'},
+  'Declined':   {'bg': Color(0xFFFCE4EC), 'color': Color(0xFFC62828), 'icon': Icons.cancel_outlined, 'label': 'Declined'},
+  'Completed':  {'bg': Color(0xFFE3F2FD), 'color': Color(0xFF1565C0), 'icon': Icons.task_alt, 'label': 'Completed'},
+  'Overdue':    {'bg': Color(0xFFFFEBEE), 'color': Color(0xFFB71C1C), 'icon': Icons.warning_amber_rounded, 'label': 'Overdue'},
   // ── BAGO: kapag ang MEMBER MISMO ang nag-cancel ng sarili niyang
   // "For Review" application (hiwalay sa "Declined" na galing sa admin). ──
-  'Cancelled':  {'bg': Color(0xFFF5F5F5), 'color': Color(0xFF777777), 'label': '🚫 Cancelled'},
+  'Cancelled':  {'bg': Color(0xFFF5F5F5), 'color': Color(0xFF777777), 'icon': Icons.block, 'label': 'Cancelled'},
 };
 
 String _peso(num v) {
@@ -60,6 +72,8 @@ class LoanApplicationScreen extends StatefulWidget {
 class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
   int _step = 1;
   double _shareCapital = 0;
+  // ── BAGO: admin-editable na Loan Multiplier (1x/2x/3x). ─────────────
+  int _loanMultiplier = 1;
   double _monthlyIncome = 0;
   String _classification = 'Employed';
   bool _loadingProfile = true;
@@ -69,6 +83,13 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
 
   String? _selType;
   final _amountCtrl = TextEditingController();
+  // ── BAGO: para sa "scroll-to-error" — kapag may hindi na-fill na
+  // required field, awtomatikong mag-s-scroll at mag-fo-focus dito
+  // imbes na basta magpakita ng error text na baka hindi mapansin. ────
+  final _amountFieldKey = GlobalKey();
+  final _purposeFieldKey = GlobalKey();
+  final _amountFocus = FocusNode();
+  final _purposeFocus = FocusNode();
   int _term = 12;
   final _purposeCtrl = TextEditingController();
   final _collateralCtrl = TextEditingController();
@@ -96,6 +117,8 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
   void dispose() {
     _amountCtrl.dispose();
     _purposeCtrl.dispose();
+    _amountFocus.dispose();
+    _purposeFocus.dispose();
     _collateralCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
@@ -112,6 +135,10 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
       if (mounted) {
         setState(() {
           _shareCapital = double.tryParse('${p['share_capital'] ?? 0}') ?? 0;
+          // ── BAGO: admin-editable na Loan Multiplier (1x/2x/3x) —
+          // dating naka-hardcode na "× 2", ngayon galing na sa member
+          // profile (na sine-set ng admin sa Manage Member). ──────────
+          _loanMultiplier = int.tryParse('${p['loan_multiplier'] ?? 1}') ?? 1;
           _monthlyIncome = inc;
           _classification = '${p['classification'] ?? 'Employed'}';
           _loadingProfile = false;
@@ -144,7 +171,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
   Map<String, dynamic> get _eligibility {
     final issues = <String>[];
     final passed = <String>[];
-    final maxLoanable = _shareCapital * 2;
+    final maxLoanable = _shareCapital * _loanMultiplier;
     final active = _myLoans.where((l) => l['status'] == 'Active').toList();
     final overdue = _myLoans.where((l) => l['status'] == 'Overdue').toList();
     final pending = _myLoans.where((l) => l['status'] == 'For Review').toList();
@@ -165,28 +192,65 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     } else {
       issues.add('You have ${overdue.length} overdue loan(s): ${overdue.map((l) => l['loan_id']).join(', ')}. Please settle them first.');
     }
-    // ── BAGO: hiwalay ang message para sa "Approved" (for release)
-    // laban sa "Active"/"For Review" — iba ang kailangang gawin ng
-    // member sa bawat isa. ─────────────────────────────────────────
+    // ── BAGO: hindi na basta na lang hinaharang ang bagong application
+    // kapag may aktibong loan — kung "at least half" (≥50%) na nabayaran
+    // ANG LAHAT ng aktibong loan, puwede pa ring mag-apply, PERO ang
+    // matitirang "loanable capacity" (Max Loanable minus ORIGINAL na
+    // halaga ng aktibong loan) ang magiging bagong hangganan — hindi na
+    // ang buong Max Loanable. ─────────────────────────────────────────
+    final activeLoanTotal = active.fold<double>(0, (s, l) => s + (double.tryParse('${l['amount'] ?? 0}') ?? 0));
+    final availableToBorrow = (maxLoanable - activeLoanTotal).clamp(0, double.infinity);
+    final allActiveHalfPaid = active.every((l) {
+      final amt = double.tryParse('${l['amount'] ?? 0}') ?? 0;
+      final bal = double.tryParse('${l['balance'] ?? 0}') ?? 0;
+      if (amt <= 0) return true;
+      return (amt - bal) / amt >= 0.5;
+    });
+
     if (active.isEmpty && approved.isEmpty && pending.isEmpty) {
       passed.add('No existing active or pending loans');
     } else {
       if (approved.isNotEmpty) {
-        issues.add('📦 You have ${approved.length} approved loan(s) ready for release: ${approved.map((l) => l['loan_id']).join(', ')}. Please visit the LEAF MPC office to claim your funds first.');
+        issues.add('You have ${approved.length} approved loan(s) ready for release: ${approved.map((l) => l['loan_id']).join(', ')}. Please visit the LEAF MPC office to claim your funds first.');
       }
-      final activePending = [...active, ...pending];
-      if (activePending.isNotEmpty) {
-        issues.add('You have ${activePending.length} active/pending loan(s): ${activePending.map((l) => l['loan_id']).join(', ')}. Complete them before applying for a new one.');
+      if (pending.isNotEmpty) {
+        issues.add('You have ${pending.length} pending loan(s): ${pending.map((l) => l['loan_id']).join(', ')}. Please wait for admin review before applying again.');
+      }
+      if (active.isNotEmpty) {
+        if (!allActiveHalfPaid) {
+          issues.add('You have ${active.length} active loan(s) that are less than 50% paid: ${active.map((l) => l['loan_id']).join(', ')}. Pay at least half before applying for another loan.');
+        } else if (availableToBorrow < 3000) {
+          issues.add("You've paid enough of your active loan to qualify for another, but your remaining loanable capacity is too small to apply for a new loan.");
+        } else {
+          passed.add("You've paid at least half of your active loan — you may apply for another within your remaining ${_peso(availableToBorrow)} loanable capacity.");
+        }
       }
     }
     if (completed.isNotEmpty) passed.add('Good payment history: ${completed.length} completed loan(s)');
 
-    return {'eligible': issues.isEmpty, 'issues': issues, 'passed': passed, 'maxLoanable': maxLoanable, 'approvedLoans': approved};
+    // ── "loanableCap" — ito na ang totoong hangganan ng bagong
+    // application (hindi na basta maxLoanable) kapag may aktibong loan
+    // pa na kasalukuyang binabayaran. ───────────────────────────────────
+    final loanableCap = active.isNotEmpty && allActiveHalfPaid ? availableToBorrow : maxLoanable;
+
+    // ── BAGO: "restrictedType" — kapag may aktibong loan na (kahit
+    // 50%+ na nabayaran, kwalipikado nang mag-apply ulit), dapat
+    // KAPAREHONG uri ng loan ang susunod na application — hindi
+    // puwedeng lumipat sa ibang klase habang may aktibo pa. Kung
+    // magkaiba-iba ang type ng mga aktibong loan (bihirang senaryo),
+    // gagamitin na lang ang type ng unang aktibong loan. ─────────────
+    final String? restrictedType = active.isNotEmpty ? '${active.first['loan_type']}' : null;
+
+    return {'eligible': issues.isEmpty, 'issues': issues, 'passed': passed, 'maxLoanable': maxLoanable, 'loanableCap': loanableCap, 'approvedLoans': approved, 'restrictedType': restrictedType};
   }
 
   // ── Loan Recommendation Engine — parehong logic sa web ──────────────
   Map<String, dynamic> get _recommendation {
-    final maxLoanable = _shareCapital * 2;
+    // ── BAGO: gamit na ang "loanableCap" (natitirang room kapag may
+    // aktibong loan na 50%+ nabayaran) imbes na basta "_shareCapital * 2"
+    // — dati, hindi pa naka-wire kaya lagi na lang buong Max Loanable
+    // ang ginagamit sa recommendation, kahit may active loan pa. ────────
+    final maxLoanable = _eligibility['loanableCap'] as double;
     final completed = _myLoans.where((l) => l['status'] == 'Completed').length;
     final hasGoodHistory = completed > 0;
 
@@ -208,13 +272,16 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
       }
     }
 
-    String recType = 'Regular Loan';
-    if (_classification == 'Student') recType = 'Emergency Loan';
-    if (_classification == 'Senior') recType = 'Regular Loan';
-    if (_classification == 'Employed') recType = _monthlyIncome >= 15000 ? 'Salary Loan' : 'Regular Loan';
+    // ── BAGO: kung may "restrictedType" (may aktibong loan na ang
+    // miyembro), KAILANGANG kaparehong type ang irekomenda, hindi na
+    // base sa classification. Kung wala pang aktibong loan, "Regular
+    // Loan" na lang ang default (wala nang "Emergency"/"Salary" na
+    // klase sa bagong 4 na loan types). ─────────────────────────────
+    final String recType = (_eligibility['restrictedType'] as String?) ?? 'Regular Loan';
 
     final interest = rate * recAmount * recTerm;
-    final monthlyDue = (recAmount + interest) / recTerm;
+    // ── FIX: parehong ayos ng _monthlyEst sa itaas. ──────────────────
+    final monthlyDue = recAmount / recTerm;
     final debtRatio = _monthlyIncome > 0 ? (monthlyDue / _monthlyIncome) * 100 : 0.0;
 
     return {
@@ -235,11 +302,13 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
   double get _sc => _amount * 0.03;
   double get _totalDed => _interest + _serviceFee + _filingFee + _insurance + _sd + _sc;
   double get _netProceeds => _amount - _totalDed;
-  double get _monthlyEst => _amount > 0 ? (_amount + _interest) / _term : 0;
+  // ── FIX: dating "(_amount + _interest) / _term" — dito ang aktwal
+  // na bug, hindi lang sa display. Kaparehong ayos ng backend at web. ──
+  double get _monthlyEst => _amount > 0 ? _amount / _term : 0;
 
   Map<String, String> _validate() {
     final e = <String, String>{};
-    final maxLoanable = (_eligibility['maxLoanable'] as double);
+    final maxLoanable = (_eligibility['loanableCap'] as double);
     if (_amount < 3000) {
       e['amount'] = 'Minimum loan amount is ₱3,000.';
     } else if (_amount > maxLoanable) {
@@ -247,6 +316,20 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     }
     if (_purposeCtrl.text.trim().isEmpty) e['purpose'] = 'Purpose is required.';
     return e;
+  }
+
+  // ── BAGO: mag-scroll at mag-focus sa UNANG hindi napunan na
+  // required field, sundin ang pagkakasunod-sunod sa form (amount
+  // muna, tapos purpose). ─────────────────────────────────────────────
+  void _scrollToFirstError(Map<String, String> errs) {
+    GlobalKey? key;
+    FocusNode? focus;
+    if (errs['amount'] != null) { key = _amountFieldKey; focus = _amountFocus; }
+    else if (errs['purpose'] != null) { key = _purposeFieldKey; focus = _purposeFocus; }
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 300), alignment: 0.2);
+      Future.delayed(const Duration(milliseconds: 320), () => focus?.requestFocus());
+    }
   }
 
   // ── BAGO: buksan ang form sa edit mode, prefilled ng existing data
@@ -317,7 +400,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
       builder: (context) => StatefulBuilder(builder: (context, setSt) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('⚠️ Cancel this application?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _LAColors.red)),
+          title: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.warning_amber_rounded, size: 20, color: _LAColors.red), SizedBox(width: 8), Flexible(child: Text('Cancel this application?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _LAColors.red)))]),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,6 +460,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     final errs = _validate();
     if (errs.isNotEmpty) {
       setState(() => _errors..clear()..addAll(errs));
+      _scrollToFirstError(errs);
       return;
     }
     setState(() { _formError = ''; _submitting = true; });
@@ -468,7 +552,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                     _MiniStat('Monthly Due', _peso(double.tryParse('${loan['monthly_due'] ?? 0}') ?? 0)),
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const Text('STATUS', style: TextStyle(fontSize: 9, color: _LAColors.sub, fontWeight: FontWeight.w700)),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Text('${st['label']}', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: st['color'] as Color))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(st['icon'] as IconData, size: 11, color: st['color'] as Color), const SizedBox(width: 4), Text('${st['label']}', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: st['color'] as Color))])),
                     ]),
                   ]),
                 ),
@@ -508,6 +592,19 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
     if (_submitted) return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildSuccess());
     if (_editedNotice) return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildEditedSuccess());
 
+    // ── BAGO: awtomatikong piliin ang restricted type kapag may
+    // aktibong loan na (kwalipikado nang mag-apply ulit) at wala pang
+    // napipiling type — para hindi na kailangang pang i-click pa ng
+    // member ang nag-iisang available na choice. Hindi ito ginagawa
+    // habang naka-edit mode (may sarili nang type na ang loan na
+    // ino-edit). ─────────────────────────────────────────────────────
+    final restrictedType = _eligibility['restrictedType'] as String?;
+    if (restrictedType != null && _selType == null && _editingId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selType == null) setState(() => _selType = restrictedType);
+      });
+    }
+
     return MemberScreenScaffold(activeRouteKey: 'apply-loan', body: _buildForm());
   }
 
@@ -518,7 +615,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _LAColors.border)),
         child: Column(children: [
-          const Text('✅', style: TextStyle(fontSize: 48)),
+          const Icon(Icons.check_circle, size: 48, color: _LAColors.green),
           const SizedBox(height: 12),
           const Text('Application Submitted!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _LAColors.dark)),
           const SizedBox(height: 10),
@@ -539,7 +636,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('📋 Your Loan Applications', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.green)),
+                  Row(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.list_alt, size: 15, color: _LAColors.green), SizedBox(width: 6), Text('Your Loan Applications', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.green))]),
                   ..._myLoans.map((l) => _LoanHistoryItem(loan: l, onTap: () => _openLoanDetail(l))),
                 ],
               ),
@@ -572,7 +669,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _LAColors.border)),
         child: Column(children: [
-          const Text('✅', style: TextStyle(fontSize: 48)),
+          const Icon(Icons.check_circle, size: 48, color: _LAColors.green),
           const SizedBox(height: 12),
           const Text('Application Updated!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _LAColors.dark)),
           const SizedBox(height: 10),
@@ -624,7 +721,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(color: const Color(0xFFFFF3E0), border: Border.all(color: const Color(0xFFFFB74D)), borderRadius: BorderRadius.circular(10)),
               child: Row(children: [
-                Expanded(child: Text('⚠️ $_staleNotice', style: const TextStyle(fontSize: 11.5, color: Color(0xFF7A4A00)))),
+                Expanded(child: Row(children: [const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFF7A4A00)), const SizedBox(width: 6), Expanded(child: Text(_staleNotice, style: const TextStyle(fontSize: 11.5, color: Color(0xFF7A4A00))))])),
                 InkWell(onTap: () => setState(() => _staleNotice = ''), child: const Icon(Icons.close, size: 16, color: Color(0xFF7A4A00))),
               ]),
             ),
@@ -638,7 +735,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(color: const Color(0xFFE3F2FD), border: Border.all(color: const Color(0xFF90CAF9)), borderRadius: BorderRadius.circular(10)),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('✏️ Editing your submitted application', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _LAColors.blue)),
+                Row(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.edit_outlined, size: 14, color: _LAColors.blue), SizedBox(width: 6), Text('Editing your submitted application', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _LAColors.blue))]),
                 InkWell(onTap: _handleCancelEdit, child: const Text('Cancel Edit', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _LAColors.blue, decoration: TextDecoration.underline))),
               ]),
             ),
@@ -653,7 +750,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFFF3E0), Color(0xFFFFE0B2)]), border: Border.all(color: const Color(0xFFFFB74D)), borderRadius: BorderRadius.circular(12)),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('📦', style: TextStyle(fontSize: 26)),
+                const Icon(Icons.inventory_2_outlined, size: 26, color: Color(0xFFE65100)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -707,7 +804,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                 // talaga "Active". ─────────────────────────────────────
                 Wrap(spacing: 10, runSpacing: 8, children: [
                   _StatChip('Share Capital', _peso(_shareCapital), _LAColors.dark),
-                  _StatChip('Max Loanable (×2)', _peso(elig['maxLoanable'] as double), _LAColors.blue),
+                  _StatChip('Max Loanable (×$_loanMultiplier)', _peso(elig['maxLoanable'] as double), _LAColors.blue),
                   _StatChip('Active Loans', '${_myLoans.where((l) => ['Active', 'Overdue'].contains(l['status'])).length}', _myLoans.where((l) => ['Active', 'Overdue'].contains(l['status'])).isNotEmpty ? _LAColors.red : _LAColors.green),
                   _StatChip('For Release', '${approvedLoans.length}', approvedLoans.isNotEmpty ? const Color(0xFFE65100) : _LAColors.green),
                   _StatChip('Completed Loans', '${_myLoans.where((l) => l['status'] == 'Completed').length}', _LAColors.green),
@@ -727,7 +824,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Text('💡', style: TextStyle(fontSize: 16))),
+                    Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.lightbulb_outline, size: 16, color: Colors.white)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -741,12 +838,12 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                   ]),
                   const SizedBox(height: 12),
                   Row(children: [
-                    Expanded(child: _RecCard(icon: '📋', label: 'Recommended Type', value: '${rec['type']}', sub: 'Best for your profile')),
+                    Expanded(child: _RecCard(icon: Icons.list_alt, label: 'Recommended Type', value: '${rec['type']}', sub: 'Best for your profile')),
                     const SizedBox(width: 8),
-                    Expanded(child: _RecCard(icon: '💰', label: 'Recommended Amount', value: _peso(rec['amount']), sub: 'Max: ${_peso(rec['maxLoanable'])}')),
+                    Expanded(child: _RecCard(icon: Icons.account_balance_wallet_outlined, label: 'Recommended Amount', value: _peso(rec['amount']), sub: 'Max: ${_peso(rec['maxLoanable'])}')),
                   ]),
                   const SizedBox(height: 8),
-                  _RecCard(icon: '📅', label: 'Recommended Term', value: '${rec['term']} months', sub: rec['monthlyIncome'] > 0 ? 'Monthly due: ${_peso(rec['monthlyDue'])}' : 'Based on loan amount'),
+                  _RecCard(icon: Icons.calendar_today_outlined, label: 'Recommended Term', value: '${rec['term']} months', sub: rec['monthlyIncome'] > 0 ? 'Monthly due: ${_peso(rec['monthlyDue'])}' : 'Based on loan amount'),
                   if (rec['monthlyIncome'] > 0) ...[
                     const SizedBox(height: 10),
                     Container(
@@ -801,7 +898,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                 InkWell(
                   onTap: () => setState(() => _showHistory = !_showHistory),
                   child: Row(children: [
-                    Expanded(child: Text('📋 My Loan Applications (${_myLoans.length})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _LAColors.dark))),
+                    Expanded(child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.list_alt, size: 15, color: _LAColors.dark), const SizedBox(width: 6), Flexible(child: Text('My Loan Applications (${_myLoans.length})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _LAColors.dark)))])),
                     Text(_showHistory ? '▲ Hide' : '▼ Show', style: const TextStyle(fontSize: 11, color: _LAColors.sub)),
                   ]),
                 ),
@@ -864,6 +961,11 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
   }
 
   Widget _buildStep1() {
+    final restrictedType = _eligibility['restrictedType'] as String?;
+    final visibleTypes = restrictedType != null
+        ? kLoanTypes.where((lt) => lt['type'] == restrictedType).toList()
+        : kLoanTypes;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _LAColors.border)),
@@ -871,8 +973,20 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Choose Loan Type', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _LAColors.dark)),
-          const SizedBox(height: 14),
-          ...kLoanTypes.map((lt) {
+          const SizedBox(height: 10),
+          // ── BAGO: kapag may aktibong loan na (kwalipikado nang mag-
+          // apply ulit dahil 50%+ na nabayaran), dapat kaparehong type
+          // lang ang pinipili sa susunod na loan. ─────────────────────
+          if (restrictedType != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), border: Border.all(color: const Color(0xFF90CAF9)), borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [const Icon(Icons.lock_outline, size: 14, color: _LAColors.blue), const SizedBox(width: 6), Expanded(child: Text('You have an active $restrictedType, so your next loan must also be a $restrictedType.', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _LAColors.blue)))]),
+            ),
+            const SizedBox(height: 10),
+          ],
+          ...visibleTypes.map((lt) {
             final selected = _selType == lt['type'];
             return InkWell(
               onTap: () => setState(() => _selType = lt['type'] as String),
@@ -889,7 +1003,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                       children: [
                         Text('${lt['type']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.dark)),
                         Text('${lt['desc']}', style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
-                        Text('Up to ${_peso(lt['maxAmt'])} · ${lt['maxTerm']} months max', style: const TextStyle(fontSize: 10, color: _LAColors.sub, fontWeight: FontWeight.w600)),
+                        Text('Up to 12 months', style: const TextStyle(fontSize: 10, color: _LAColors.sub, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -925,8 +1039,11 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
 
   Widget _buildStep2() {
     final type = _selectedType!;
-    final maxLoanable = _eligibility['maxLoanable'] as double;
-    final availTerms = [3, 6, 9, 12, 18, 24, 36, 48].where((t) => t <= (type['maxTerm'] as int)).toList();
+    final maxLoanable = _eligibility['loanableCap'] as double;
+    // ── BAGO: dating "jump" na options (3,6,9,12,18,24,36,48) na may
+    // hiwalay na limitasyon per loan type — ngayon sunod-sunod na 1-12
+    // buwan para sa LAHAT ng types, tugma na sa admin F2F application. ──
+    final availTerms = List.generate(12, (i) => i + 1);
     final showComp = _amount >= 3000 && _selType != null;
 
     return Container(
@@ -948,6 +1065,8 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
           Text.rich(TextSpan(text: 'LOAN AMOUNT (₱)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF888888), letterSpacing: 0.4), children: const [TextSpan(text: ' *', style: TextStyle(color: _LAColors.red))])),
           const SizedBox(height: 6),
           TextField(
+            key: _amountFieldKey,
+            focusNode: _amountFocus,
             controller: _amountCtrl,
             keyboardType: TextInputType.number,
             // ── Hindi na basta-basta makakatype nang lalampas sa max
@@ -961,7 +1080,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
             onChanged: (_) { setState(() => _errors.remove('amount')); },
             decoration: InputDecoration(prefixText: '₱ ', hintText: 'Min ₱3,000 — Max ${_peso(maxLoanable)}', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _errors['amount'] != null ? _LAColors.red : const Color(0xFFE0E0E0))), errorText: _errors['amount']),
           ),
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text.rich(TextSpan(text: 'Max loanable: ', style: const TextStyle(fontSize: 10, color: Color(0xFF888888)), children: [TextSpan(text: _peso(maxLoanable), style: const TextStyle(color: _LAColors.blue, fontWeight: FontWeight.w700)), const TextSpan(text: ' (Share Capital × 2)')]))),
+          Padding(padding: const EdgeInsets.only(top: 4), child: Text.rich(TextSpan(text: 'Max loanable: ', style: const TextStyle(fontSize: 10, color: Color(0xFF888888)), children: [TextSpan(text: _peso(maxLoanable), style: const TextStyle(color: _LAColors.blue, fontWeight: FontWeight.w700)), TextSpan(text: ' (Share Capital × $_loanMultiplier)')]))),
           const SizedBox(height: 14),
 
           const Text('LOAN TERM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF888888), letterSpacing: 0.4)),
@@ -977,6 +1096,8 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
           Text.rich(TextSpan(text: 'PURPOSE', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF888888), letterSpacing: 0.4), children: const [TextSpan(text: ' *', style: TextStyle(color: _LAColors.red))])),
           const SizedBox(height: 6),
           TextField(
+            key: _purposeFieldKey,
+            focusNode: _purposeFocus,
             controller: _purposeCtrl,
             maxLines: 3,
             onChanged: (_) => setState(() => _errors.remove('purpose')),
@@ -1019,7 +1140,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: _LAColors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
                 onPressed: () {
                   final e = _validate();
-                  if (e.isNotEmpty) { setState(() => _errors..clear()..addAll(e)); return; }
+                  if (e.isNotEmpty) { setState(() => _errors..clear()..addAll(e)); _scrollToFirstError(e); return; }
                   setState(() => _step = 3);
                 },
                 child: const Text('Next: Review →', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1036,13 +1157,17 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFC8E6C9))),
       child: Column(
         children: [
-          Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), color: _LAColors.dark, child: const Text('🧮 Loan Computation (LEAF MPC)', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+          Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), color: _LAColors.dark, child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.calculate_outlined, size: 14, color: Colors.white), SizedBox(width: 6), Text('Loan Computation (LEAF MPC)', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))])),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             color: const Color(0xFFF1F8E9),
             child: Column(children: [
-              _CompRow('Interest Rate', '${(_monthlyRate * 100).toStringAsFixed(3)}% / mo × $_term months'),
+              // ── FIX: dating may hiwalay na "Interest Rate" row dito
+              // PLUS rate details na nasa loob na rin ng "Interest"
+              // deduction row sa ibaba — nagmumukhang naka-doble ang
+              // kaltas kahit hindi naman. Tinanggal na ang linyang ito,
+              // nasa "Interest" deduction row na lang ang rate info. ──
               _CompRow('Total Interest', '₱${_interest.toStringAsFixed(2)}', color: const Color(0xFFE65100)),
               const Divider(height: 16),
               _CompRow('Monthly Amortization', '₱${_monthlyEst.toStringAsFixed(2)}', color: _LAColors.green, bold: true),
@@ -1055,7 +1180,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('💰 Upfront Deductions (from Loan Release)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+                Row(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.account_balance_wallet_outlined, size: 12, color: Color(0xFF555555)), SizedBox(width: 5), Text('Upfront Deductions (from Loan Release)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF555555)))]),
                 const SizedBox(height: 6),
                 _CompRow('Loan Amount', _peso(_amount)),
                 const Divider(height: 12),
@@ -1146,7 +1271,7 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFBBDEFB))),
-            child: const Text('📋 By submitting, you confirm that all information provided is accurate. The admin will evaluate your application and notify you of the result.', style: TextStyle(fontSize: 11.5, color: _LAColors.blue, height: 1.5)),
+            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.info_outline, size: 15, color: _LAColors.blue), SizedBox(width: 8), Expanded(child: Text('By submitting, you confirm that all information provided is accurate. The admin will evaluate your application and notify you of the result.', style: TextStyle(fontSize: 11.5, color: _LAColors.blue, height: 1.5)))]),
           ),
           const SizedBox(height: 16),
           if (_editingId != null) ...[
@@ -1223,7 +1348,8 @@ class _StatChip extends StatelessWidget {
 }
 
 class _RecCard extends StatelessWidget {
-  final String icon, label, value, sub;
+  final IconData icon;
+  final String label, value, sub;
   const _RecCard({required this.icon, required this.label, required this.value, required this.sub});
 
   @override
@@ -1235,7 +1361,7 @@ class _RecCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 15)),
+          Icon(icon, size: 18, color: Colors.white),
           const SizedBox(height: 3),
           Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.6))),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -1314,7 +1440,7 @@ class _LoanHistoryItem extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(_peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _LAColors.dark)),
                 const SizedBox(height: 3),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Text('${st['label']}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: st['color'] as Color))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2), decoration: BoxDecoration(color: st['bg'] as Color, borderRadius: BorderRadius.circular(20)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(st['icon'] as IconData, size: 10, color: st['color'] as Color), const SizedBox(width: 4), Text('${st['label']}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: st['color'] as Color))])),
               ]),
             ]),
             if (canManage)

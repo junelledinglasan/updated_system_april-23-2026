@@ -21,6 +21,11 @@ import LoanPayment         from "./components/admin/LoanPayment";
 import Announcement        from "./components/admin/Announcement";
 import Reports             from "./components/admin/Reports";
 import GCashVerification   from "./components/admin/GCashVerification";
+// ── BAGO: dating overlay modals lang ito (state-toggled sa loob ng
+// AdminLayout.jsx) — ngayon sarili nang FILES/ROUTES, dahil nasa
+// sidebar na sila bilang tunay na nav items. ─────────────────────────
+import SavingsDeposit      from "./components/admin/SavingsDeposit";
+import ShareCapitalDeposit from "./components/admin/ShareCapitalDeposit";
 
 // Staff components
 import StaffHome           from "./components/staff/StaffHome";
@@ -65,6 +70,9 @@ export default function App() {
             <Route path="gcash-verification" element={<GCashVerification />}  />
             <Route path="announcement"       element={<Announcement />}       />
             <Route path="reports"            element={<Reports />}            />
+            {/* ── BAGO: dating modals, ngayon sariling routes na. ──── */}
+            <Route path="savings-deposit"       element={<SavingsDeposit />}       />
+            <Route path="share-capital-deposit" element={<ShareCapitalDeposit />}  />
           </Route>
 
           {/* ── Staff Routes ── */}

@@ -12,15 +12,20 @@ class _MSColors {
   static const blue   = Color(0xFF1565C0);
 }
 
+// ── FIX: nawawala dati ang "Bookkeeper" dito — meron naman itong
+// default features ('reports') sa buong system, pero hindi ito
+// puwedeng piliin kapag gumagawa ng bagong staff account. ───────────
 const Map<String, String> kStaffRoleLabels = {
   'cashier': 'Cashier',
   'collector': 'Collector',
+  'bookkeeper': 'Bookkeeper',
   'admin_clerk': 'Administrative Clerk',
 };
 
 const List<Map<String, String>> kStaffRoleOptions = [
   {'value': 'cashier', 'label': 'Cashier'},
   {'value': 'collector', 'label': 'Collector'},
+  {'value': 'bookkeeper', 'label': 'Bookkeeper'},
   {'value': 'admin_clerk', 'label': 'Administrative Clerk'},
 ];
 

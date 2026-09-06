@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../utils/page_cache.dart';
 import '../admin/receipt_screen.dart';
 import 'gcash_payment_screen.dart';
+import '../../providers/language_provider.dart';
 
 class _MLColors {
   static const dark   = Color(0xFF1B5E20);
@@ -124,6 +125,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
     return MemberScreenScaffold(
       activeRouteKey: 'my-loans',
       body: RefreshIndicator(
@@ -137,25 +139,25 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('My Loans', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _MLColors.dark)),
+                    Text(lang.t('myloans_page_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _MLColors.dark)),
                     const SizedBox(height: 2),
-                    const Text('View your loans, payment history, and receipts.', style: TextStyle(fontSize: 11, color: _MLColors.sub)),
+                    Text(lang.t('myloans_page_sub'), style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
                     const SizedBox(height: 14),
 
                     // ── Main tabs ─────────────────────────────────────
                     Container(
                       decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _MLColors.border), borderRadius: BorderRadius.circular(12)),
                       child: Row(children: [
-                        Expanded(child: _MainTabBtn(icon: Icons.credit_card_outlined, label: 'Active', count: _activeLoans.length, active: _mainTab == 'active', onTap: () => setState(() => _mainTab = 'active'))),
-                        Expanded(child: _MainTabBtn(icon: Icons.list_alt, label: 'History', count: _allLoans.length, active: _mainTab == 'history', onTap: () => setState(() => _mainTab = 'history'))),
-                        Expanded(child: _MainTabBtn(icon: Icons.receipt_long_outlined, label: 'Payments', count: _payments.length, active: _mainTab == 'all', onTap: () => setState(() => _mainTab = 'all'))),
+                        Expanded(child: _MainTabBtn(icon: Icons.credit_card_outlined, label: lang.t('myloans_tab_active'), count: _activeLoans.length, active: _mainTab == 'active', onTap: () => setState(() => _mainTab = 'active'))),
+                        Expanded(child: _MainTabBtn(icon: Icons.list_alt, label: lang.t('myloans_tab_history'), count: _allLoans.length, active: _mainTab == 'history', onTap: () => setState(() => _mainTab = 'history'))),
+                        Expanded(child: _MainTabBtn(icon: Icons.receipt_long_outlined, label: lang.t('myloans_tab_all_payments'), count: _payments.length, active: _mainTab == 'all', onTap: () => setState(() => _mainTab = 'all'))),
                       ]),
                     ),
                     const SizedBox(height: 14),
 
-                    if (_mainTab == 'active') ..._buildActiveTab(),
-                    if (_mainTab == 'history') ..._buildHistoryTab(),
-                    if (_mainTab == 'all') ..._buildAllPaymentsTab(),
+                    if (_mainTab == 'active') ..._buildActiveTab(lang),
+                    if (_mainTab == 'history') ..._buildHistoryTab(lang),
+                    if (_mainTab == 'all') ..._buildAllPaymentsTab(lang),
                   ],
                 ),
               ),
@@ -163,19 +165,19 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     );
   }
 
-  List<Widget> _buildActiveTab() {
+  List<Widget> _buildActiveTab(LanguageProvider lang) {
     if (_activeLoans.isEmpty) {
       return [
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 48),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _MLColors.border)),
-          child: Column(children: const [
-            Icon(Icons.description_outlined, size: 36, color: Color(0xFFC8E6C9)),
-            SizedBox(height: 10),
-            Text('No active loans', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF555555))),
-            SizedBox(height: 4),
-            Text('You have no active loan records at the moment.', style: TextStyle(fontSize: 12, color: _MLColors.sub)),
+          child: Column(children: [
+            const Icon(Icons.description_outlined, size: 36, color: Color(0xFFC8E6C9)),
+            const SizedBox(height: 10),
+            Text(lang.t('myloans_no_active'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF555555))),
+            const SizedBox(height: 4),
+            Text(lang.t('myloans_no_active_sub'), style: const TextStyle(fontSize: 12, color: _MLColors.sub)),
           ]),
         ),
       ];
@@ -188,7 +190,11 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
       ..._activeLoans.map((loan) {
         final lp = double.tryParse('${loan['amount'] ?? 0}') ?? 0;
         final lb = double.tryParse('${loan['balance'] ?? 0}') ?? 0;
-        final pct = lp > 0 ? (((lp - lb) / lp) * 100).round() : 0;
+        // ── FIX: parehong ayos — i-sum ang aktwal na mga payment ng
+        // loan na 'to, hindi ang "(lp-lb)/lp" na nagiging negative
+        // kapag may naipong penalty (lumalaki ang balance). ──────────
+        final loanPaidAmt = _payments.where((p) => p['loan'] == loan['id'] || '${p['loan_code']}' == '${loan['loan_id']}').fold<double>(0, (s, p) => s + (double.tryParse('${p['amount'] ?? 0}') ?? 0));
+        final pct = lp > 0 ? ((loanPaidAmt / lp) * 100).round().clamp(0, 100000) : 0;
         final isSelected = _selectedLoan != null && _selectedLoan['loan_id'] == loan['loan_id'];
         final pending = _hasPendingGCash(loan['loan_id']);
         return Container(
@@ -213,13 +219,26 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                   ),
                 ]),
                 Text('${loan['loan_id'] ?? ''}', style: const TextStyle(fontSize: 10, color: _MLColors.sub, fontFamily: 'monospace')),
+                // ── BAGO: penalty badge — makikita lang kapag may
+                // naipong 2% penalty (overdue na loan). ────────────────
+                if ((double.tryParse('${loan['total_penalty'] ?? 0}') ?? 0) > 0)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(20)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.warning_amber_rounded, size: 10, color: Color(0xFFC62828)),
+                      const SizedBox(width: 4),
+                      Text('+${_peso(double.tryParse('${loan['total_penalty']}') ?? 0)} penalty', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFFC62828))),
+                    ]),
+                  ),
                 const SizedBox(height: 8),
                 Text(_peso(lb), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
-                const Text('remaining balance', style: TextStyle(fontSize: 10, color: _MLColors.sub)),
+                Text(lang.t('myloans_remaining_balance'), style: const TextStyle(fontSize: 10, color: _MLColors.sub)),
                 const SizedBox(height: 8),
                 ClipRRect(borderRadius: BorderRadius.circular(20), child: LinearProgressIndicator(value: (pct / 100).clamp(0, 1), backgroundColor: const Color(0xFFF5F5F5), color: _MLColors.green, minHeight: 8)),
                 const SizedBox(height: 4),
-                Text('$pct% paid', style: const TextStyle(fontSize: 10, color: _MLColors.sub)),
+                Text(lang.t('myloans_pct_paid', {'pct': pct}), style: const TextStyle(fontSize: 10, color: _MLColors.sub)),
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -227,7 +246,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                     onPressed: pending ? null : () => _payViaGcash(loan),
                     style: ElevatedButton.styleFrom(backgroundColor: pending ? const Color(0xFFF5F5F5) : const Color(0xFF1976D2), foregroundColor: pending ? const Color(0xFFAAAAAA) : Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
                     icon: const Icon(Icons.smartphone, size: 14),
-                    label: Text(pending ? 'GCash Pending Verification' : 'Pay via GCash', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                    label: Text(pending ? lang.t('myloans_gcash_pending') : lang.t('myloans_pay_gcash'), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ],
@@ -244,22 +263,28 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
           child: Row(children: [
             const Icon(Icons.warning_amber_rounded, size: 16, color: _MLColors.orange),
             const SizedBox(width: 8),
-            Expanded(child: Text('You have $pendingCount GCash payment request(s) pending admin verification. You will be notified once verified.', style: const TextStyle(fontSize: 11.5, color: _MLColors.orange, fontWeight: FontWeight.w600))),
+            Expanded(child: Text(lang.t('myloans_gcash_notice', {'count': pendingCount}), style: const TextStyle(fontSize: 11.5, color: _MLColors.orange, fontWeight: FontWeight.w600))),
           ]),
         ),
 
       // Detail card
-      if (_selectedLoan != null) ..._buildDetailCard(),
+      if (_selectedLoan != null) ..._buildDetailCard(lang),
     ];
   }
 
-  List<Widget> _buildDetailCard() {
+  List<Widget> _buildDetailCard(LanguageProvider lang) {
     final loan = _selectedLoan;
     final principal = double.tryParse('${loan['amount'] ?? 0}') ?? 0;
     final balance = double.tryParse('${loan['balance'] ?? 0}') ?? 0;
-    final totalPaid = principal - balance;
+    // ── FIX: dating "principal - balance" — nasira ito ngayon dahil
+    // puwede nang LUMAKI ang balance (dahil sa 2% penalty), hindi na
+    // laging lumiliit lang (dahil sa pagbabayad). Nagreresulta ito ng
+    // NEGATIVE na "Total Paid" kapag may naipong penalty. Ang tamang
+    // paraan: i-sum ang AKTWAL na mga payment record ng loan na 'to. ──
+    final loanPaymentsForTotal = _payments.where((p) => p['loan'] == loan['id'] || '${p['loan_code']}' == '${loan['loan_id']}').toList();
+    final totalPaid = loanPaymentsForTotal.fold<double>(0, (s, p) => s + (double.tryParse('${p['amount'] ?? 0}') ?? 0));
     final monthlyDue = double.tryParse('${loan['monthly_due'] ?? 0}') ?? 0;
-    final paidPct = principal > 0 ? ((totalPaid / principal) * 100).round() : 0;
+    final paidPct = principal > 0 ? ((totalPaid / principal) * 100).round().clamp(0, 100000) : 0;
 
     return [
       Container(
@@ -268,17 +293,17 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Expanded(child: _DetailTabBtn(label: 'Loan Details', active: _detailTab == 'details', onTap: () => setState(() => _detailTab = 'details'))),
-              Expanded(child: _DetailTabBtn(label: 'Payment History', active: _detailTab == 'payments', onTap: () => setState(() => _detailTab = 'payments'))),
-              Expanded(child: _DetailTabBtn(label: 'Amortization', active: _detailTab == 'schedule', onTap: () => setState(() => _detailTab = 'schedule'))),
+              Expanded(child: _DetailTabBtn(label: lang.t('myloans_tab_details'), active: _detailTab == 'details', onTap: () => setState(() => _detailTab = 'details'))),
+              Expanded(child: _DetailTabBtn(label: lang.t('myloans_tab_payments'), active: _detailTab == 'payments', onTap: () => setState(() => _detailTab = 'payments'))),
+              Expanded(child: _DetailTabBtn(label: lang.t('myloans_tab_schedule'), active: _detailTab == 'schedule', onTap: () => setState(() => _detailTab = 'schedule'))),
             ]),
             Padding(
               padding: const EdgeInsets.all(16),
               child: _detailTab == 'details'
-                  ? _buildDetailsTab(loan, principal, balance, totalPaid, monthlyDue, paidPct)
+                  ? _buildDetailsTab(loan, principal, balance, totalPaid, monthlyDue, paidPct, lang)
                   : _detailTab == 'payments'
-                      ? _buildPaymentsTab(loan)
-                      : _buildScheduleTab(loan, monthlyDue),
+                      ? _buildPaymentsTab(loan, lang)
+                      : _buildScheduleTab(loan, monthlyDue, lang),
             ),
           ],
         ),
@@ -286,18 +311,18 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     ];
   }
 
-  Widget _buildDetailsTab(dynamic loan, double principal, double balance, double totalPaid, double monthlyDue, int paidPct) {
+  Widget _buildDetailsTab(dynamic loan, double principal, double balance, double totalPaid, double monthlyDue, int paidPct, LanguageProvider lang) {
     final rows = [
-      ['Loan ID', '${loan['loan_id'] ?? ''}'],
-      ['Loan Type', '${loan['loan_type'] ?? ''}'],
-      ['Principal', _peso(principal)],
-      ['Remaining', _peso(balance)],
-      ['Total Paid', _peso(totalPaid)],
-      ['Monthly Due', _peso(monthlyDue)],
-      ['Term', '${loan['term_months'] ?? ''} months'],
-      ['Release Date', '${loan['approved_at'] ?? ''}'.split('T').first],
-      ['Next Due', '${loan['next_due_date'] ?? '—'}'],
-      ['Status', '${loan['status'] ?? ''}'],
+      [lang.t('myloans_loan_id'), '${loan['loan_id'] ?? ''}'],
+      [lang.t('myloans_loan_type'), '${loan['loan_type'] ?? ''}'],
+      [lang.t('myloans_principal'), _peso(principal)],
+      [lang.t('myloans_remaining'), _peso(balance)],
+      [lang.t('myloans_total_paid'), _peso(totalPaid)],
+      [lang.t('myloans_monthly_due'), _peso(monthlyDue)],
+      [lang.t('myloans_term'), lang.t('myloans_term_months', {'n': loan['term_months'] ?? ''})],
+      [lang.t('myloans_release_date'), '${loan['approved_at'] ?? ''}'.split('T').first],
+      [lang.t('myloans_next_due'), '${loan['next_due_date'] ?? '—'}'],
+      [lang.t('myloans_status'), '${loan['status'] ?? ''}'],
     ];
     // Ginawang pares (2 kada row) gamit ang Row+Expanded imbes na manual
     // pixel-width Container sa loob ng Wrap — dati kasi nag-o-overflow
@@ -311,7 +336,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     Widget fieldCell(List<String> r, {required bool isLast}) {
       final label = r[0];
       final val = r[1];
-      final color = label == 'Remaining' ? _MLColors.red : label == 'Total Paid' ? _MLColors.green : const Color(0xFF1A1A1A);
+      final color = label == lang.t('myloans_remaining') ? _MLColors.red : label == lang.t('myloans_total_paid') ? _MLColors.green : const Color(0xFF1A1A1A);
       return Expanded(
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -329,9 +354,36 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
       );
     }
 
+    final totalPenalty = double.tryParse('${loan['total_penalty'] ?? 0}') ?? 0;
+    final monthsPenalized = loan['months_overdue_penalized'] ?? 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── BAGO: prominenteng banner kapag may naipong penalty —
+        // para malinaw sa member kung bakit tumaas ang balance nila. ──
+        if (totalPenalty > 0)
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFFCE4EC), border: Border.all(color: const Color(0xFFF8BBD0)), borderRadius: BorderRadius.circular(10)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFC62828)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFC62828), height: 1.4),
+                    children: [
+                      const TextSpan(text: 'You have a '),
+                      TextSpan(text: '${_peso(totalPenalty)} penalty', style: const TextStyle(fontWeight: FontWeight.w800)),
+                      TextSpan(text: ' for $monthsPenalized month${monthsPenalized != 1 ? "s" : ""} of late payment (2% of your Monthly Due per month). This is already included in your Remaining Balance. Pay as soon as possible to avoid further penalties.'),
+                    ],
+                  ),
+                ),
+              ),
+            ]),
+          ),
         Container(
           decoration: BoxDecoration(border: Border.all(color: _MLColors.border), borderRadius: BorderRadius.circular(10)),
           child: Column(
@@ -355,14 +407,14 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
         ClipRRect(borderRadius: BorderRadius.circular(20), child: LinearProgressIndicator(value: (paidPct / 100).clamp(0, 1), backgroundColor: const Color(0xFFF5F5F5), color: _MLColors.green, minHeight: 10)),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('$paidPct% paid', style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
-          Text('${_peso(balance)} remaining', style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
+          Text(lang.t('myloans_pct_paid', {'pct': paidPct}), style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
+          Text('${_peso(balance)} ${lang.t('myloans_remaining_label')}', style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
         ]),
       ],
     );
   }
 
-  Widget _buildPaymentsTab(dynamic loan) {
+  Widget _buildPaymentsTab(dynamic loan, LanguageProvider lang) {
     final loanPayments = _payments.where((p) => p['loan'] == loan['id'] || '${p['loan_code']}' == '${loan['loan_id']}').toList();
     // ── BAGO: isama rin ang GCash payment requests na Pending o
     // Rejected — para makita ang BUONG proseso ng pagbabayad, hindi
@@ -381,7 +433,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
       });
 
     if (combined.isEmpty) {
-      return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No payments yet.', style: TextStyle(color: _MLColors.sub))));
+      return Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Center(child: Text(lang.t('myloans_no_payments_yet'), style: const TextStyle(color: _MLColors.sub))));
     }
     return Column(
       children: combined.map<Widget>((item) {
@@ -403,19 +455,19 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFA5D6A7))),
-                      child: const Text('Completed', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.green)),
+                      child: Text(lang.t('myloans_status_completed'), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.green)),
                     )
                   else if (item['status'] == 'Pending')
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFFFE082))),
-                      child: const Text('Pending Verification', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.orange)),
+                      child: Text(lang.t('myloans_status_pending_verification'), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.orange)),
                     )
                   else
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFEF9A9A))),
-                      child: const Text('Rejected', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.red)),
+                      child: Text(lang.t('myloans_status_rejected'), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _MLColors.red)),
                     ),
                   if (!isPayment && item['status'] == 'Rejected' && item['reject_reason'] != null)
                     Padding(
@@ -437,7 +489,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     );
   }
 
-  Widget _buildScheduleTab(dynamic loan, double monthlyDue) {
+  Widget _buildScheduleTab(dynamic loan, double monthlyDue, LanguageProvider lang) {
     final loanPayments = _payments.where((p) => p['loan'] == loan['id']).toList();
     final totalPaidAmt = loanPayments.fold<double>(0, (s, p) => s + (double.tryParse('${p['amount'] ?? 0}') ?? 0));
     final monthsPaid = monthlyDue > 0 ? (totalPaidAmt / monthlyDue).floor() : 0;
@@ -468,7 +520,7 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(isPaid ? Icons.check_circle : Icons.access_time, size: 11, color: isPaid ? _MLColors.green : const Color(0xFF999999)),
                 const SizedBox(width: 4),
-                Text(isPaid ? 'Paid' : 'Upcoming', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: isPaid ? _MLColors.green : const Color(0xFF999999))),
+                Text(isPaid ? lang.t('myloans_paid') : lang.t('myloans_upcoming'), style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: isPaid ? _MLColors.green : const Color(0xFF999999))),
               ]),
             ),
           ]),
@@ -477,9 +529,9 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     );
   }
 
-  List<Widget> _buildHistoryTab() {
+  List<Widget> _buildHistoryTab(LanguageProvider lang) {
     if (_allLoans.isEmpty) {
-      return [const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No loan history yet.', style: TextStyle(color: _MLColors.sub))))];
+      return [Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Center(child: Text(lang.t('myloans_no_history'), style: const TextStyle(color: _MLColors.sub))))];
     }
     return _allLoans.map<Widget>((loan) {
       final isExpanded = _expandedLoanId == loan['loan_id'];
@@ -505,15 +557,21 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                       Text('${loan['loan_id'] ?? ''}', style: const TextStyle(fontFamily: 'monospace', color: _MLColors.dark, fontWeight: FontWeight.w800, fontSize: 13)),
                       Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 18, color: _MLColors.sub),
                     ]),
-                    Text('${loan['loan_type'] ?? ''}', style: const TextStyle(fontSize: 11, color: _MLColors.sub)),
+                    // ── BAGO: dating "Loan Type" lang — idinagdag ang
+                    // Term at Date (kailan kinuha ang loan) para alam
+                    // agad ng member. ─────────────────────────────────
+                    Text(
+                      '${loan['loan_type'] ?? ''} · ${loan['term_months'] != null ? lang.t('myloans_term_months', {'n': loan['term_months']}) : '—'} · ${'${loan['applied_at'] ?? ''}'.split('T').first.isNotEmpty ? '${loan['applied_at'] ?? ''}'.split('T').first : '—'}',
+                      style: const TextStyle(fontSize: 11, color: _MLColors.sub),
+                    ),
                     const SizedBox(height: 8),
                     Row(children: [
-                      Expanded(child: _HistMini('Amount', _peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0))),
-                      Expanded(child: _HistMini('Balance', isPaid ? '₱0' : _peso(double.tryParse('${loan['balance'] ?? 0}') ?? 0), color: isPaid ? _MLColors.green : _MLColors.red)),
+                      Expanded(child: _HistMini(lang.t('myloans_amount_label'), _peso(double.tryParse('${loan['amount'] ?? 0}') ?? 0))),
+                      Expanded(child: _HistMini(lang.t('myloans_balance_label'), isPaid ? '₱0' : _peso(double.tryParse('${loan['balance'] ?? 0}') ?? 0), color: isPaid ? _MLColors.green : _MLColors.red)),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(color: sb, borderRadius: BorderRadius.circular(20), border: Border.all(color: sc.withOpacity(0.3))),
-                        child: Text(isPaid ? 'Completed' : '${loan['status'] ?? ''}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: sc)),
+                        child: Text(isPaid ? lang.t('myloans_completed') : '${loan['status'] ?? ''}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: sc)),
                       ),
                     ]),
                   ],
@@ -528,10 +586,10 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Payment History (${loanPayments.length})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _MLColors.green)),
+                    Text(lang.t('myloans_payment_history_label') + ' ' + lang.t('myloans_payments_count', {'n': loanPayments.length}), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _MLColors.green)),
                     const SizedBox(height: 8),
                     if (loanPayments.isEmpty)
-                      const Text('No payments recorded yet.', style: TextStyle(fontSize: 11.5, color: _MLColors.sub))
+                      Text(lang.t('myloans_no_payments_recorded'), style: const TextStyle(fontSize: 11.5, color: _MLColors.sub))
                     else
                       ...loanPayments.map((p) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -550,20 +608,20 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
     }).toList();
   }
 
-  List<Widget> _buildAllPaymentsTab() {
+  List<Widget> _buildAllPaymentsTab(LanguageProvider lang) {
     if (_payments.isEmpty) {
-      return [const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No payment records yet.', style: TextStyle(color: _MLColors.sub))))];
+      return [Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Center(child: Text(lang.t('myloans_no_payment_records'), style: const TextStyle(color: _MLColors.sub))))];
     }
     final totalPaid = _payments.fold<double>(0, (s, p) => s + (double.tryParse('${p['amount'] ?? 0}') ?? 0));
     final latest = '${_payments.first['paid_at'] ?? ''}'.split('T').first;
 
     return [
       Row(children: [
-        Expanded(child: _SummaryStat(label: 'Total Payments', value: '${_payments.length}', color: _MLColors.dark)),
+        Expanded(child: _SummaryStat(label: lang.t('myloans_total_payments'), value: '${_payments.length}', color: _MLColors.dark)),
         const SizedBox(width: 8),
-        Expanded(child: _SummaryStat(label: 'Total Paid', value: _peso(totalPaid), color: _MLColors.green)),
+        Expanded(child: _SummaryStat(label: lang.t('myloans_total_paid'), value: _peso(totalPaid), color: _MLColors.green)),
         const SizedBox(width: 8),
-        Expanded(child: _SummaryStat(label: 'Latest', value: latest.isEmpty ? '—' : latest, color: const Color(0xFF555555))),
+        Expanded(child: _SummaryStat(label: lang.t('myloans_latest_payment'), value: latest.isEmpty ? '—' : latest, color: const Color(0xFF555555))),
       ]),
       const SizedBox(height: 14),
       ..._payments.map((p) {
@@ -584,6 +642,17 @@ class _MyLoansScreenState extends State<MyLoansScreen> {
                       Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1), decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(20)), child: Text('${loan['loan_type']}', style: const TextStyle(fontSize: 8.5, color: Color(0xFF6A1B9A), fontWeight: FontWeight.w700))),
                     ],
                   ]),
+                  // ── BAGO: idinagdag ang Term at Loan Date (kailan
+                  // kinuha ang loan na 'to) — hiwalay sa petsa ng
+                  // bayad (paid_at) sa ibaba. ─────────────────────────
+                  if (loan != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '${loan['term_months'] != null ? lang.t('myloans_term_months', {'n': loan['term_months']}) : '—'} · ${lang.t('myloans_th_loan_date')}: ${'${loan['applied_at'] ?? ''}'.split('T').first.isNotEmpty ? '${loan['applied_at'] ?? ''}'.split('T').first : '—'}',
+                        style: const TextStyle(fontSize: 9.5, color: Color(0xFFAAAAAA)),
+                      ),
+                    ),
                   const SizedBox(height: 3),
                   Text('${p['paid_at'] ?? ''}'.split('T').first, style: const TextStyle(fontSize: 10.5, color: Color(0xFF555555))),
                   if (p['note'] != null && '${p['note']}'.isNotEmpty) Text('${p['note']}', style: const TextStyle(fontSize: 10, color: _MLColors.sub)),

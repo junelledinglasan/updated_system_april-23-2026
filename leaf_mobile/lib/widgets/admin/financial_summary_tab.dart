@@ -83,6 +83,11 @@ class _FinancialSummaryTabState extends State<FinancialSummaryTab> {
     }
 
     final shareCapital = double.tryParse('${_summary!['share_capital'] ?? 0}') ?? 0;
+    // ── FIX: dating inuulit lang ang shareCapital sa "Max Loanable"
+    // sub-label — hindi ginagamit ang totoong "max_loanable" field
+    // mula sa backend (na siyang nagrere-respeto sa admin-editable na
+    // loan_multiplier). ───────────────────────────────────────────────
+    final maxLoanable = double.tryParse('${_summary!['max_loanable'] ?? shareCapital}') ?? shareCapital;
     final activeLoans = _summary!['active_loans'] ?? 0;
     final totalLoans = _summary!['total_loans'] ?? 0;
     final totalPaid = double.tryParse('${_summary!['total_paid'] ?? 0}') ?? 0;
@@ -106,7 +111,7 @@ class _FinancialSummaryTabState extends State<FinancialSummaryTab> {
           mainAxisSpacing: 8,
           childAspectRatio: 1.5,
           children: [
-            _FinStatBox(icon: Icons.savings_outlined, label: 'Share Capital', value: '₱${shareCapital.toStringAsFixed(0)}', sub: 'Max Loanable: ₱${shareCapital.toStringAsFixed(0)}', color: _FinColors.green, bg: const Color(0xFFE8F5E9)),
+            _FinStatBox(icon: Icons.savings_outlined, label: 'Share Capital', value: '₱${shareCapital.toStringAsFixed(0)}', sub: 'Max Loanable: ₱${maxLoanable.toStringAsFixed(0)}', color: _FinColors.green, bg: const Color(0xFFE8F5E9)),
             _FinStatBox(icon: Icons.assignment_outlined, label: 'Active Loans', value: '$activeLoans', sub: 'Total: $totalLoans loan${totalLoans != 1 ? "s" : ""}', color: _FinColors.blue, bg: const Color(0xFFE3F2FD)),
             _FinStatBox(icon: Icons.credit_card, label: 'Total Paid', value: '₱${totalPaid.toStringAsFixed(0)}', sub: 'Remaining: ₱${totalBalance.toStringAsFixed(0)}', color: _FinColors.purple, bg: const Color(0xFFF3E5F5)),
             _FinStatBox(icon: Icons.account_balance_outlined, label: 'Savings Balance', value: '₱${savingsBalance.toStringAsFixed(0)}', sub: '↑₱${totalDeposit.toStringAsFixed(0)} · ↓₱${totalWithdraw.toStringAsFixed(0)}', color: _FinColors.orange, bg: const Color(0xFFFFF8E1)),
@@ -192,46 +197,81 @@ class _FinancialSummaryTabState extends State<FinancialSummaryTab> {
         final payments = (loan['payments'] as List?) ?? [];
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: isExpanded ? const Color(0xFFA5D6A7) : const Color(0xFFE0E0E0)),
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.white,
+            border: Border.all(color: isExpanded ? const Color(0xFFA5D6A7) : const Color(0xFFDDE8DD), width: isExpanded ? 1.5 : 1),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 2))],
           ),
           child: Column(
             children: [
               InkWell(
+                borderRadius: BorderRadius.circular(12),
                 onTap: () => setState(() => _expandedLoanId = isExpanded ? null : loanId.hashCode),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  color: isExpanded ? const Color(0xFFF1F8E9) : Colors.transparent,
-                  child: Row(
+                  decoration: BoxDecoration(
+                    color: isExpanded ? const Color(0xFFF1F8E9) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('$loanId', style: const TextStyle(fontFamily: 'monospace', color: _FinColors.green, fontWeight: FontWeight.w700, fontSize: 11.5)),
-                            Text('${loan['loan_type'] ?? ''}', style: const TextStyle(fontSize: 9.5, color: _FinColors.sub)),
-                          ],
-                        ),
+                      // ── BAGO: 2-linyang layout imbes na 6 na bagay
+                      // na piga-pigain sa isang row (dating nagki-
+                      // crumple/nagwa-wrap ang "12 months" dahil sa
+                      // kasikipan). Linya 1: Loan ID + Status badge +
+                      // chevron. Linya 2: Loan Type · Term. Linya 3:
+                      // Amount/Balance bilang magkatabing mini stats. ──
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('$loanId', style: const TextStyle(fontFamily: 'monospace', color: _FinColors.green, fontWeight: FontWeight.w700, fontSize: 12)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: sColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: sColor.withOpacity(0.3))),
+                            child: Text(isPaid ? 'Paid' : '${loan['status'] ?? ''}', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: sColor)),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: const Color(0xFFBBBBBB)),
+                        ],
                       ),
-                      Expanded(
-                        child: Text('₱${(double.tryParse('${loan['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text('${loan['loan_type'] ?? ''} · ${loan['term_months'] ?? "—"} months', style: const TextStyle(fontSize: 10, color: _FinColors.sub)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Amount', style: TextStyle(fontSize: 9, color: Color(0xFFAAAAAA))),
+                                Text('₱${(double.tryParse('${loan['amount'] ?? 0}') ?? 0).toStringAsFixed(0)}',
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Balance', style: TextStyle(fontSize: 9, color: Color(0xFFAAAAAA))),
+                                isPaid
+                                    ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Text('₱0 ', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: _FinColors.green)),
+                                        Icon(Icons.check, size: 12, color: _FinColors.green),
+                                      ])
+                                    : Text(
+                                        '₱${balance.toStringAsFixed(0)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Color(0xFFC62828)),
+                                      ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: Text(
-                          isPaid ? '₱0 ✓' : '₱${balance.toStringAsFixed(0)}',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: isPaid ? _FinColors.green : const Color(0xFFC62828)),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: sColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: sColor.withOpacity(0.3))),
-                        child: Text(isPaid ? 'Paid' : '${loan['status'] ?? ''}', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: sColor)),
-                      ),
-                      Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: const Color(0xFFBBBBBB)),
                     ],
                   ),
                 ),

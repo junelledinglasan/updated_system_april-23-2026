@@ -47,8 +47,15 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
   double get _sc => _amount * 0.03;
   double get _totalDeductions => _interest + _serviceFee + _filingFee + _insurance + _sd + _sc;
   double get _netProceeds => _amount - _totalDeductions;
-  double get _totalPayable => _amount + _interest;
-  double get _monthlyAmort => _term > 0 ? _totalPayable / _term : 0;
+  // ── FIX: dating "_amount + _interest" — mali na ito ngayon, dahil
+  // isang beses na lang nakukuha ang interest bilang UPFRONT
+  // DEDUCTION (kinaltas na sa Net Proceeds). Ang aktwal na babayaran
+  // ng member sa buwanang hulog ay ang PRINCIPAL LANG (tugma sa
+  // "_monthlyAmort × _term"), hindi na dapat idagdag pa ang interest
+  // dito — isang display bug lang ito, hindi apektado ang aktwal na
+  // monthly_due/balance na na-save. ────────────────────────────────────
+  double get _totalPayable => _amount;
+  double get _monthlyAmort => _term > 0 ? _amount / _term : 0;
 
   Future<void> _handleApprove() async {
     setState(() => _loading = true);
@@ -182,9 +189,14 @@ class _ProcessLoanScreenState extends State<ProcessLoanScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: const Color(0xFFF7FAF7), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE4F0E5))),
               child: Column(children: [
-                _ResultRow('Interest Rate', '${(_monthlyRate * 100).toStringAsFixed(3)}%/mo (${(_monthlyRate * 100 * 12).toStringAsFixed(2)}%/yr)'),
+                // ── FIX: dating may hiwalay na "Interest Rate" row
+                // dito PLUS rate details na nasa loob na rin ng
+                // "Interest" deduction row sa ibaba — nagmumukhang
+                // naka-doble ang kaltas kahit hindi naman. Tinanggal
+                // na ang linyang ito, nasa "Interest" deduction row
+                // na lang ang rate info. ─────────────────────────────
                 _ResultRow('Total Interest ($_term months)', '₱${_interest.toStringAsFixed(2)}', color: _PLColors.orange),
-                _ResultRow('Total Payable (Principal + Interest)', '₱${_totalPayable.toStringAsFixed(2)}'),
+                _ResultRow('Total Payable (via Monthly Installments)', '₱${_totalPayable.toStringAsFixed(2)}'),
                 const Divider(),
                 _ResultRow('Monthly Amortization', '₱${_monthlyAmort.toStringAsFixed(2)}', color: _PLColors.green, bold: true),
               ]),

@@ -74,6 +74,8 @@ class MemberSerializer(serializers.ModelSerializer):
             'id', 'member_id', 'fullname', 'first_name', 'last_name',
             'contact', 'email', 'status', 'classification',
             'membership_status', 'membership_date', 'share_capital',
+            # ── BAGO: writable — dito nagse-set ang admin ng 1x/2x/3x. ──
+            'loan_multiplier',
             'max_loanable', 'application_id', 'plain_password',
             'student_profile', 'senior_profile', 'job_profile',
             'pre_member_info', 'user', 'pre_member', 'date_registered',
@@ -92,13 +94,21 @@ class MemberListSerializer(serializers.ModelSerializer):
     status         = serializers.ReadOnlyField()
     classification = serializers.ReadOnlyField()
     application_id = serializers.ReadOnlyField()
+    # ── FIX: nawawala dati ang "max_loanable" dito — kaya sa mga
+    # lugar na gumagamit ng LIST endpoint (hal. "New F2F Loan
+    # Application" member selector), laging ₱0 ang lumalabas na Max
+    # Loanable, kahit may Share Capital naman ang member. ─────────────
+    max_loanable   = serializers.ReadOnlyField()
     birth_date     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Member
         fields = [
             'id', 'member_id', 'fullname', 'first_name', 'last_name',
-            'contact', 'share_capital', 'status', 'membership_status',
+            'contact', 'share_capital',
+            # ── BAGO ──
+            'loan_multiplier', 'max_loanable',
+            'status', 'membership_status',
             'classification', 'membership_date', 'application_id',
             'birth_date',
         ]

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/member_provider.dart';
 import 'member_drawer.dart';
 
@@ -102,53 +101,15 @@ class _MemberScreenScaffoldState extends State<MemberScreenScaffold> {
           child: Container(height: 1, color: _MSColors.border),
         ),
         actions: [
-          // ── TINANGGAL: bell icon button — redundant na dahil meron
-          // nang red number badge ang "Notifications" sa drawer mismo. ──
-          PopupMenuButton<String>(
-            tooltip: 'Account',
-            offset: const Offset(0, 40),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                // ignore: use_build_context_synchronously
-                await context.read<AuthProvider>().logout();
-                context.read<MemberProvider>().reset();
-                if (context.mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-                }
-              } else if (value == 'profile') {
-                Navigator.pushReplacementNamed(context, '/member/profile');
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Text(memberProv.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1A2E1A))),
-              ),
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Text(memberProv.isOfficial ? 'Member · ${memberProv.memberId}' : 'Pending Membership', style: const TextStyle(fontSize: 11, color: Color(0xFF7A8A6A))),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'profile',
-                child: Row(children: [
-                  Icon(Icons.person_outline, size: 16, color: Color(0xFF555555)),
-                  SizedBox(width: 8),
-                  Text('My Profile', style: TextStyle(fontWeight: FontWeight.w600)),
-                ]),
-              ),
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(children: [
-                  Icon(Icons.logout, size: 16, color: Color(0xFFC62828)),
-                  SizedBox(width: 8),
-                  Text('Sign Out', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.w600)),
-                ]),
-              ),
-            ],
-            child: CircleAvatar(radius: 14, backgroundColor: _MSColors.greenLt, child: Text(memberProv.initials, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
-          ),
+          // ── FIX: dating PopupMenuButton ito (Name, Member ID, My
+          // Profile, Sign Out) — dagdag na feature ito sa mobile na
+          // wala naman sa web (walang onClick sa ".ml-topbar-avatar"
+          // doon, plain lang na display). Tinanggal na para consistent
+          // ang behavior — "My Profile" ay naa-access na rin naman via
+          // "Profile" nav item sa drawer, at "Sign Out" ay meron nang
+          // dedikadong button sa ilalim ng drawer (kaparehong pattern
+          // ng web, kung saan doon lang din nakalagay ang Sign Out). ──
+          CircleAvatar(radius: 14, backgroundColor: _MSColors.greenLt, child: Text(memberProv.initials, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
           const SizedBox(width: 12),
         ],
       ),

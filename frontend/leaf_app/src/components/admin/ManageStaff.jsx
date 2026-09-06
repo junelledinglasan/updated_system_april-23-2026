@@ -3,15 +3,20 @@ import { getStaffListAPI, addStaffAPI, editStaffAPI, resetStaffPasswordAPI, dele
 import { Pencil, KeyRound, Eye, EyeOff, UserPlus, Trash2 } from "lucide-react";
 import "./ManageStaff.css";
 
+// ── FIX: nawawala dati ang "Bookkeeper" dito — meron naman itong
+// default features ('reports') at label sa buong system, pero hindi
+// ito puwedeng piliin kapag gumagawa ng bagong staff account. ───────
 const STAFF_ROLE_OPTIONS = [
   { value: "cashier",     label: "Cashier"               },
   { value: "collector",   label: "Collector"             },
+  { value: "bookkeeper",  label: "Bookkeeper"            },
   { value: "admin_clerk", label: "Administrative Clerk"  },
 ];
 
 const STAFF_ROLE_LABELS = {
   cashier:     "Cashier",
   collector:   "Collector",
+  bookkeeper:  "Bookkeeper",
   admin_clerk: "Administrative Clerk",
 };
 

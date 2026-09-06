@@ -414,6 +414,12 @@ def member_detail_view(request, pk):
             member.membership_status = ms
         if sc := data.get('share_capital'):
             member.share_capital = sc
+        # ── FIX: nawawala dati ang "loan_multiplier" dito — kaya kahit
+        # matagumpay ang response mula sa "Loan Multiplier" dropdown
+        # (walang error), hindi talaga ito na-se-save sa database, dahil
+        # walang code na kumukuha/nagse-set nito. ────────────────────────
+        if lm := data.get('loan_multiplier'):
+            member.loan_multiplier = int(lm)
 
         member.save()
 
@@ -557,7 +563,11 @@ def member_financial_summary_view(request, pk):
     return Response({
         'share_capital':     share_capital,
         'amount_paid':       amount_paid,
-        'max_loanable':      share_capital * 2,
+        # ── FIX: dating naka-hardcode na "share_capital * 2" — hindi
+        # nito ginagamit ang admin-editable na loan_multiplier (1x/2x/
+        # 3x) na na-fix na natin sa Member model. Gamit na ngayon ang
+        # totoong "member.max_loanable" property. ────────────────────
+        'max_loanable':      member.max_loanable,
         'total_loans':       len(loans),
         'active_loans':      len(active_loans),
         'total_loan_amount': sum(float(l.amount)  for l in active_loans),
@@ -570,6 +580,10 @@ def member_financial_summary_view(request, pk):
                 'amount':      float(l.amount),
                 'balance':     float(l.balance),
                 'monthly_due': float(l.monthly_due),
+                # ── FIX: nawawala dati ang "term_months" dito — kaya
+                # laging blangko ("— months") ang lumalabas sa Term
+                # column ng Financial Summary. ───────────────────────
+                'term_months': l.term_months,
                 'status':      l.status,
                 'applied_at':  str(l.applied_at)[:10],
                 'payments': [

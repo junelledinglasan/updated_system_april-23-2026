@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getOnlineApplicationsAPI, getOnlineApplicationAPI, updateOnlineAppStatusAPI } from "../../api/members";
-import { Search } from "lucide-react";
+import { Search, Paperclip, Users, CheckCircle, XCircle, AlertTriangle, ExternalLink, Loader, X, Lock } from "lucide-react";
 import "./OnlineApplications.css";
 
 const STATUS_TABS   = ["All", "Pending", "Approved", "Rejected"];
@@ -15,7 +15,9 @@ const STATUS_COLOR  = {
 function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) {
   const [rejectMode, setRejectMode] = useState(false);
   const [reason,     setReason]     = useState("");
-  const [idTab,      setIdTab]      = useState("front");
+  // ── BAGO: tinanggal ang "idTab" state — hindi na kailangan dahil
+  // isa na lang na Birth Certificate image ang ipinapakita, wala nang
+  // front/back tab switcher. ───────────────────────────────────────
 
   if (!app) return null;
   const status = app.application_status || app.status || "Pending";
@@ -25,15 +27,40 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
     onReject(app.id, reason);
   };
 
-  const InfoRow = ({ label, value, mono=false, full=false }) => (
-    <div className={`oa-info-item${full?" oa-full":""}`}>
-      <span className="oa-info-key">{label}</span>
-      <span className={`oa-info-val${mono?" mono":""}`}>{value || "—"}</span>
+  // ── BAGO: dating plain na text lang (label sa itaas, value sa
+  // ibaba, walang background/border) — ngayon "chip"-style box, tugma
+  // sa established na pattern sa ibang bahagi ng system (hal.
+  // ManageMember.jsx). ─────────────────────────────────────────────────
+  // ── BAGO: dating plain na section lang (title + grid, walang
+  // card/border/background) — ngayon may white card, subtle border,
+  // at green accent bar sa tabi ng title, para mas malinaw ang
+  // paghihiwalay ng bawat seksyon. ─────────────────────────────────────
+  const SectionCard = ({ title, icon, children }) => (
+    <div style={{background:"#fff", border:"1px solid #e8f5e9", borderRadius:12, padding:16, boxShadow:"0 1px 4px rgba(0,0,0,0.03)"}}>
+      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:12}}>
+        <div style={{width:4, height:16, background:"#2e7d32", borderRadius:2}}/>
+        <div style={{fontSize:12,fontWeight:700,color:"#1b5e20",textTransform:"uppercase",letterSpacing:0.5,display:"flex",alignItems:"center",gap:6}}>
+          {icon}{title}
+        </div>
+      </div>
+      {children}
     </div>
   );
 
-  const hasIdFront = !!app.id_front_url;
-  const hasIdBack  = !!app.id_back_url;
+  const InfoRow = ({ label, value, mono=false, full=false }) => (
+    <div className={full ? "oa-full" : ""} style={{
+      background:"#f9fef9", border:"1px solid #e8f5e9", borderRadius:8,
+      padding:"8px 12px", display:"flex", flexDirection:"column", gap:2,
+    }}>
+      <span style={{fontSize:9.5,fontWeight:700,color:"#8a9a7a",textTransform:"uppercase",letterSpacing:0.4}}>{label}</span>
+      <span style={{fontSize:12.5,color:"#222",fontWeight:600,fontFamily:mono?"monospace":"inherit",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value || "—"}</span>
+    </div>
+  );
+
+  // ── BAGO: dating "Valid ID" (front + back, 2 images) — ngayon
+  // "Birth Certificate" na lang (1 imahe), tugma sa binago natin sa
+  // member-side ApplyMembership.jsx. ──────────────────────────────────
+  const hasBirthCert = !!app.id_front_url;
   const hasSpouseInfo = !!(app.spouse_name || app.beneficiary_name);
 
   return (
@@ -46,20 +73,19 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <span className={`oa-badge ${STATUS_COLOR[status] || ""}`}>{status}</span>
-            <button className="oa-modal-close" onClick={onClose}>✕</button>
+            <button className="oa-modal-close" onClick={onClose}><X size={16}/></button>
           </div>
         </div>
 
-        <div className="oa-modal-body">
+        <div className="oa-modal-body" style={{background:"#f7faf7"}}>
           {loadingDetails ? (
             <div style={{textAlign:"center",padding:"32px 0",color:"#aaa"}}>
-              <div style={{fontSize:24,marginBottom:8}}>⏳</div>
-              Loading full application details...
+              <Loader size={24} style={{marginBottom:8}}/>
+              <div>Loading full application details...</div>
             </div>
           ) : (<>
             {/* ── Personal Info ── */}
-            <div className="oa-section">
-              <div className="oa-section-title">Personal Information</div>
+            <SectionCard title="Personal Information">
               <div className="oa-info-grid">
                 <InfoRow label="Last Name"              value={app.last_name} />
                 <InfoRow label="First Name"             value={app.first_name} />
@@ -78,15 +104,14 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
                 <InfoRow label="Email"                  value={app.email} mono />
                 <InfoRow label="Religious/Social Affiliation" value={app.religious_social_affiliation} />
                 <InfoRow label="Address"                value={app.address} full />
-                <InfoRow label="Birth Certificate"      value={app.birth_certificate ? "✅ Submitted" : "❌ Not submitted"} />
-                <InfoRow label="Marriage Certificate"   value={app.marriage_certificate ? "✅ Submitted" : "❌ Not submitted"} />
+                <InfoRow label="Birth Certificate"      value={app.birth_certificate ? <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#2e7d32"}}><CheckCircle size={13}/> Submitted</span> : <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#c62828"}}><XCircle size={13}/> Not submitted</span>} />
+                <InfoRow label="Marriage Certificate"   value={app.marriage_certificate ? <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#2e7d32"}}><CheckCircle size={13}/> Submitted</span> : <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#c62828"}}><XCircle size={13}/> Not submitted</span>} />
               </div>
-            </div>
+            </SectionCard>
 
             {/* ── Spouse & Family ── */}
             {hasSpouseInfo && (
-              <div className="oa-section">
-                <div className="oa-section-title">👪 Spouse & Family</div>
+              <SectionCard title="Spouse & Family" icon={<Users size={14}/>}>
                 <div className="oa-info-grid">
                   <InfoRow label="Spouse Name"        value={app.spouse_name} />
                   <InfoRow label="Spouse Occupation"  value={app.spouse_occupation} />
@@ -98,107 +123,60 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
                     <InfoRow label="Credit References" value={app.credit_references} full />
                   )}
                 </div>
-              </div>
+              </SectionCard>
             )}
 
-            {/* ── Valid ID Images ── */}
-            <div className="oa-section">
-              <div className="oa-section-title">📎 Valid ID Verification</div>
-              {!hasIdFront && !hasIdBack ? (
-                <div style={{padding:"16px",background:"#fff8e1",borderRadius:8,border:"1px solid #ffe082",fontSize:12,color:"#f57c00"}}>
-                  ⚠ No ID uploaded by the applicant.
+            {/* ── Birth Certificate Image ── */}
+            <SectionCard title="Birth Certificate Verification" icon={<Paperclip size={14}/>}>
+              {!hasBirthCert ? (
+                <div style={{padding:"16px",background:"#fff8e1",borderRadius:8,border:"1px solid #ffe082",fontSize:12,color:"#f57c00",display:"flex",alignItems:"center",gap:8}}>
+                  <AlertTriangle size={14}/> No Birth Certificate uploaded by the applicant.
                 </div>
               ) : (
                 <>
-                  {/* Tab switcher */}
-                  <div style={{display:"flex",gap:8,marginBottom:12}}>
-                    {[["front","🪪 Front Side"],["back","🪪 Back Side"]].map(([key, label]) => (
-                      <button key={key} onClick={() => setIdTab(key)} style={{
-                        padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",
-                        border:`2px solid ${idTab===key?"#2e7d32":"#e0e0e0"}`,
-                        borderRadius:8,
-                        background: idTab===key?"#e8f5e9":"#fafafa",
-                        color: idTab===key?"#1b5e20":"#888",
-                        transition:"all 0.15s",
-                      }}>{label}</button>
-                    ))}
+                  <div style={{textAlign:"center"}}>
+                    <img
+                      src={app.id_front_url}
+                      alt="Birth Certificate"
+                      style={{maxWidth:"100%",maxHeight:320,borderRadius:10,border:"2px solid #a5d6a7",objectFit:"contain"}}
+                    />
+                    <div style={{marginTop:8,fontSize:11,color:"#888"}}>
+                      <a href={app.id_front_url} target="_blank" rel="noopener noreferrer" style={{color:"#2e7d32",display:"inline-flex",alignItems:"center",gap:4}}>
+                        <ExternalLink size={12}/> Open full size
+                      </a>
+                    </div>
                   </div>
 
-                  {/* ID Image display */}
-                  {idTab === "front" && (
-                    hasIdFront ? (
-                      <div style={{textAlign:"center"}}>
-                        <img
-                          src={app.id_front_url}
-                          alt="Valid ID Front"
-                          style={{maxWidth:"100%",maxHeight:320,borderRadius:10,border:"2px solid #a5d6a7",objectFit:"contain"}}
-                        />
-                        <div style={{marginTop:8,fontSize:11,color:"#888"}}>
-                          <a href={app.id_front_url} target="_blank" rel="noopener noreferrer" style={{color:"#2e7d32"}}>
-                            🔗 Open full size
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{padding:"16px",background:"#fafafa",borderRadius:8,border:"1px solid #e0e0e0",fontSize:12,color:"#aaa",textAlign:"center"}}>
-                        No front ID uploaded.
-                      </div>
-                    )
-                  )}
-
-                  {idTab === "back" && (
-                    hasIdBack ? (
-                      <div style={{textAlign:"center"}}>
-                        <img
-                          src={app.id_back_url}
-                          alt="Valid ID Back"
-                          style={{maxWidth:"100%",maxHeight:320,borderRadius:10,border:"2px solid #a5d6a7",objectFit:"contain"}}
-                        />
-                        <div style={{marginTop:8,fontSize:11,color:"#888"}}>
-                          <a href={app.id_back_url} target="_blank" rel="noopener noreferrer" style={{color:"#2e7d32"}}>
-                            🔗 Open full size
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{padding:"16px",background:"#fafafa",borderRadius:8,border:"1px solid #e0e0e0",fontSize:12,color:"#aaa",textAlign:"center"}}>
-                        No back ID uploaded.
-                      </div>
-                    )
-                  )}
-
-                  <div style={{marginTop:10,padding:"8px 12px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-                    ✅ Please verify that the name and other details on the ID match the information provided in the form above before approving.
+                  <div style={{marginTop:10,padding:"8px 12px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                    <CheckCircle size={13}/> Please verify that the name and other details on the Birth Certificate match the information provided in the form above before approving.
                   </div>
                 </>
               )}
-            </div>
+            </SectionCard>
 
             {/* ── Account Credentials ── */}
             {(app.username || app.plain_password) && (
-              <div className="oa-section">
-                <div className="oa-section-title">🔐 Account Credentials</div>
+              <SectionCard title="Account Credentials" icon={<Lock size={14}/>}>
                 <div className="oa-info-grid">
                   <InfoRow label="Username" value={app.username} mono />
                   <InfoRow label="Password"  value={app.plain_password} mono />
                 </div>
-              </div>
+              </SectionCard>
             )}
 
             {status === "Rejected" && app.reject_reason && (
-              <div className="oa-notice oa-notice-rejected">
-                ✗ Rejected: <strong>{app.reject_reason}</strong>
+              <div className="oa-notice oa-notice-rejected" style={{display:"flex",alignItems:"center",gap:6}}>
+                <XCircle size={14}/> Rejected: <strong>{app.reject_reason}</strong>
               </div>
             )}
             {status === "Approved" && (
-              <div className="oa-notice oa-notice-approved">
-                ✓ This application has been <strong>approved</strong>.
+              <div className="oa-notice oa-notice-approved" style={{display:"flex",alignItems:"center",gap:6}}>
+                <CheckCircle size={14}/> This application has been <strong>approved</strong>.
               </div>
             )}
 
             {rejectMode && (
-              <div className="oa-section">
-                <div className="oa-section-title reject-title-text">✗ Reason for Rejection</div>
+              <SectionCard title="Reason for Rejection" icon={<XCircle size={14}/>}>
                 <textarea
                   className="oa-textarea"
                   placeholder="e.g. Incomplete requirements, ID does not match provided info..."
@@ -207,7 +185,7 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
                   rows={3}
                   autoFocus
                 />
-              </div>
+              </SectionCard>
             )}
           </>)}
         </div>
@@ -218,8 +196,8 @@ function ViewModal({ app, loadingDetails=false, onClose, onApprove, onReject }) 
               <button className="oa-btn-cancel" onClick={onClose}>Close</button>
               {status === "Pending" && (
                 <>
-                  <button className="oa-btn-reject-soft" onClick={() => setRejectMode(true)}>✗ Reject</button>
-                  <button className="oa-btn-approve" onClick={() => onApprove(app.id)}>✓ Approve</button>
+                  <button className="oa-btn-reject-soft" onClick={() => setRejectMode(true)} style={{display:"flex",alignItems:"center",gap:6}}><XCircle size={14}/> Reject</button>
+                  <button className="oa-btn-approve" onClick={() => onApprove(app.id)} style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle size={14}/> Approve</button>
                 </>
               )}
             </>
@@ -378,7 +356,7 @@ export default function OnlineApplications() {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
-            {search && <button className="oa-clear-btn" onClick={() => { setSearch(""); setPage(1); }}>✕</button>}
+            {search && <button className="oa-clear-btn" onClick={() => { setSearch(""); setPage(1); }}><X size={13}/></button>}
           </div>
           <div className="oa-status-tabs">
             {STATUS_TABS.map(s => (
@@ -404,7 +382,7 @@ export default function OnlineApplications() {
                 <th style={{ width:"13%" }}>Contact No.</th>
                 <th style={{ width:"17%" }}>Email</th>
                 <th style={{ width:"10%" }}>Occupation</th>
-                <th style={{ width:"8%",textAlign:"center" }}>ID</th>
+                <th style={{ width:"8%",textAlign:"center" }}>Birth Cert.</th>
                 <th style={{ width:"8%" }}>Submitted</th>
               </tr>
             </thead>
@@ -415,7 +393,7 @@ export default function OnlineApplications() {
                 <tr><td colSpan={8} className="oa-empty">No applications found.</td></tr>
               ) : paginated.map(app => {
                 const appStatus = app.application_status || "Pending";
-                const hasId = app.id_front_url || app.id_back_url;
+                const hasBirthCert = app.id_front_url;
                 return (
                   <tr
                     key={app.id}
@@ -434,8 +412,8 @@ export default function OnlineApplications() {
                     <td className="cell-email">{app.email}</td>
                     <td>{app.occupation}</td>
                     <td style={{textAlign:"center"}}>
-                      <span title={hasId?"ID uploaded":"No ID"} style={{fontSize:16}}>
-                        {hasId ? "✅" : "❌"}
+                      <span title={hasBirthCert?"Birth Certificate uploaded":"No Birth Certificate"} style={{display:"inline-flex"}}>
+                        {hasBirthCert ? <CheckCircle size={16} color="#2e7d32"/> : <XCircle size={16} color="#c62828"/>}
                       </span>
                     </td>
                     <td className="cell-date">{app.created_at?.slice(0,10)}</td>

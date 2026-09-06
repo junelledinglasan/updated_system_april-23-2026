@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/members_service.dart';
+import '../../widgets/admin/admin_scaffold_helpers.dart';
 
 class _SVColors {
   static const orange = Color(0xFFF57F17);
@@ -36,6 +37,10 @@ class _SavingsDepositScreenState extends State<SavingsDepositScreen> {
   List<dynamic> _history = [];
   bool _histLoading = false;
   String _histSearch = '';
+  // ── BAGO: dating flat na listahan lang ng LAHAT ng transactions —
+  // ngayon naka-group per member, makikita muna ang MEMBER, tapos
+  // i-expand para makita ang kanilang mga record. ────────────────────
+  String? _expandedMember;
 
   @override
   void initState() {
@@ -119,28 +124,44 @@ class _SavingsDepositScreenState extends State<SavingsDepositScreen> {
         return name.contains(q) || code.contains(q);
       }).toList();
 
+  // ── BAGO: i-group ang mga transaction per member. ────────────────
+  List<Map<String, dynamic>> get _memberGroups {
+    final Map<String, Map<String, dynamic>> groups = {};
+    for (final tx in _filteredHistory) {
+      final key = '${tx['member_code'] ?? tx['member_name']}';
+      groups.putIfAbsent(key, () => {
+            'member_name': tx['member_name'],
+            'member_code': tx['member_code'],
+            'txs': <dynamic>[],
+          });
+      (groups[key]!['txs'] as List<dynamic>).add(tx);
+    }
+    return groups.values.toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFD8E8CC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: _SVColors.dark,
-        elevation: 0.5,
-        title: const Text('Savings Transaction', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _SVColors.dark)),
-      ),
+    // ── FIX: dating sariling plain Scaffold+AppBar lang ito (walang
+    // drawer) — kaya "back" arrow lang ang lumalabas, walang access sa
+    // hamburger/drawer menu papunta sa ibang admin sections. Gamit na
+    // ngayon ang parehong AdminScreenScaffold na ginagamit ng ibang
+    // admin screens (Manage Members, atbp.), para consistent ang
+    // navigation access. ─────────────────────────────────────────────
+    return AdminScreenScaffold(
+      activeRouteKey: 'savings',
+      title: 'Savings Transaction',
       body: Column(
         children: [
           Container(
             color: Colors.white,
             child: Row(
               children: [
-                _MainTab(label: 'New Transaction', active: _mainTab == 'new', color: _SVColors.orange, onTap: () => setState(() { _mainTab = 'new'; _done = false; _step = 1; })),
+                _MainTab(label: 'New Transaction', active: _mainTab == 'new', color: _SVColors.orange, onTap: () => setState(() { _mainTab = 'new'; _done = false; _step = 1; _expandedMember = null; })),
                 _MainTab(
                   label: 'History${_history.isNotEmpty ? " (${_history.length})" : ""}',
                   active: _mainTab == 'history',
                   color: _SVColors.orange,
-                  onTap: () { setState(() => _mainTab = 'history'); if (_history.isEmpty) _loadHistory(); },
+                  onTap: () { setState(() { _mainTab = 'history'; _expandedMember = null; }); if (_history.isEmpty) _loadHistory(); },
                 ),
               ],
             ),
@@ -218,18 +239,16 @@ class _SavingsDepositScreenState extends State<SavingsDepositScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: _SVColors.orange, foregroundColor: Colors.white),
-                      onPressed: _selected != null ? () => setState(() => _step = 2) : null,
-                      child: const Text('Next →'),
-                    ),
-                  ),
-                ],
+              // ── FIX: tinanggal ang "Cancel" button — hindi na
+              // kailangan, wala nang back arrow, at meron nang hamburger
+              // menu papunta sa ibang sections. ────────────────────────
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _SVColors.orange, foregroundColor: Colors.white),
+                  onPressed: _selected != null ? () => setState(() => _step = 2) : null,
+                  child: const Text('Next →'),
+                ),
               ),
             ),
           ),
@@ -346,28 +365,65 @@ class _SavingsDepositScreenState extends State<SavingsDepositScreen> {
         Expanded(
           child: _histLoading
               ? const Center(child: CircularProgressIndicator())
-              : _filteredHistory.isEmpty
+              : _memberGroups.isEmpty
                   ? const Center(child: Text('No savings transactions found.', style: TextStyle(color: _SVColors.sub)))
+                  // ── BAGO: dating flat na ListView lang ng LAHAT ng
+                  // transactions — ngayon naka-group per MEMBER, i-tap
+                  // para makita ang kanilang mga record. ─────────────
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filteredHistory.length,
+                      itemCount: _memberGroups.length,
                       itemBuilder: (context, i) {
-                        final tx = _filteredHistory[i];
-                        final isDeposit = tx['transaction_type'] == 'Deposit';
+                        final g = _memberGroups[i];
+                        final txs = g['txs'] as List<dynamic>;
+                        final code = '${g['member_code'] ?? g['member_name']}';
+                        final isOpen = _expandedMember == code;
+                        final memberTotal = txs.fold<double>(0, (s, t) => s + (t['transaction_type'] == 'Deposit' ? 1 : -1) * (double.tryParse('${t['amount']}') ?? 0));
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFF0F0F0))),
-                          child: Row(children: [
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: (isDeposit ? _SVColors.green : _SVColors.red).withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text('${tx['transaction_type']}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: isDeposit ? _SVColors.green : _SVColors.red))),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text('${tx['member_name'] ?? ''}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                                Text('${tx['member_code'] ?? ''} · ${'${tx['created_at'] ?? ''}'.split('T').first}', style: const TextStyle(fontSize: 9.5, color: _SVColors.sub)),
-                              ]),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: isOpen ? _SVColors.orange : const Color(0xFFF0F0F0))),
+                          child: Column(children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => setState(() => _expandedMember = isOpen ? null : code),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(children: [
+                                  CircleAvatar(radius: 18, backgroundColor: const Color(0xFFFFF3E0), child: Text('${g['member_name'] ?? 'M'}'.isNotEmpty ? '${g['member_name']}'[0].toUpperCase() : 'M', style: const TextStyle(color: _SVColors.orange, fontWeight: FontWeight.w800))),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                      Text('${g['member_name'] ?? ''}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                      Text('$code · ${txs.length} transaction${txs.length != 1 ? 's' : ''}', style: const TextStyle(fontSize: 10, color: _SVColors.sub)),
+                                    ]),
+                                  ),
+                                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                    Text('${memberTotal >= 0 ? "+" : ""}₱${memberTotal.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: memberTotal >= 0 ? _SVColors.green : _SVColors.red)),
+                                    const Text('net', style: TextStyle(fontSize: 8, color: Color(0xFFBBBBBB))),
+                                  ]),
+                                  Icon(isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: const Color(0xFFBBBBBB)),
+                                ]),
+                              ),
                             ),
-                            Text('${isDeposit ? "+" : "−"}₱${(double.tryParse('${tx['amount']}') ?? 0).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w700, color: isDeposit ? _SVColors.green : _SVColors.red, fontSize: 12)),
+                            if (isOpen)
+                              Container(
+                                decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFF5E9D0)))),
+                                child: Column(
+                                  children: txs.map<Widget>((tx) {
+                                    final isDeposit = tx['transaction_type'] == 'Deposit';
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFFAFAFA)))),
+                                      child: Row(children: [
+                                        Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: (isDeposit ? _SVColors.green : _SVColors.red).withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text('${tx['transaction_type']}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: isDeposit ? _SVColors.green : _SVColors.red))),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: Text('${'${tx['created_at'] ?? ''}'.split('T').first}${tx['note'] != null && '${tx['note']}'.isNotEmpty ? " · ${tx['note']}" : ""}', style: const TextStyle(fontSize: 10, color: _SVColors.sub))),
+                                        Text('${isDeposit ? "+" : "−"}₱${(double.tryParse('${tx['amount']}') ?? 0).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w700, color: isDeposit ? _SVColors.green : _SVColors.red, fontSize: 12)),
+                                      ]),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
                           ]),
                         );
                       },

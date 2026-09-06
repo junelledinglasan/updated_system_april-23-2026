@@ -7,6 +7,18 @@ const STAFF_ROLE_LABELS = {
   cashier: "Cashier", collector: "Collector", bookkeeper: "Bookkeeper", admin_clerk: "Administrative Clerk",
 };
 
+// ── BAGO: salamin ng "DEFAULT_FEATURES_BY_ROLE" sa backend
+// (settings_app/models.py) — ginagamit lang para malaman kung
+// "default" pa ang kasalukuyang permissions ng isang staff (hindi pa
+// na-customize), para maipakita ito sa admin at hindi malito kung
+// bakit may naka-check na agad kahit hindi pa sila mismo nag-set. ────
+const DEFAULT_FEATURES_BY_ROLE = {
+  cashier:     ["loan-payment"],
+  collector:   ["loan-payment"],
+  bookkeeper:  ["reports"],
+  admin_clerk: ["members", "applications", "loan-approval", "announcement", "reports"],
+};
+
 // ─── Settings Modal — Logo Customization + Staff Feature Permissions + GCash ──
 export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
   const [tab,      setTab]      = useState("logo");
@@ -232,12 +244,21 @@ export default function SettingsModal({ onClose, logoUrl, onLogoUpdated }) {
                     const isOpen = expandedStaff === s.staff_id;
                     const perms  = localPerms[s.staff_id] || [];
                     const dirty  = JSON.stringify([...perms].sort()) !== JSON.stringify([...(s.features||[])].sort());
+                    // ── BAGO: "(default)" indicator — para malinaw sa
+                    // admin kung ito pa rin ang sensible na panimulang
+                    // set (base sa role) at hindi pa sila mismo
+                    // nag-customize. ─────────────────────────────────
+                    const roleDefaults = DEFAULT_FEATURES_BY_ROLE[s.staff_role] || [];
+                    const isDefault = JSON.stringify([...perms].sort()) === JSON.stringify([...roleDefaults].sort());
                     return (
                       <div key={s.staff_id} className="stg-staff-card">
                         <button className="stg-staff-header" onClick={() => setExpanded(isOpen ? null : s.staff_id)}>
                           <div>
                             <div className="stg-staff-name">{s.staff_name}</div>
-                            <div className="stg-staff-role">{STAFF_ROLE_LABELS[s.staff_role] || s.staff_role || "Staff"} · {perms.length} feature{perms.length!==1?"s":""} enabled</div>
+                            <div className="stg-staff-role">
+                              {STAFF_ROLE_LABELS[s.staff_role] || s.staff_role || "Staff"} · {perms.length} feature{perms.length!==1?"s":""} enabled
+                              {isDefault && <span style={{marginLeft:6,color:"#888",fontStyle:"italic"}}>(default)</span>}
+                            </div>
                           </div>
                           <span className="stg-staff-chevron">{isOpen ? "▲" : "▼"}</span>
                         </button>

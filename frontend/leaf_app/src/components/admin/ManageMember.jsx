@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { getMembersAPI, getMemberStatsAPI, getMemberAPI, updateMemberAPI, deleteMemberAPI, getApplicationsAPI, updateApplicationStatusAPI, convertToMemberAPI, getOnlineApplicationsAPI, convertOnlineAppAPI, registerMemberAPI, getMemberSavingsAPI } from "../../api/members";
-import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff, UserCheck, UserX, ShieldAlert, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff, UserCheck, UserX, ShieldAlert, CheckCircle2, XCircle, Info, ArrowLeft, User, Wallet, GraduationCap, Lock, TrendingUp, Check, EyeOff, PiggyBank, FileText, CreditCard, ArrowUpCircle, ArrowDownCircle, Sprout } from "lucide-react";
 import api from "../../api/axiosInstance";
 import "./ManageMember.css";
 
-const STATUS_OPTIONS = ["All","Active","Deactivated"];
+const STATUS_OPTIONS = ["All","Active","Inactive","Deactivated"];
 const ROWS_PER_PAGE  = 10;
 
 const SORT_OPTIONS = [
@@ -75,17 +76,24 @@ function AgeGroupChart({ members }) {
 }
 
 function ModalField({ label, name, type="text", options=null, full=false, mode, form, handle }) {
+  // ── BAGO: dating plain floating text lang ang bawat field (label
+  // sa itaas, value sa ibaba, walang box/container) — ngayon naka-
+  // "chip" na sa loob ng light green box, para mas organized at hindi
+  // na-eeng plain kapag maraming fields sa isang grid. ────────────────
   return (
-    <div className={`modal-field${full?" full":""}`}>
-      <div className="modal-field-label">{label}</div>
+    <div className={`modal-field${full?" full":""}`} style={{
+      background:"#f9fef9", border:"1px solid #eef5ea", borderRadius:10,
+      padding:"10px 14px",
+    }}>
+      <div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>{label}</div>
       {mode==="view" ? (
-        <div className="modal-field-value">{form[name] || "—"}</div>
+        <div className="modal-field-value" style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{form[name] || "—"}</div>
       ) : options ? (
-        <select className="modal-input" name={name} value={form[name]||""} onChange={handle}>
+        <select className="modal-input" name={name} value={form[name]||""} onChange={handle} style={{width:"100%",border:"1px solid #c8e6c9",borderRadius:6,padding:"6px 8px",fontSize:13,background:"#fff"}}>
           {options.map(o => <option key={o}>{o}</option>)}
         </select>
       ) : (
-        <input className="modal-input" type={type} name={name} value={form[name]||""} onChange={handle} />
+        <input className="modal-input" type={type} name={name} value={form[name]||""} onChange={handle} style={{width:"100%",border:"1px solid #c8e6c9",borderRadius:6,padding:"6px 8px",fontSize:13,background:"#fff",boxSizing:"border-box"}}/>
       )}
     </div>
   );
@@ -157,9 +165,9 @@ function FinancialSummary({ memberId }) {
   const savingsTxList  = savings?.transactions   || [];
 
   const TABS = [
-    {key:"savings",  label:"🏦 Savings",       color:"#e65100", count:savingsTxList.length},
-    {key:"sharecap", label:"💰 Share Capital", color:"#1565c0", count:scHistory.length},
-    {key:"loans",    label:"📋 Loans",         color:"#2e7d32", count:summary.loans.length},
+    {key:"savings",  label:"Savings",       icon:<PiggyBank size={12}/>,   color:"#e65100", count:savingsTxList.length},
+    {key:"sharecap", label:"Share Capital", icon:<Wallet size={12}/>,      color:"#1565c0", count:scHistory.length},
+    {key:"loans",    label:"Loans",         icon:<FileText size={12}/>,    color:"#2e7d32", count:summary.loans.length},
   ];
 
   return (
@@ -167,24 +175,27 @@ function FinancialSummary({ memberId }) {
       <div className="mm-view-section-title">Financial Overview</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
         <div style={{background:"#e8f5e9",borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
-          <div style={{fontSize:11,color:"#558b2f",fontWeight:600,marginBottom:4}}>💰 Share Capital</div>
+          <div style={{fontSize:11,color:"#558b2f",fontWeight:600,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><Wallet size={12}/> Share Capital</div>
           <div style={{fontSize:18,fontWeight:800,color:"#1b5e20"}}>₱{Number(summary.share_capital).toLocaleString()}</div>
-          <div style={{fontSize:10,color:"#888",marginTop:2}}>Max Loanable: ₱{Number(summary.share_capital).toLocaleString()}</div>
+          <div style={{fontSize:10,color:"#888",marginTop:2}}>Max Loanable: ₱{Number(summary.max_loanable).toLocaleString()}</div>
         </div>
         <div style={{background:"#e3f2fd",borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
-          <div style={{fontSize:11,color:"#1565c0",fontWeight:600,marginBottom:4}}>📋 Active Loans</div>
+          <div style={{fontSize:11,color:"#1565c0",fontWeight:600,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><FileText size={12}/> Active Loans</div>
           <div style={{fontSize:18,fontWeight:800,color:"#0d47a1"}}>{summary.active_loans}</div>
           <div style={{fontSize:10,color:"#888",marginTop:2}}>Total: {summary.total_loans} loan{summary.total_loans!==1?"s":""}</div>
         </div>
         <div style={{background:"#f3e5f5",borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
-          <div style={{fontSize:11,color:"#6a1b9a",fontWeight:600,marginBottom:4}}>💳 Total Paid</div>
+          <div style={{fontSize:11,color:"#6a1b9a",fontWeight:600,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><CreditCard size={12}/> Total Paid</div>
           <div style={{fontSize:18,fontWeight:800,color:"#4a148c"}}>₱{Number(summary.total_paid).toLocaleString()}</div>
           <div style={{fontSize:10,color:"#888",marginTop:2}}>Remaining: ₱{Number(summary.total_balance).toLocaleString()}</div>
         </div>
         <div style={{background:"#fff8e1",borderRadius:10,padding:"12px 14px",textAlign:"center",border:"1px solid #ffe082"}}>
-          <div style={{fontSize:11,color:"#f57f17",fontWeight:600,marginBottom:4}}>🏦 Savings Balance</div>
+          <div style={{fontSize:11,color:"#f57f17",fontWeight:600,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><PiggyBank size={12}/> Savings Balance</div>
           <div style={{fontSize:18,fontWeight:800,color:"#e65100"}}>₱{Number(savingsBalance).toLocaleString()}</div>
-          <div style={{fontSize:10,color:"#888",marginTop:2}}>↑ ₱{Number(totalDeposit).toLocaleString()} · ↓ ₱{Number(totalWithdraw).toLocaleString()}</div>
+          <div style={{fontSize:10,color:"#888",marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <span style={{display:"flex",alignItems:"center",gap:2}}><ArrowUpCircle size={10} color="#2e7d32"/> ₱{Number(totalDeposit).toLocaleString()}</span>
+            <span style={{display:"flex",alignItems:"center",gap:2}}><ArrowDownCircle size={10} color="#c62828"/> ₱{Number(totalWithdraw).toLocaleString()}</span>
+          </div>
         </div>
       </div>
 
@@ -198,7 +209,7 @@ function FinancialSummary({ memberId }) {
             borderBottom:historyTab===t.key ? `2px solid ${t.color}` : "2px solid transparent",
             marginBottom:-2, display:"flex", alignItems:"center", justifyContent:"center", gap:5,
           }}>
-            {t.label}
+            {t.icon} {t.label}
             <span style={{background:historyTab===t.key?"#f0f0f0":"#f0f0f0",color:historyTab===t.key?t.color:"#aaa",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700}}>
               {t.count}
             </span>
@@ -221,8 +232,8 @@ function FinancialSummary({ memberId }) {
               <tr key={tx.id} style={{background:idx%2===0?"#fff":"#fffde7",borderTop:"1px solid #f5f5f5"}}>
                 <td style={{padding:"7px 10px",color:"#888",fontSize:10}}>{tx.created_at?.split("T")[0]}</td>
                 <td style={{padding:"7px 10px"}}>
-                  <span style={{background:tx.transaction_type==="Deposit"?"#e8f5e9":"#fce4ec",color:tx.transaction_type==="Deposit"?"#2e7d32":"#c62828",padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>
-                    {tx.transaction_type==="Deposit"?"💰":"💸"} {tx.transaction_type}
+                  <span style={{background:tx.transaction_type==="Deposit"?"#e8f5e9":"#fce4ec",color:tx.transaction_type==="Deposit"?"#2e7d32":"#c62828",padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}>
+                    {tx.transaction_type==="Deposit"?<ArrowDownCircle size={10}/>:<ArrowUpCircle size={10}/>} {tx.transaction_type}
                   </span>
                 </td>
                 <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:tx.transaction_type==="Deposit"?"#2e7d32":"#c62828"}}>
@@ -262,9 +273,9 @@ function FinancialSummary({ memberId }) {
                     <span style={{
                       background:t.txn_type==="CBU"?"#e8f5e9":t.txn_type==="Initial"?"#fff8e1":"#e3f2fd",
                       color:t.txn_type==="CBU"?"#2e7d32":t.txn_type==="Initial"?"#f57f17":"#1565c0",
-                      padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700
+                      padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3
                     }}>
-                      {t.txn_type==="CBU"?"📈 CBU":t.txn_type==="Initial"?"🌱 Initial":"💰 Deposit"}
+                      {t.txn_type==="CBU"?<><TrendingUp size={10}/> CBU</>:t.txn_type==="Initial"?<><Sprout size={10}/> Initial</>:<><Wallet size={10}/> Deposit</>}
                     </span>
                   </td>
                   <td style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#1565c0"}}>+₱{Number(t.amount).toLocaleString()}</td>
@@ -289,20 +300,23 @@ function FinancialSummary({ memberId }) {
             const sBg           = isPaid ? "#e3f2fd"  : (statusBg[loan.status]   || "#f5f5f5");
             return (
               <div key={loan.loan_id} style={{ borderRadius:10, border:`1px solid ${isExpanded?"#a5d6a7":"#e0e0e0"}`, overflow:"hidden", transition:"border 0.2s" }}>
-                <div onClick={() => setActiveLoanId(isExpanded ? null : loan.loan_id)} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr auto", padding:"10px 14px", cursor:"pointer", gap:8, background: isExpanded ? "#f1f8e9" : idx%2===0 ? "#fff" : "#fafafa", alignItems:"center" }}>
+                <div onClick={() => setActiveLoanId(isExpanded ? null : loan.loan_id)} style={{ display:"grid", gridTemplateColumns:"1fr 0.9fr 0.7fr 1fr 1fr auto", padding:"10px 14px", cursor:"pointer", gap:8, background: isExpanded ? "#f1f8e9" : idx%2===0 ? "#fff" : "#fafafa", alignItems:"center" }}>
                   <div>
                     <div style={{fontFamily:"monospace",color:"#1b5e20",fontWeight:700,fontSize:12}}>{loan.loan_id}</div>
                     <div style={{fontSize:10,color:"#888",marginTop:1}}>{loan.loan_type}</div>
                   </div>
                   <div><div style={{fontSize:10,color:"#999"}}>Amount</div><div style={{fontWeight:700,fontSize:13}}>₱{Number(loan.amount).toLocaleString()}</div></div>
-                  <div><div style={{fontSize:10,color:"#999"}}>Balance</div><div style={{fontWeight:700,fontSize:13,color:isPaid?"#2e7d32":"#c62828"}}>{isPaid ? "₱0 ✓" : `₱${Number(loan.balance).toLocaleString()}`}</div></div>
+                  {/* ── BAGO: Term — kulang dati dito, kaya hindi
+                      makita kung ilang buwan ang loan. ────────────── */}
+                  <div><div style={{fontSize:10,color:"#999"}}>Term</div><div style={{fontWeight:700,fontSize:13}}>{loan.term_months||"—"} months</div></div>
+                  <div><div style={{fontSize:10,color:"#999"}}>Balance</div><div style={{fontWeight:700,fontSize:13,color:isPaid?"#2e7d32":"#c62828",display:"flex",alignItems:"center",gap:3}}>{isPaid ? <>₱0 <Check size={12}/></> : `₱${Number(loan.balance).toLocaleString()}`}</div></div>
                   <div><span style={{background:sBg,color:sColor,border:`1px solid ${sColor}33`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{displayStatus}</span></div>
                   <div style={{fontSize:13,color:"#bbb",userSelect:"none",paddingRight:4}}>{isExpanded ? "▲" : "▼"}</div>
                 </div>
                 {isExpanded && (
                   <div style={{borderTop:"1px solid #e8f5e9",background:"#f9fef9"}}>
-                    <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#2e7d32",display:"flex",alignItems:"center",gap:8}}>
-                      💳 Payment History — {loan.loan_id}
+                    <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#2e7d32",display:"flex",alignItems:"center",gap:6}}>
+                      <CreditCard size={12}/> Payment History — {loan.loan_id}
                       <span style={{fontWeight:400,color:"#aaa",fontSize:10}}>({loan.payments?.length || 0} payment{loan.payments?.length !== 1 ? "s" : ""})</span>
                     </div>
                     {!loan.payments || loan.payments.length === 0 ? (
@@ -325,7 +339,7 @@ function FinancialSummary({ memberId }) {
                               <td style={{padding:"6px 14px",color:"#666"}}>{p.paid_at}</td>
                               <td style={{padding:"6px 14px",fontFamily:"monospace",color:"#1b5e20",fontSize:10}}>{p.tx_id}</td>
                               <td style={{padding:"6px 14px",textAlign:"right",fontWeight:700,color:"#2e7d32"}}>₱{Number(p.amount).toLocaleString()}</td>
-                              <td style={{padding:"6px 14px",textAlign:"right",fontWeight:600,color:p.balance===0?"#1565c0":"#c62828"}}>{p.balance === 0 ? "₱0 ✓ Fully Paid" : `₱${Number(p.balance).toLocaleString()}`}</td>
+                              <td style={{padding:"6px 14px",textAlign:"right",fontWeight:600,color:p.balance===0?"#1565c0":"#c62828"}}>{p.balance === 0 ? <span style={{display:"inline-flex",alignItems:"center",gap:3}}>₱0 <Check size={11}/> Fully Paid</span> : `₱${Number(p.balance).toLocaleString()}`}</td>
                               <td style={{padding:"6px 14px",color:"#888"}}>{p.recorded_by}</td>
                               <td style={{padding:"6px 14px",color:"#aaa"}}>{p.note}</td>
                             </tr>
@@ -336,7 +350,7 @@ function FinancialSummary({ memberId }) {
                     <div style={{padding:"8px 14px",display:"flex",gap:16,fontSize:11,color:"#888",borderTop:"1px solid #e8f5e9",flexWrap:"wrap"}}>
                       <span>Monthly Due: <strong style={{color:"#555"}}>₱{Number(loan.monthly_due).toLocaleString()}</strong></span>
                       <span>Total Paid: <strong style={{color:"#2e7d32"}}>₱{Number(loan.payments?.reduce((s,p) => s + p.amount, 0) || 0).toLocaleString()}</strong></span>
-                      <span>Remaining: <strong style={{color:isPaid?"#1565c0":"#c62828"}}>{isPaid ? "₱0 — Fully Paid ✓" : `₱${Number(loan.balance).toLocaleString()}`}</strong></span>
+                      <span>Remaining: <strong style={{color:isPaid?"#1565c0":"#c62828",display:"inline-flex",alignItems:"center",gap:3}}>{isPaid ? <>₱0 — Fully Paid <Check size={11}/></> : `₱${Number(loan.balance).toLocaleString()}`}</strong></span>
                     </div>
                   </div>
                 )}
@@ -359,6 +373,13 @@ function ViewEditModal({ member, onClose, onSave }) {
   const [saving,     setSaving]    = useState(false);
   const [showPw,     setShowPw]    = useState(false);
   const [profileTab, setProfileTab]= useState("info");
+  // ── BAGO: 1x/2x/3x na Loan Multiplier — hiwalay itong maliit na
+  // control (auto-save agad pagpalit, hindi kasama sa buong Edit/Save
+  // flow), dahil desisyon ito ng admin base sa payment history ng
+  // member, hindi bahagi ng profile info. ──────────────────────────
+  const [loanMultiplier, setLoanMultiplier] = useState(1);
+  const [savingMultiplier, setSavingMultiplier] = useState(false);
+  const [multiplierSaved, setMultiplierSaved] = useState(false);
 
   const [form, setForm] = useState({
     first_name:"",last_name:"",middle_name:"",status:"Active",
@@ -416,6 +437,7 @@ function ViewEditModal({ member, onClose, onSave }) {
           monthly_income: jp.monthly_income||"",
           plain_password: data.plain_password||"",
         });
+        setLoanMultiplier(data.loan_multiplier || 1);
       } catch(e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -425,6 +447,25 @@ function ViewEditModal({ member, onClose, onSave }) {
   const handle = e => {
     const val = e.target.type==="checkbox" ? e.target.checked : e.target.value;
     setForm(p => ({...p,[e.target.name]:val}));
+  };
+
+  // ── BAGO: auto-save agad pagpalit ng multiplier — hindi na
+  // kailangang pindutin pa ang "Save" ng buong Edit modal. ────────────
+  const handleMultiplierChange = async (e) => {
+    const newVal = Number(e.target.value);
+    const prevVal = loanMultiplier;
+    setLoanMultiplier(newVal);
+    setSavingMultiplier(true);
+    try {
+      await updateMemberAPI(member.id, { loan_multiplier: newVal });
+      setMultiplierSaved(true);
+      setTimeout(() => setMultiplierSaved(false), 2000);
+    } catch(e) {
+      console.error(e);
+      setLoanMultiplier(prevVal); // ── ibalik kung na-fail ang save
+    } finally {
+      setSavingMultiplier(false);
+    }
   };
 
   const handleSave = async () => {
@@ -437,55 +478,130 @@ function ViewEditModal({ member, onClose, onSave }) {
   const username = detail?.user_username||"—";
   const memberId = detail?.member_id||member.member_id||"—";
 
+  // ── BAGO: puting "section card" wrapper — ginagamit sa bawat
+  // grupo ng fields (Personal Info, Spouse & Family, atbp.) para may
+  // separation/contrast sa page, imbes na direktang nakalatag lang
+  // ang mga field sa background. ──────────────────────────────────
+  const SectionCard = ({ title, icon, children }) => (
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid #e4f0e5",padding:"18px 20px",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <div style={{width:4,height:16,background:"#2e7d32",borderRadius:3}}/>
+        {icon}
+        <span style={{fontSize:12,fontWeight:800,color:"#1b5e20",textTransform:"uppercase",letterSpacing:0.5}}>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box mm-view-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title">{mode==="view"?"Member Profile":"Edit Member"}</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+    // ── BAGO: dating floating modal (naka-center sa itaas ng backdrop),
+    // ngayon FULL-SCREEN na page — mas maluwag at maganda tingnan,
+    // kasabay ng mas mayamang visual design (gradient header, sectioned
+    // white cards, accent colors) imbes na yung plain na dating itsura. ──
+    <div style={{position:"fixed",inset:0,zIndex:2000,background:"#eef5ea",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      {/* ── Top bar — dating may hiwalay pang "Close" button sa ibaba
+          na duplicate lang ng "← Back to Members" dito. Ngayon dito na
+          lang lahat ng navigation/actions, at context-aware: sa view
+          mode, "Back" = lumabas sa page; sa edit mode, "Back" =
+          bumalik lang sa view (hindi lumalabas), at "Save Changes" na
+          ang nasa kanan imbes na "Edit Member". ────────────────────── */}
+      <div style={{position:"sticky",top:0,zIndex:10,background:"#fff",borderBottom:"1px solid #e4f0e5",padding:"14px 24px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+        <button onClick={() => mode==="edit" ? setMode("view") : onClose()} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,color:"#555",fontSize:13,fontWeight:600,padding:"6px 10px",borderRadius:8,flexShrink:0}}>
+          <ArrowLeft size={15}/> {mode==="edit" ? "Back" : "Back to Members"}
+        </button>
+        <div style={{flex:1,textAlign:"center",fontSize:15,fontWeight:800,color:"#1b5e20"}}>{mode==="view"?"Member Profile":"Edit Member"}</div>
+        <div style={{flexShrink:0}}>
+          {!loading && (mode==="view" ? (
+            <button className="btn-modal-save" onClick={() => setMode("edit")} style={{padding:"8px 16px",fontSize:12.5,display:"flex",alignItems:"center",gap:6}}><Pencil size={13}/> Edit Member</button>
+          ) : (
+            <button className="btn-modal-save" onClick={handleSave} disabled={saving} style={{padding:"8px 16px",fontSize:12.5}}>{saving?"Saving...":"Save Changes"}</button>
+          ))}
         </div>
-        <div className="modal-body">
-          {loading ? <div style={{textAlign:"center",padding:"40px 0",color:"#888"}}>Loading member details...</div> : (<>
-            <div className="mm-view-header">
-              <div className="mm-view-avatar">{(form.first_name||"M")[0].toUpperCase()}</div>
-              <div className="mm-view-info">
-                <div className="mm-view-name">{form.first_name} {form.last_name}</div>
-                <div className="mm-view-id">{memberId}</div>
-                <div className="mm-view-username">@{username}</div>
+      </div>
+
+      <div style={{flex:1,maxWidth:880,width:"100%",margin:"0 auto",padding:"24px 24px 40px",boxSizing:"border-box"}}>
+        {loading ? (
+          <div style={{textAlign:"center",padding:"60px 0",color:"#888"}}>Loading member details...</div>
+        ) : (<>
+          {/* ── Gradient header ── */}
+          <div style={{
+            background:"linear-gradient(135deg,#1b5e20,#2e7d32,#388e3c)",
+            borderRadius:16,padding:"22px 24px",marginBottom:18,
+            boxShadow:"0 8px 24px rgba(46,125,50,0.22)",
+            display:"flex",alignItems:"center",gap:16,
+          }}>
+            <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:24,fontWeight:800,flexShrink:0}}>
+              {(form.first_name||"M")[0].toUpperCase()}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#fff",fontSize:19,fontWeight:800}}>{form.first_name} {form.last_name}</div>
+              <div style={{color:"rgba(255,255,255,0.75)",fontSize:11.5,fontFamily:"monospace",marginTop:2}}>{memberId}</div>
+              <div style={{color:"rgba(255,255,255,0.75)",fontSize:12.5}}>@{username}</div>
+            </div>
+            <span style={{
+              padding:"5px 14px",borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0,
+              background: form.status==="Active" ? "rgba(255,255,255,0.92)" : "#ffcdd2",
+              color: form.status==="Active" ? "#1b5e20" : "#c62828",
+            }}>{form.status}</span>
+          </div>
+
+          {/* ── Tabs ── */}
+          {mode==="view" && (
+            <div style={{display:"flex",background:"#fff",borderRadius:12,border:"1px solid #e4f0e5",marginBottom:18,overflow:"hidden"}}>
+              {[{key:"info",label:"Profile Info",icon:<User size={13}/>},{key:"finance",label:"Financial Summary",icon:<Wallet size={13}/>}].map(t => (
+                <button key={t.key} onClick={() => setProfileTab(t.key)} style={{
+                  flex:1,padding:"12px 8px",fontSize:12.5,fontWeight:700,
+                  color:profileTab===t.key?"#fff":"#888",
+                  background:profileTab===t.key?"#2e7d32":"transparent",
+                  border:"none",cursor:"pointer",transition:"all 0.15s",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                }}>{t.icon} {t.label}</button>
+              ))}
+            </div>
+          )}
+
+          {mode==="view" && profileTab==="finance" && <FinancialSummary memberId={member.id}/>}
+
+          {(mode==="edit"||profileTab==="info") && (<>
+            {/* ── Capital + Loan Multiplier card ── */}
+            <div style={{background:"linear-gradient(135deg,#f1f8e9,#e8f5e9)",border:"1px solid #c8e6c9",borderRadius:14,padding:"18px 20px",marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:10.5,fontWeight:700,color:"#558b2f",textTransform:"uppercase",letterSpacing:0.4}}>Share Capital</div>
+                  <div style={{fontSize:22,fontWeight:800,color:"#222",marginTop:2}}>₱{Number(form.share_capital||0).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:10.5,fontWeight:700,color:"#558b2f",textTransform:"uppercase",letterSpacing:0.4}}>Max Loanable</div>
+                  <div style={{fontSize:22,fontWeight:800,color:"#2e7d32",marginTop:2}}>₱{(Number(form.share_capital||0)*loanMultiplier).toLocaleString()}</div>
+                </div>
               </div>
-              <span className={`status-badge status-${(form.status||"").toLowerCase()}`}>{form.status}</span>
+              {/* ── BAGO: editable na Loan Multiplier — 1x (unang
+                  loan), 2x (masamang payment history), 3x (magandang
+                  payment history). Direkta ang admin na nagpapasya
+                  dito, hindi ito awtomatiko. Auto-save agad. ────── */}
+              <div style={{background:"rgba(255,255,255,0.7)",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:28,height:28,borderRadius:8,background:"#e8f5e9",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><TrendingUp size={15} color="#2e7d32"/></div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#1b5e20"}}>Loan Multiplier</div>
+                  <div style={{fontSize:10,color:"#7a8a6a"}}>Base sa payment history</div>
+                </div>
+                {savingMultiplier && <span style={{fontSize:10,color:"#888"}}>Saving...</span>}
+                {multiplierSaved && !savingMultiplier && <span style={{fontSize:10,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Check size={12}/> Saved</span>}
+                <select
+                  value={loanMultiplier}
+                  onChange={handleMultiplierChange}
+                  disabled={savingMultiplier}
+                  style={{fontSize:12.5,fontWeight:700,padding:"6px 12px",borderRadius:20,border:"1.5px solid #a5d6a7",background:"#e8f5e9",color:"#1b5e20",cursor:savingMultiplier?"default":"pointer"}}
+                >
+                  <option value={1}>1× — First loan</option>
+                  <option value={2}>2× — Bad payment history</option>
+                  <option value={3}>3× — Good payment history</option>
+                </select>
+              </div>
             </div>
 
-            {mode==="view" && (
-              <div style={{display:"flex",borderBottom:"2px solid #e8f5e9",marginBottom:16}}>
-                {[{key:"info",label:"👤 Profile Info"},{key:"finance",label:"💰 Financial Summary"}].map(t => (
-                  <button key={t.key} onClick={() => setProfileTab(t.key)} style={{
-                    flex:1,padding:"9px 8px",fontSize:12,fontWeight:600,
-                    color:profileTab===t.key?"#2e7d32":"#888",
-                    background:profileTab===t.key?"#f9fef9":"none",
-                    border:"none",borderBottom:profileTab===t.key?"2px solid #2e7d32":"none",
-                    marginBottom:profileTab===t.key?-2:0,cursor:"pointer",
-                  }}>{t.label}</button>
-                ))}
-              </div>
-            )}
-
-            {mode==="view" && profileTab==="finance" && <FinancialSummary memberId={member.id}/>}
-
-            {(mode==="edit"||profileTab==="info") && (<>
-              <div className="mm-view-capital">
-                <div className="mm-vc-row">
-                  <span className="mm-vc-label">Share Capital</span>
-                  <span className="mm-vc-val">₱{Number(form.share_capital||0).toLocaleString()}</span>
-                </div>
-                <div className="mm-vc-row">
-                  <span className="mm-vc-label">Max Loanable</span>
-                  <span className="mm-vc-val green">₱{(Number(form.share_capital||0)*2).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="mm-view-section-title">Personal Information</div>
-              <div className="modal-grid">
+            <SectionCard title="Personal Information" icon={<IdCard size={14} color="#2e7d32"/>}>
+              <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <ModalField label="Last Name"      name="last_name"     mode={mode} form={form} handle={handle}/>
                 <ModalField label="First Name"     name="first_name"    mode={mode} form={form} handle={handle}/>
                 <ModalField label="Middle Name"    name="middle_name"   mode={mode} form={form} handle={handle}/>
@@ -503,9 +619,10 @@ function ViewEditModal({ member, onClose, onSave }) {
                 <ModalField label="Religious/Social Affiliation" name="religious_social_affiliation" mode={mode} form={form} handle={handle}/>
                 <ModalField label="Address"        name="address"       full mode={mode} form={form} handle={handle}/>
               </div>
+            </SectionCard>
 
-              <div className="mm-view-section-title">Spouse & Family</div>
-              <div className="modal-grid">
+            <SectionCard title="Spouse & Family" icon={<Users size={14} color="#2e7d32"/>}>
+              <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <ModalField label="Spouse Name"        name="spouse_name"               mode={mode} form={form} handle={handle}/>
                 <ModalField label="Spouse Occupation"  name="spouse_occupation"         mode={mode} form={form} handle={handle}/>
                 <ModalField label="Spouse Income (₱)"  name="spouse_income"    type="number" mode={mode} form={form} handle={handle}/>
@@ -514,20 +631,21 @@ function ViewEditModal({ member, onClose, onSave }) {
                 <ModalField label="Relationship"       name="beneficiary_relationship"  mode={mode} form={form} handle={handle}/>
                 <ModalField label="Credit References"  name="credit_references"         mode={mode} form={form} handle={handle} full/>
               </div>
+            </SectionCard>
 
-              <div className="mm-view-section-title">Classification & Profile</div>
-              <div className="modal-grid">
+            <SectionCard title="Classification & Profile" icon={<GraduationCap size={14} color="#2e7d32"/>}>
+              <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <ModalField label="Classification"         name="classification" options={["Student","Senior","Employed"]} mode={mode} form={form} handle={handle}/>
                 <ModalField label="Educational Attainment" name="educational_attainment" options={["Elementary","High School","Vocational","College","Post Graduate"]} mode={mode} form={form} handle={handle}/>
-                <div className="modal-field">
-                  <div className="modal-field-label">Birth Certificate</div>
+                <div className="modal-field" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px"}}>
+                  <div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Birth Certificate</div>
                   {mode==="view"
                     ? <div className="modal-field-value">{form.birth_certificate?" Submitted":" Not submitted"}</div>
                     : <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}><input type="checkbox" name="birth_certificate" checked={!!form.birth_certificate} onChange={handle}/> Yes</label>
                   }
                 </div>
-                <div className="modal-field">
-                  <div className="modal-field-label">Marriage Certificate</div>
+                <div className="modal-field" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px"}}>
+                  <div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Marriage Certificate</div>
                   {mode==="view"
                     ? <div className="modal-field-value">{form.marriage_certificate?" Submitted":" Not submitted"}</div>
                     : <label style={{display:"flex",alignItems:"center",gap:8,marginTop:4,fontSize:13,cursor:"pointer"}}><input type="checkbox" name="marriage_certificate" checked={!!form.marriage_certificate} onChange={handle}/> Yes</label>
@@ -535,22 +653,23 @@ function ViewEditModal({ member, onClose, onSave }) {
                 </div>
               </div>
 
-              {form.classification==="Student" && <div className="modal-grid">
+              {form.classification==="Student" && <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:10}}>
                 <ModalField label="School Name"           name="school_name"  mode={mode} form={form} handle={handle}/>
                 <ModalField label="Year Level"            name="year_level"   options={["Grade 7","Grade 8","Grade 9","Grade 10","Grade 11","Grade 12","1st Year","2nd Year","3rd Year","4th Year","5th Year","Graduate"]} mode={mode} form={form} handle={handle}/>
                 <ModalField label="Monthly Allowance (₱)" name="allowance"   type="number" mode={mode} form={form} handle={handle}/>
               </div>}
-              {form.classification==="Senior" && <div className="modal-grid">
+              {form.classification==="Senior" && <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:10}}>
                 <ModalField label="Monthly Pension Income (₱)" name="pension_income" type="number" mode={mode} form={form} handle={handle}/>
               </div>}
-              {form.classification==="Employed" && <div className="modal-grid">
+              {form.classification==="Employed" && <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:10}}>
                 <ModalField label="Employment Type"   name="job_type" options={["Employed","Self-Employed","Business","Freelance","Other"]} mode={mode} form={form} handle={handle}/>
                 <ModalField label="Monthly Income (₱)" name="monthly_income" type="number" mode={mode} form={form} handle={handle}/>
               </div>}
+            </SectionCard>
 
-              {mode==="view" && (detail?.id_front_url || detail?.id_back_url) && (<>
-                <div className="mm-view-section-title">Valid ID</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            {mode==="view" && (detail?.id_front_url || detail?.id_back_url) && (
+              <SectionCard title="Valid ID" icon={<IdCard size={14} color="#2e7d32"/>}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                   {detail?.id_front_url && (
                     <div>
                       <div className="modal-field-label" style={{marginBottom:6}}>Front</div>
@@ -564,15 +683,16 @@ function ViewEditModal({ member, onClose, onSave }) {
                     </div>
                   )}
                 </div>
-              </>)}
+              </SectionCard>
+            )}
 
-              <div className="mm-view-section-title">Account</div>
-              <div className="modal-grid">
-                <div className="modal-field full"><div className="modal-field-label">Member ID</div><input className="modal-input disabled" value={memberId} disabled /></div>
-                <div className="modal-field full"><div className="modal-field-label">Username</div><div className="modal-field-value mono">{username}</div></div>
+            <SectionCard title="Account" icon={<Lock size={14} color="#2e7d32"/>}>
+              <div className="modal-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div className="modal-field full" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px",gridColumn:"1 / -1"}}><div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Member ID</div><input className="modal-input disabled" value={memberId} disabled style={{width:"100%",border:"none",background:"transparent",fontSize:13,fontWeight:600,padding:0}}/></div>
+                <div className="modal-field full" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px",gridColumn:"1 / -1"}}><div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Username</div><div className="modal-field-value mono" style={{fontSize:13,fontWeight:600}}>{username}</div></div>
                 {mode==="view" && (
-                  <div className="modal-field full">
-                    <div className="modal-field-label">Password</div>
+                  <div className="modal-field full" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px",gridColumn:"1 / -1"}}>
+                    <div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Password</div>
                     <div className="mm-pass-view-wrap">
                       <span className="modal-field-value mono">{showPw?(form.plain_password||"No password saved"):"••••••••"}</span>
                       <button type="button" className="mm-reveal-btn" onClick={() => setShowPw(p=>!p)}>{showPw?"Hide":"Show"}</button>
@@ -580,31 +700,22 @@ function ViewEditModal({ member, onClose, onSave }) {
                   </div>
                 )}
                 {mode==="edit" && (
-                  <div className="modal-field full">
+                  <div className="modal-field full" style={{gridColumn:"1 / -1"}}>
                     <div className="modal-field-label">New Password <span style={{fontSize:11,color:"#aaa",fontWeight:400,marginLeft:6}}>(leave blank to keep current)</span></div>
                     <div className="mm-pass-wrap">
                       <input className="modal-input mm-pass-input" type={showPw?"text":"password"} name="plain_password" value={form.plain_password} onChange={handle} placeholder="Enter new password"/>
-                      <button type="button" className="mm-eye-btn" onClick={() => setShowPw(p=>!p)}>{showPw?"🙈":"👁"}</button>
+                      <button type="button" className="mm-eye-btn" onClick={() => setShowPw(p=>!p)}>{showPw?<EyeOff size={14}/>:<Eye size={14}/>}</button>
                     </div>
                   </div>
                 )}
-                <div className="modal-field full">
-                  <div className="modal-field-label">Date Registered</div>
-                  <div className="modal-field-value">{detail?.date_registered?new Date(detail.date_registered).toLocaleDateString("en-PH",{year:"numeric",month:"long",day:"numeric"}):"—"}</div>
+                <div className="modal-field full" style={{background:"#f9fef9",border:"1px solid #eef5ea",borderRadius:10,padding:"10px 14px",gridColumn:"1 / -1"}}>
+                  <div className="modal-field-label" style={{fontSize:10,fontWeight:700,color:"#7a8a6a",textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Date Registered</div>
+                  <div className="modal-field-value" style={{fontSize:13,fontWeight:600}}>{detail?.date_registered?new Date(detail.date_registered).toLocaleDateString("en-PH",{year:"numeric",month:"long",day:"numeric"}):"—"}</div>
                 </div>
               </div>
-            </>)}
+            </SectionCard>
           </>)}
-        </div>
-        <div className="modal-footer">
-          {mode==="view" ? (<>
-            <button className="btn-modal-close" onClick={onClose}>Close</button>
-            <button className="btn-modal-save" onClick={() => setMode("edit")}>✏ Edit Member</button>
-          </>) : (<>
-            <button className="btn-modal-close" onClick={() => setMode("view")}>← Back</button>
-            <button className="btn-modal-save" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Changes"}</button>
-          </>)}
-        </div>
+        </>)}
       </div>
     </div>
   );
@@ -945,6 +1056,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
 }
 
 export default function ManageMember() {
+  const location = useLocation();
   const [members,      setMembers]      = useState([]);
   const [pending,      setPending]      = useState([]);
   const [stats,        setStats]        = useState({active:0,inactive:0,suspended:0,total:0});
@@ -979,6 +1091,17 @@ export default function ManageMember() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // ── BAGO: awtomatikong bubuksan ang profile ng partikular na member
+  // kapag galing sa "Overdue Loan Alert" widget ng Dashboard (na
+  // nagpapasa ng "openMemberId" via navigation state) — hindi na
+  // kailangang hanapin pa nang manu-mano gamit ang search bar. ────────
+  useEffect(() => {
+    if (location.state?.openMemberId && members.length > 0) {
+      const found = members.find(m => m.id === location.state.openMemberId);
+      if (found) setViewMember(found);
+    }
+  }, [location.state, members]);
   useEffect(()=>{ const h=e=>{if(e.detail?.action==="register")setShowRegister(true);}; window.addEventListener("staff-action",h); return ()=>window.removeEventListener("staff-action",h); },[]);
 
   const filtered = useMemo(() => {
@@ -1009,6 +1132,30 @@ export default function ManageMember() {
       fetchData(true);
     } catch(e) {
       showToast(e.response?.data?.error || "Failed to deactivate member.", "danger");
+    }
+  };
+  // ── BAGO: gumagana na ngayon ang "Activate" mula sa DALAWANG status
+  // (Inactive AT Deactivated) pabalik sa Active — kaya generic ang
+  // pangalan (hindi "handleReactivateFromDeactivated" lang). ─────────
+  const handleActivate = async (id) => {
+    try {
+      await updateMemberAPI(id, { status: "Active", membership_status: "Active" });
+      showToast("Member reactivated.", "success");
+      fetchData(true);
+    } catch(e) {
+      showToast(e.response?.data?.error || "Failed to reactivate member.", "danger");
+    }
+  };
+  // ── BAGO: "Mark Inactive" — hiwalay sa "Deactivate" (na awtomatikong
+  // nagko-complete ng active loans). Manual na status lang ito na
+  // puwedeng i-set/i-alis ng admin kahit kailan, walang side-effects. ──
+  const handleMarkInactive = async (id) => {
+    try {
+      await updateMemberAPI(id, { status: "Inactive", membership_status: "Inactive" });
+      showToast("Member marked as inactive.", "success");
+      fetchData(true);
+    } catch(e) {
+      showToast(e.response?.data?.error || "Failed to mark member as inactive.", "danger");
     }
   };
   const handleSaveEdit = async (id,form) => { try{await updateMemberAPI(id,form);showToast("Member updated successfully.");fetchData(true);}catch{showToast("Failed to update member.","danger");} };
@@ -1115,14 +1262,25 @@ export default function ManageMember() {
                       {(()=>{const age=computeAge(m.birth_date);return age&&age>0?<span style={{color:"#555"}}>{age}</span>:<span style={{color:"#ccc"}}>—</span>;})()}
                     </td>
                     <td>{m.contact}</td>
-                    <td><span className={`status-badge status-${(m.status||"").toLowerCase()}`}>{m.status}</span></td>
+                    <td><span className={`status-badge status-${(m.status||"").toLowerCase()}`} style={
+                      m.status==="Inactive" ? {background:"#f5f5f5",color:"#616161",border:"1px solid #d0d0d0"} :
+                      m.status==="Deactivated" ? {background:"#ffebee",color:"#c62828",border:"1px solid #ef9a9a"} : undefined
+                    }>{m.status}</span></td>
                     <td>
+                      {/* ── BAGO: "Mark Inactive" — bagong hiwalay na
+                          button (manual, walang side-effects), kaiba
+                          sa "Deactivate" (awtomatikong nag-co-complete
+                          ng active loans). "Activate" naman ay gumagana
+                          na mula sa DALAWANG status (Inactive AT
+                          Deactivated) pabalik sa Active. ──────────── */}
                       <div className="action-btns" onClick={e=>e.stopPropagation()}>
-                        <button className="action-btn view-btn" title="View" onClick={()=>setViewMember(m)}><Eye size={13}/></button>
-                        <button className="action-btn edit-btn" title="Edit" onClick={()=>setViewMember(m)}><Pencil size={12}/></button>
                         <button className="action-btn delete-btn" title="Delete" onClick={()=>setDeleteMember(m)}><Trash2 size={12}/></button>
-                        {m.status!=="Deactivated" && (
+                        {m.status==="Active" && (<>
+                          <button title="Mark Inactive" onClick={()=>handleMarkInactive(m.id)} style={{background:"#f5f5f5",color:"#616161",border:"1px solid #d0d0d0",borderRadius:6,padding:"4px 6px",cursor:"pointer",display:"flex",alignItems:"center"}}><UserX size={12}/></button>
                           <button title="Deactivate Member" onClick={()=>setDeactivateMember(m)} style={{background:"#fff3e0",color:"#e65100",border:"1px solid #ffcc80",borderRadius:6,padding:"4px 6px",cursor:"pointer",display:"flex",alignItems:"center"}}><PowerOff size={12}/></button>
+                        </>)}
+                        {(m.status==="Inactive" || m.status==="Deactivated") && (
+                          <button title="Activate Member" onClick={()=>handleActivate(m.id)} style={{background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:6,padding:"4px 6px",cursor:"pointer",display:"flex",alignItems:"center"}}><UserCheck size={12}/></button>
                         )}
                       </div>
                     </td>

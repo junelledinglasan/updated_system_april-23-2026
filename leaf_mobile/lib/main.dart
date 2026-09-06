@@ -21,6 +21,12 @@ import 'screens/admin/reports_screen.dart';
 import 'screens/staff/staff_dashboard.dart';
 import 'providers/auth_provider.dart';
 import 'providers/member_provider.dart';
+// ── FIX: dating hindi naka-register ang "LanguageProvider" dito, kahit
+// matagal na itong ginagamit ng maraming screens (hal.
+// my_loans_screen.dart, na gumagamit ng "context.watch<LanguageProvider>()"
+// sa maraming lugar) — kaya lumalabas ang "Could not find the correct
+// Provider<LanguageProvider>" error. Idinagdag na ito sa MultiProvider. ──
+import 'providers/language_provider.dart';
 import 'utils/constants.dart';
 import 'utils/nav_key.dart';
 
@@ -30,6 +36,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MemberProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
       ],
       child: const LeafMPCApp(),
     ),

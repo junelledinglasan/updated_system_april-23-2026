@@ -15,9 +15,18 @@ class LoanSerializer(serializers.ModelSerializer):
 
 
 class CreateLoanSerializer(serializers.ModelSerializer):
+    # ── FIX: PALAGING NAKUKUHA BILANG "False" ito dati — dahil hindi
+    # ito explicit na naka-declare dito (nasa LoanSerializer lang ito
+    # naka-declare, ibang serializer). Basta na-iignore ng DRF ang
+    # "is_f2f: true" na ipinapadala ng frontend (hindi kilala ang
+    # field na 'to sa serializer na 'to), kaya lagi na lang
+    # "validated_data.pop('is_f2f', False)" ang gumagana — palaging
+    # "For Review" ang naging status, kahit F2F application. ─────────
+    is_f2f = serializers.BooleanField(required=False, default=False, write_only=True)
+
     class Meta:
         model  = Loan
-        fields = ['loan_type', 'amount', 'term_months', 'purpose', 'collateral', 'member']
+        fields = ['loan_type', 'amount', 'term_months', 'purpose', 'collateral', 'member', 'is_f2f']
         extra_kwargs = {
             'member':    { 'required': False },
             'collateral':{ 'required': False },
@@ -48,11 +57,12 @@ class CreateLoanSerializer(serializers.ModelSerializer):
                 {'amount': 'Minimum loan amount is ₱3,000.'}
             )
 
-        # ── 2. Max loanable (Share Capital × 2) ────────────────────────────
-        max_loanable = float(member.share_capital) * 2
+        # ── 2. Max loanable (base sa admin-editable na loan_multiplier,
+        # hindi na naka-hardcode sa "× 2") ─────────────────────────────
+        max_loanable = member.max_loanable
         if amount > max_loanable:
             raise serializers.ValidationError(
-                {'amount': f'Amount exceeds your max loanable of ₱{max_loanable:,.2f} (Share Capital × 2).'}
+                {'amount': f'Amount exceeds your max loanable of ₱{max_loanable:,.2f}.'}
             )
 
         # ── 3. Overdue loan check ───────────────────────────────────────────
@@ -109,8 +119,18 @@ class CreateLoanSerializer(serializers.ModelSerializer):
         else:
             monthly_rate = 0.01
 
-        interest      = monthly_rate * amount * term
-        monthly_due   = (amount + interest) / term
+        # ── FIX: dating "(amount + interest) / term" — dito
+        # NA-DODOBLE ang interest, dahil ISANG BESES na nakukuha ang
+        # interest bilang UPFRONT DEDUCTION (kinaltas na sa Net
+        # Proceeds bago pa man ma-release ang pera sa member — tingnan
+        # ang mga computation preview sa LoanApplication.jsx/AdminLayout.jsx/
+        # new_loan_application_screen.dart, kung saan "Interest" ay
+        # kasama sa "Upfront Deductions"). Kung idadagdag pa rin ito sa
+        # monthly_due, doble na ang binabayad ng member — una sa upfront
+        # deduction, tapos ulit sa bawat buwanang hulog. Base na lang
+        # ngayon sa PRINCIPAL LANG hinati sa term (hindi na kailangan
+        # ang "interest" variable dito). ─────────────────────────────
+        monthly_due   = amount / term
         balance       = amount
         interest_rate = monthly_rate * 12 * 100
 

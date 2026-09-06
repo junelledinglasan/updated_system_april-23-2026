@@ -209,10 +209,11 @@ export default function ApplyMembership() {
   const [resubmit,       setResubmit]      = useState(false);
   const [uploadProgress, setUploadProgress]= useState("");
 
-  const [idFrontFile,    setIdFrontFile]    = useState(null);
-  const [idBackFile,     setIdBackFile]     = useState(null);
-  const [idFrontPreview, setIdFrontPreview] = useState(null);
-  const [idBackPreview,  setIdBackPreview]  = useState(null);
+  // ── BAGO: dating "Valid ID" (front + back, 2 uploads) — ngayon
+  // "Birth Certificate" na lang (1 upload, dahil isang pahina lang
+  // karaniwan ang birth certificate, hindi tulad ng ID na may 2 side). ──
+  const [birthCertFile,    setBirthCertFile]    = useState(null);
+  const [birthCertPreview, setBirthCertPreview] = useState(null);
 
   const [form, setForm] = useState({
     // Personal
@@ -266,20 +267,20 @@ export default function ApplyMembership() {
     setErrors(p => ({ ...p, [e.target.name]: "" }));
   };
 
-  const handleIdSelect = (side, file) => {
+  const handleBirthCertSelect = (file) => {
     if (file.size > 5 * 1024 * 1024) {
-      setErrors(p => ({ ...p, [`id_${side}`]: "File too large. Maximum is 5MB." }));
+      setErrors(p => ({ ...p, birth_cert: "File too large. Maximum is 5MB." }));
       return;
     }
     const preview = URL.createObjectURL(file);
-    if (side === "front") { setIdFrontFile(file); setIdFrontPreview(preview); }
-    else                  { setIdBackFile(file);  setIdBackPreview(preview);  }
-    setErrors(p => ({ ...p, [`id_${side}`]: "" }));
+    setBirthCertFile(file);
+    setBirthCertPreview(preview);
+    setErrors(p => ({ ...p, birth_cert: "" }));
   };
 
-  const handleIdClear = side => {
-    if (side === "front") { setIdFrontFile(null); setIdFrontPreview(null); }
-    else                  { setIdBackFile(null);  setIdBackPreview(null);  }
+  const handleBirthCertClear = () => {
+    setBirthCertFile(null);
+    setBirthCertPreview(null);
   };
 
   const uploadToSupabase = async (file, path) => {
@@ -307,8 +308,7 @@ export default function ApplyMembership() {
       if (!form.school_name.trim()) e.school_name = "Required";
       if (!form.year_level.trim())  e.year_level  = "Required";
     }
-    if (!idFrontFile) e.id_front = "Please upload the front side of your Valid ID.";
-    if (!idBackFile)  e.id_back  = "Please upload the back side of your Valid ID.";
+    if (!birthCertFile) e.birth_cert = "Please upload your Birth Certificate.";
     return e;
   };
 
@@ -318,14 +318,14 @@ export default function ApplyMembership() {
       setErrors(e);
       const personalFields = ["first_name","last_name","birth_date","place_of_birth","sex","sex_other","contact_number","email","address","occupation"];
       const classFields    = ["school_name","year_level"];
-      const idFields       = ["id_front","id_back"];
+      const idFields       = ["birth_cert"];
       if (personalFields.some(f => e[f])) { setTab("personal");       return; }
       if (classFields.some(f => e[f]))    { setTab("classification");  return; }
       if (idFields.some(f => e[f]))       { setTab("verification");    return; }
       return;
     }
     if (!supabase) {
-      setErrors({ id_front: "Supabase is not configured. Add VITE_SUPABASE_ANON_KEY to your .env file." });
+      setErrors({ birth_cert: "Supabase is not configured. Add VITE_SUPABASE_ANON_KEY to your .env file." });
       setTab("verification");
       return;
     }
@@ -333,10 +333,8 @@ export default function ApplyMembership() {
     try {
       const ts     = Date.now();
       const userId = user?.id || "unknown";
-      setUploadProgress("Uploading Valid ID (front)...");
-      const idFrontUrl = await uploadToSupabase(idFrontFile, `valid-ids/${userId}_${ts}_front.${idFrontFile.name.split(".").pop()}`);
-      setUploadProgress("Uploading Valid ID (back)...");
-      const idBackUrl  = await uploadToSupabase(idBackFile,  `valid-ids/${userId}_${ts}_back.${idBackFile.name.split(".").pop()}`);
+      setUploadProgress("Uploading Birth Certificate...");
+      const birthCertUrl = await uploadToSupabase(birthCertFile, `birth-certificates/${userId}_${ts}.${birthCertFile.name.split(".").pop()}`);
       setUploadProgress("Submitting application...");
       await submitApplicationAPI({
         first_name:                   form.first_name,
@@ -371,14 +369,22 @@ export default function ApplyMembership() {
         pension_income:               form.pension_income || 0,
         job_type:                     form.job_type,
         monthly_income:               form.monthly_income || 0,
-        id_front_url:                 idFrontUrl,
-        id_back_url:                  idBackUrl,
+        // ── PAALALA: dating "id_front_url"/"id_back_url" ang dalawang
+        // field na 'to (Valid ID front+back). Ngayon isa na lang na
+        // Birth Certificate ang ipinapasa — ipinasok ko pa rin sa
+        // "id_front_url" key (backend compatibility, wala akong
+        // access sa backend serializer para malaman kung meron bang
+        // dedikadong field name para dito, hal. "birth_cert_url").
+        // Kung may ganoon, sabihin mo lang para maayos natin nang
+        // tama ang key name. ─────────────────────────────────────────
+        id_front_url:                 birthCertUrl,
+        id_back_url:                  null,
       });
       setDone(true);
     } catch(err) {
       const msg = err.response?.data?.error || err.response?.data?.detail || err.message || "Failed to submit. Please try again.";
       if (msg.toLowerCase().includes("upload") || msg.toLowerCase().includes("supabase")) {
-        setErrors({ id_front: msg }); setTab("verification");
+        setErrors({ birth_cert: msg }); setTab("verification");
       } else {
         setErrors({ first_name: msg }); setTab("personal");
       }
@@ -595,24 +601,22 @@ export default function ApplyMembership() {
           {tab === "verification" && (
             <div className="am-form-grid">
               <div className="am-field am-full" style={{background:"#e8f5e9",borderRadius:10,padding:"14px 16px",border:"1px solid #c8e6c9"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#1b5e20",marginBottom:6}}>Valid ID Verification (Required)</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#1b5e20",marginBottom:6}}>Birth Certificate Verification (Required)</div>
                 <div style={{fontSize:12,color:"#555",lineHeight:1.7}}>
-                  Upload a clear photo of your <strong>Valid ID — both front and back sides</strong>.<br/>
-                  Accepted: PhilSys · Driver's License · Passport · SSS · GSIS · PRC · Voter's ID · Postal ID · Senior Citizen's ID · School ID
+                  Upload a clear photo or scan of your <strong>PSA/NSO-issued Birth Certificate</strong>.
                 </div>
               </div>
 
               {!supabase && (
                 <div className="am-field am-full" style={{background:"#ffebee",borderRadius:8,padding:"12px 14px",border:"1px solid #ef9a9a",fontSize:12,color:"#c62828",fontWeight:600}}>
-                  ID upload is not yet configured. Please add VITE_SUPABASE_ANON_KEY to your .env file.
+                  Document upload is not yet configured. Please add VITE_SUPABASE_ANON_KEY to your .env file.
                 </div>
               )}
 
-              <IDUploadField label="Valid ID — Front Side" required file={idFrontFile} preview={idFrontPreview} onSelect={f => handleIdSelect("front", f)} onClear={() => handleIdClear("front")} error={errors.id_front}/>
-              <IDUploadField label="Valid ID — Back Side"  required file={idBackFile}  preview={idBackPreview}  onSelect={f => handleIdSelect("back", f)}  onClear={() => handleIdClear("back")}  error={errors.id_back}/>
+              <IDUploadField label="Birth Certificate" required file={birthCertFile} preview={birthCertPreview} onSelect={handleBirthCertSelect} onClear={handleBirthCertClear} error={errors.birth_cert}/>
 
               <div className="am-field am-full" style={{background:"#fff8e1",borderRadius:8,padding:"10px 14px",border:"1px solid #ffe082",fontSize:11,color:"#f57c00"}}>
-                Make sure the ID photo is clear and fully readable. Blurry or incomplete images may cause rejection.
+                Make sure the document photo is clear and fully readable. Blurry or incomplete images may cause rejection.
               </div>
             </div>
           )}

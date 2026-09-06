@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getLoansAPI } from "../../api/loans";
 import { getPaymentsAPI, getPaymentStatsAPI, recordPaymentAPI } from "../../api/payments";
-import { Search, Eye, ChevronDown, ChevronUp, Wallet, AlertTriangle, BarChart3, Receipt, History } from "lucide-react";
+import { Search, Eye, ChevronDown, ChevronUp, Wallet, AlertTriangle, BarChart3, Receipt, History, X, CheckCircle, PartyPopper, Link, Printer, CreditCard, Calendar, ClipboardList } from "lucide-react";
 import api from "../../api/axiosInstance";
 import "./LoanPayment.css";
 import logo from '../../assets/logo.png';
@@ -31,7 +31,7 @@ function RecordModal({ loan, onClose, onSave }) {
       <div className="lp-modal" onClick={e=>e.stopPropagation()}>
         <div className="lp-modal-header">
           <div><div className="lp-modal-title">Record Payment</div><div className="lp-modal-sub">F2F — Office Collection</div></div>
-          <button className="lp-modal-close" onClick={onClose}>✕</button>
+          <button className="lp-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="lp-modal-body">
           <div className="lp-borrower-strip">
@@ -41,10 +41,11 @@ function RecordModal({ loan, onClose, onSave }) {
               <div className="lp-borrower-meta">{loan.member_code||loan.memberId} · {loan.loan_id||loan.loanId} · {loan.loan_type||loan.loanType}</div>
             </div>
           </div>
-          <div className="lp-balance-row">
+          <div className="lp-balance-row" style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:10}}>
             <div className="lp-bal-item"><span className="lp-bal-label">Principal</span><span className="lp-bal-val">₱{Number(loan.amount||0).toLocaleString()}</span></div>
             <div className="lp-bal-item highlight"><span className="lp-bal-label">Remaining Balance</span><span className="lp-bal-val danger">₱{balance.toLocaleString()}</span></div>
             <div className="lp-bal-item"><span className="lp-bal-label">Monthly Due</span><span className="lp-bal-val green">₱{Number(loan.monthly_due||0).toLocaleString()}</span></div>
+            <div className="lp-bal-item"><span className="lp-bal-label">Term</span><span className="lp-bal-val">{loan.term_months||loan.termMonths||"—"} months</span></div>
           </div>
           <div className="lp-field">
             <label className="lp-field-label">Payment Amount (₱) <span className="lp-required">*</span></label>
@@ -61,7 +62,7 @@ function RecordModal({ loan, onClose, onSave }) {
             <label className="lp-field-label">Note (optional)</label>
             <input className="lp-input" type="text" value={note} onChange={e=>setNote(e.target.value)} placeholder="e.g. Partial payment, advance payment..." maxLength={80}/>
           </div>
-          {error && <div className="lp-error">⚠ {error}</div>}
+          {error && <div className="lp-error" style={{display:"flex",alignItems:"center",gap:6}}><AlertTriangle size={13}/> {error}</div>}
           {isValid && (
             <div className="lp-preview">
               <div className="lp-prev-row"><span>Current balance</span><span>₱{balance.toLocaleString()}</span></div>
@@ -69,7 +70,7 @@ function RecordModal({ loan, onClose, onSave }) {
               <div className="lp-prev-divider"/>
               <div className="lp-prev-row result">
                 <span>New balance</span>
-                <span className={newBal===0?"paid-val":""}>₱{newBal.toLocaleString()}{newBal===0&&<span className="lp-paid-tag"> FULLY PAID 🎉</span>}</span>
+                <span className={newBal===0?"paid-val":""}>₱{newBal.toLocaleString()}{newBal===0&&<span className="lp-paid-tag" style={{display:"inline-flex",alignItems:"center",gap:4}}> FULLY PAID <PartyPopper size={13}/></span>}</span>
               </div>
             </div>
           )}
@@ -84,11 +85,15 @@ function RecordModal({ loan, onClose, onSave }) {
 }
 
 // ── ReceiptModal — updated with professional print layout ──────────────────────
-function ReceiptModal({ tx, onClose }) {
+function ReceiptModal({ tx, onClose, allLoansForLookup }) {
   if (!tx) return null;
   const isOnBlockchain = tx.polygon_tx && tx.network === 'polygon';
   const explorerUrl    = tx.polygon_tx ? `https://polygonscan.com/tx/${tx.polygon_tx}` : null;
   const isFullyPaid    = parseFloat(tx.balance || 0) === 0;
+  // ── BAGO: hinahanap ang orihinal na loan record gamit ang loan_code
+  // ng payment, para makuha ang "Loan Type" at "Loan Amount" (orihinal
+  // na halaga ng loan) — wala kasi ito sa payment record mismo. ───────
+  const matchedLoan = (allLoansForLookup||[]).find(l => l.loan_id === (tx.loan_code || tx.loanId));
 
   const handlePrint = () => {
     // Set print-specific data attributes so CSS can show only the receipt
@@ -105,7 +110,7 @@ function ReceiptModal({ tx, onClose }) {
             <div className="lp-modal-title">Transaction Receipt</div>
             <div className="lp-modal-sub mono">{tx.tx_id||tx.txId}</div>
           </div>
-          <button className="lp-modal-close" onClick={onClose}>✕</button>
+          <button className="lp-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
 
         {/* ── Printable Receipt Area ── */}
@@ -142,6 +147,16 @@ function ReceiptModal({ tx, onClose }) {
               <span className="lp-rk">Loan ID</span>
               <span className="lp-rv mono">{tx.loan_code || tx.loanId || "—"}</span>
             </div>
+            {/* ── BAGO: Loan Type at Loan Amount (orihinal) — kulang
+                dati, hinanap na lang gamit ang loan_code ng payment. ── */}
+            <div className="lp-receipt-row-item">
+              <span className="lp-rk">Loan Type</span>
+              <span className="lp-rv">{matchedLoan?.loan_type || "—"}</span>
+            </div>
+            <div className="lp-receipt-row-item">
+              <span className="lp-rk">Loan Amount</span>
+              <span className="lp-rv">{matchedLoan ? `₱${Number(matchedLoan.amount||0).toLocaleString()}` : "—"}</span>
+            </div>
           </div>
 
           <div className="lp-receipt-divider"/>
@@ -155,8 +170,8 @@ function ReceiptModal({ tx, onClose }) {
             </div>
             <div className="lp-receipt-row-item">
               <span className="lp-rk">Balance After</span>
-              <span className="lp-rv" style={{color: isFullyPaid ? "#1565c0" : "#c62828", fontWeight:700}}>
-                {isFullyPaid ? "₱0.00 — FULLY PAID ✓" : `₱${Number(tx.balance||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+              <span className="lp-rv" style={{color: isFullyPaid ? "#1565c0" : "#c62828", fontWeight:700, display:"inline-flex", alignItems:"center", gap:4}}>
+                {isFullyPaid ? <>₱0.00 — FULLY PAID <CheckCircle size={13}/></> : `₱${Number(tx.balance||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`}
               </span>
             </div>
             <div className="lp-receipt-row-item">
@@ -184,7 +199,7 @@ function ReceiptModal({ tx, onClose }) {
             </div>
             <div className="lp-receipt-row-item">
               <span className="lp-rk">Blockchain</span>
-              <span className="lp-rv">{isOnBlockchain ? "Polygon Mainnet" : "⚠ Local only"}</span>
+              <span className="lp-rv" style={{display:"inline-flex",alignItems:"center",gap:4}}>{isOnBlockchain ? "Polygon Mainnet" : <><AlertTriangle size={12}/> Local only</>}</span>
             </div>
             {tx.polygon_tx && (
               <div className="lp-receipt-row-item">
@@ -203,8 +218,8 @@ function ReceiptModal({ tx, onClose }) {
           {/* Polygonscan link — screen only */}
           {explorerUrl && (
             <div className="no-print" style={{marginTop:12,textAlign:'center'}}>
-              <a href={explorerUrl} target="_blank" rel="noopener noreferrer" style={{color:'#7c3aed',fontWeight:600,fontSize:13}}>
-                🔗 View on Polygonscan
+              <a href={explorerUrl} target="_blank" rel="noopener noreferrer" style={{color:'#7c3aed',fontWeight:600,fontSize:13,display:"inline-flex",alignItems:"center",gap:6}}>
+                <Link size={13}/> View on Polygonscan
               </a>
             </div>
           )}
@@ -222,7 +237,7 @@ function ReceiptModal({ tx, onClose }) {
 
         <div className="lp-modal-footer no-print">
           <button className="lp-btn-cancel" onClick={onClose}>Close</button>
-          <button className="lp-btn-print" onClick={handlePrint}>🖨 Print Receipt</button>
+          <button className="lp-btn-print" onClick={handlePrint} style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}><Printer size={14}/> Print Receipt</button>
         </div>
       </div>
     </div>
@@ -303,7 +318,7 @@ function DailyGroup({ dateStr, txList, onViewTx }) {
                 <td className="fw green">₱{Number(t.amount||0).toLocaleString()}</td>
                 <td className="blue">₱{Number(t.balance||0).toLocaleString()}</td>
                 <td className="cell-date">{t.paid_at ? new Date(t.paid_at).toLocaleTimeString("en-PH", {timeZone:"Asia/Manila", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false}) : "—"}</td>
-                <td><span className="hash-text">{t.polygon_tx ? '🔗 '+t.polygon_tx.slice(0,10)+'...' : t.hash?.substring(0,16)+'...'}</span></td>
+                <td><span className="hash-text" style={{display:"inline-flex",alignItems:"center",gap:3}}>{t.polygon_tx ? <><Link size={10}/> {t.polygon_tx.slice(0,10)}...</> : t.hash?.substring(0,16)+'...'}</span></td>
                 <td style={{textAlign:"center"}}><button className="lp-view-btn" onClick={() => onViewTx(t)}><Eye size={12}/></button></td>
               </tr>
             ))}
@@ -347,8 +362,8 @@ function LoanHistoryRow({ loan, transactions, idx }) {
         </div>
         <div>
           <div style={{fontSize:10,color:"#999"}}>Balance</div>
-          <div style={{fontWeight:700,fontSize:13,color:isPaid?"#2e7d32":"#c62828"}}>
-            {isPaid ? "₱0 ✓" : `₱${Number(loan.balance||0).toLocaleString()}`}
+          <div style={{fontWeight:700,fontSize:13,color:isPaid?"#2e7d32":"#c62828",display:"flex",alignItems:"center",gap:4}}>
+            {isPaid ? <>₱0 <CheckCircle size={12}/></> : `₱${Number(loan.balance||0).toLocaleString()}`}
           </div>
         </div>
         <div>
@@ -363,7 +378,7 @@ function LoanHistoryRow({ loan, transactions, idx }) {
       {expanded && (
         <div style={{borderTop:"1px solid #e8f5e9",background:"#f9fef9"}}>
           <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#2e7d32",display:"flex",alignItems:"center",gap:8}}>
-            💳 Payment History — {loan.loan_id}
+            <CreditCard size={13}/> Payment History — {loan.loan_id}
             <span style={{fontWeight:400,color:"#aaa",fontSize:10}}>({payments.length} payment{payments.length!==1?"s":""})</span>
           </div>
           {payments.length === 0 ? (
@@ -386,8 +401,8 @@ function LoanHistoryRow({ loan, transactions, idx }) {
                     <td style={{padding:"6px 14px",color:"#666",fontSize:10}}>{p.paid_at?.slice(0,10)}</td>
                     <td style={{padding:"6px 14px",fontFamily:"monospace",color:"#1b5e20",fontSize:10}}>{p.tx_id}</td>
                     <td style={{padding:"6px 14px",textAlign:"right",fontWeight:700,color:"#2e7d32"}}>₱{Number(p.amount||0).toLocaleString()}</td>
-                    <td style={{padding:"6px 14px",textAlign:"right",fontWeight:600,color:parseFloat(p.balance||0)===0?"#1565c0":"#c62828"}}>
-                      {parseFloat(p.balance||0)===0?"₱0 ✓":` ₱${Number(p.balance||0).toLocaleString()}`}
+                    <td style={{padding:"6px 14px",textAlign:"right",fontWeight:600,color:parseFloat(p.balance||0)===0?"#1565c0":"#c62828",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3}}>
+                      {parseFloat(p.balance||0)===0?<>₱0 <CheckCircle size={11}/></>:` ₱${Number(p.balance||0).toLocaleString()}`}
                     </td>
                     <td style={{padding:"6px 14px",color:"#888",fontSize:10}}>{p.recorded_by||"—"}</td>
                     <td style={{padding:"6px 14px",color:"#aaa",fontSize:10}}>{p.note||"—"}</td>
@@ -399,7 +414,7 @@ function LoanHistoryRow({ loan, transactions, idx }) {
           <div style={{padding:"8px 14px",display:"flex",gap:16,fontSize:11,color:"#888",borderTop:"1px solid #e8f5e9",flexWrap:"wrap"}}>
             <span>Monthly Due: <strong style={{color:"#555"}}>₱{Number(loan.monthly_due||0).toLocaleString()}</strong></span>
             <span>Total Paid: <strong style={{color:"#2e7d32"}}>₱{totalPaid.toLocaleString()}</strong></span>
-            <span>Remaining: <strong style={{color:isPaid?"#1565c0":"#c62828"}}>{isPaid?"₱0 — Fully Paid ✓":`₱${Number(loan.balance||0).toLocaleString()}`}</strong></span>
+            <span>Remaining: <strong style={{color:isPaid?"#1565c0":"#c62828",display:"inline-flex",alignItems:"center",gap:4}}>{isPaid?<>₱0 — Fully Paid <CheckCircle size={12}/></>:`₱${Number(loan.balance||0).toLocaleString()}`}</strong></span>
           </div>
         </div>
       )}
@@ -479,6 +494,12 @@ export default function LoanPayment() {
   };
 
   useEffect(() => { fetchData(); }, []);
+  // ── BAGO: proactive na kinukuha ang "allLoans" (kasama ang mga
+  // Completed na loan) tuwing bubuksan ang isang receipt — dati,
+  // hindi ito na-fefetch hangga't hindi binibisita ang "Loan History"
+  // tab, kaya walang makikitang Loan Type/Amount kung fully-paid na
+  // pala ang loan (wala na ito sa "Active Loans" list). ─────────────
+  useEffect(() => { if (viewTx) fetchAllLoans(); }, [viewTx]);
 
   const totalCollected   = parseFloat(pStats.total_collected||0);
   const overdueCount     = loans.filter(l=>l.status==="Overdue").length;
@@ -595,7 +616,7 @@ export default function LoanPayment() {
               <div className="lp-modal-title">Payment History</div>
               <div className="lp-modal-sub">{loanHistory.loan_id} · {loanHistory.member_name}</div>
             </div>
-            <button className="lp-modal-close" onClick={() => setLoanHistory(null)}>✕</button>
+            <button className="lp-modal-close" onClick={() => setLoanHistory(null)}><X size={16}/></button>
           </div>
           <div className="lp-modal-body">
             <div className="lp-balance-row">
@@ -646,7 +667,7 @@ export default function LoanPayment() {
       {toast && <div className={`lp-toast lp-toast-${toast.type}`}>{toast.msg}</div>}
       <RecordModal loan={recordLoan} onClose={()=>setRecord(null)} onSave={handleSave}/>
       <LoanHistoryModal/>
-      <ReceiptModal tx={viewTx} onClose={()=>setViewTx(null)}/>
+      <ReceiptModal tx={viewTx} onClose={()=>setViewTx(null)} allLoansForLookup={[...loans, ...allLoans]}/>
 
       <div className="lp-page-header">
         <div>
@@ -679,12 +700,12 @@ export default function LoanPayment() {
             <div className="lp-search-wrap">
               <span className="lp-search-icon"><Search size={13} color="#aaa"/></span>
               <input className="lp-search-input" placeholder="Search..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
-              {search && <button className="lp-clear-btn" onClick={()=>{setSearch("");setPage(1);}}>✕</button>}
+              {search && <button className="lp-clear-btn" onClick={()=>{setSearch("");setPage(1);}}><X size={13}/></button>}
             </div>
             {activeTab==="history" && (
               <div className="lp-filter-tabs">
-                <button className={`lp-filter-tab ${historyView==="daily"?"active ftab-all":""}`} onClick={()=>setHistoryView("daily")}>📅 Daily View</button>
-                <button className={`lp-filter-tab ${historyView==="all"?"active ftab-all":""}`} onClick={()=>setHistoryView("all")}>📋 All Transactions</button>
+                <button className={`lp-filter-tab ${historyView==="daily"?"active ftab-all":""}`} onClick={()=>setHistoryView("daily")} style={{display:"inline-flex",alignItems:"center",gap:6}}><Calendar size={13}/> Daily View</button>
+                <button className={`lp-filter-tab ${historyView==="all"?"active ftab-all":""}`} onClick={()=>setHistoryView("all")} style={{display:"inline-flex",alignItems:"center",gap:6}}><ClipboardList size={13}/> All Transactions</button>
               </div>
             )}
             {activeTab==="loanhistory" && (
@@ -701,19 +722,20 @@ export default function LoanPayment() {
           <div className="lp-table-wrap">
             <table className="lp-table">
               <thead><tr>
-                <th style={{width:"12%"}}>Loan ID</th>
-                <th style={{width:"10%"}}>Member ID</th>
-                <th style={{width:"14%"}}>Full Name</th>
-                <th style={{width:"12%"}}>Loan Type</th>
+                <th style={{width:"11%"}}>Loan ID</th>
+                <th style={{width:"9%"}}>Member ID</th>
+                <th style={{width:"12%"}}>Full Name</th>
+                <th style={{width:"11%"}}>Loan Type</th>
+                <th style={{width:"6%"}}>Term</th>
                 <th style={{width:"9%"}}>Amount</th>
                 <th style={{width:"9%"}}>Balance</th>
                 <th style={{width:"9%"}}>Monthly Due</th>
-                <th style={{width:"7%"}}>Status</th>
+                <th style={{width:"6%"}}>Status</th>
                 <th style={{width:"8%",textAlign:"center"}}>Action</th>
               </tr></thead>
               <tbody>
-                {loading ? <tr><td colSpan={9} className="lp-empty">Loading...</td></tr>
-                : paginatedLoans.length===0 ? <tr><td colSpan={9} className="lp-empty">No loans found.</td></tr>
+                {loading ? <tr><td colSpan={10} className="lp-empty">Loading...</td></tr>
+                : paginatedLoans.length===0 ? <tr><td colSpan={10} className="lp-empty">No loans found.</td></tr>
                 : paginatedLoans.map((l,idx)=>(
                   <tr key={l.id}
                     className={`${idx%2===0?"row-even":"row-odd"} lp-clickable-row`}
@@ -725,6 +747,7 @@ export default function LoanPayment() {
                     <td className="mono">{l.member_code}</td>
                     <td className="cell-name">{l.member_name}</td>
                     <td><span className="lp-type-pill">{l.loan_type}</span></td>
+                    <td className="fw">{l.term_months||"—"} months</td>
                     <td className="fw">₱{Number(l.amount||0).toLocaleString()}</td>
                     <td className={`fw ${l.status==="Overdue"?"danger":"blue"}`}>₱{Number(l.balance||0).toLocaleString()}</td>
                     <td className="fw green">₱{Number(l.monthly_due||0).toLocaleString()}</td>
@@ -777,7 +800,7 @@ export default function LoanPayment() {
                     <td className="fw green">₱{Number(t.amount||0).toLocaleString()}</td>
                     <td className="blue">₱{Number(t.balance||0).toLocaleString()}</td>
                     <td className="cell-date">{t.paid_at}</td>
-                    <td><span className="hash-text">{t.polygon_tx ? '🔗 '+t.polygon_tx.slice(0,10)+'...' : t.hash}</span></td>
+                    <td><span className="hash-text" style={{display:"inline-flex",alignItems:"center",gap:3}}>{t.polygon_tx ? <><Link size={10}/> {t.polygon_tx.slice(0,10)}...</> : t.hash}</span></td>
                     <td style={{textAlign:"center"}}><button className="lp-view-btn" onClick={()=>setViewTx(t)}><Eye size={12}/></button></td>
                   </tr>
                 ))}

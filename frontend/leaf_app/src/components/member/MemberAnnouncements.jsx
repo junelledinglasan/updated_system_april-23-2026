@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { getAnnouncementsAPI, addCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
+import { getAnnouncementsAPI, getAnnouncementAPI, addCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { getPageCache, savePageCache } from "../../utils/pageCache";
+import { ThumbsUp, Heart, Laugh, Sparkles, Frown, Angry as AngryIcon, X, Megaphone, MessageCircle } from "lucide-react";
 import "./MemberAnnouncements.css";
 
 const TYPE_COLOR = {
@@ -14,7 +15,11 @@ const TYPE_COLOR = {
 // backend/reactToAnnouncementAPI), naka-translate lang ang DISPLAY
 // label via t("ma_reaction_..."). ────────────────────────────────────
 const REACTION_TYPES = ["Like","Love","Haha","Wow","Sad","Angry"];
-const REACTION_EMOJI = { Like:"👍", Love:"❤️", Haha:"😂", Wow:"😮", Sad:"😢", Angry:"😠" };
+// ── BAGO: dating naka-emoji ito (👍❤️😂😮😢😠) — ngayon totoong
+// lucide-react icons, tugma sa "walang emoji" na patakaran. Walang
+// eksaktong lucide icon para sa "surprised/wow" face, kaya "Sparkles"
+// ang ginamit kong pinakamalapit na alternatibo. ────────────────────
+const REACTION_ICON  = { Like: ThumbsUp, Love: Heart, Haha: Laugh, Wow: Sparkles, Sad: Frown, Angry: AngryIcon };
 const REACTION_COLOR = { Like:"#1565c0", Love:"#c62828", Haha:"#f57f17", Wow:"#f57f17", Sad:"#f57f17", Angry:"#e65100" };
 const REACTION_KEY   = { Like:"ma_reaction_like", Love:"ma_reaction_love", Haha:"ma_reaction_haha", Wow:"ma_reaction_wow", Sad:"ma_reaction_sad", Angry:"ma_reaction_angry" };
 
@@ -39,7 +44,7 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
   const openPicker = () => { clearTimeout(hideTimer.current); setShowPicker(true); };
   const scheduleHide = () => { hideTimer.current = setTimeout(() => setShowPicker(false), 300); };
 
-  const emoji = myReaction ? REACTION_EMOJI[myReaction] : "👍";
+  const ReactionIcon = myReaction ? REACTION_ICON[myReaction] : ThumbsUp;
   const color = myReaction ? (REACTION_COLOR[myReaction] || "#2e7d32") : "#888";
   const label = myReaction ? t(REACTION_KEY[myReaction]) : t("ma_reaction_like");
 
@@ -48,16 +53,19 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
       <div className="ma-reaction-btn-wrap" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
         {showPicker && (
           <div className="ma-reaction-picker" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
-            {REACTION_TYPES.map(type => (
-              <span key={type} className="ma-reaction-emoji" title={t(REACTION_KEY[type])}
-                onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
-                {REACTION_EMOJI[type]}
-              </span>
-            ))}
+            {REACTION_TYPES.map(type => {
+              const Icon = REACTION_ICON[type];
+              return (
+                <span key={type} className="ma-reaction-emoji" title={t(REACTION_KEY[type])}
+                  onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
+                  <Icon size={16} color={REACTION_COLOR[type]}/>
+                </span>
+              );
+            })}
           </div>
         )}
         <button className="ma-reaction-btn" style={{ color }} onClick={(e) => { e.stopPropagation(); onReact(myReaction || "Like"); }}>
-          <span>{emoji}</span>
+          <span style={{display:"inline-flex",alignItems:"center"}}><ReactionIcon size={14}/></span>
           <span style={{ fontWeight: myReaction ? 800 : 600 }}>{label}</span>
         </button>
       </div>
@@ -68,12 +76,15 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
           <span className="ma-reacted-by-count">{t("ma_reacted", { n: totalReactions })}</span>
           {showWho && (
             <div className="ma-reacted-by-list">
-              {(reactions || []).map(r => (
-                <div key={r.id} className="ma-reacted-by-item">
-                  <span>{REACTION_EMOJI[r.reaction_type] || "👍"}</span>
-                  <span>{r.posted_by_name}</span>
-                </div>
-              ))}
+              {(reactions || []).map(r => {
+                const RIcon = REACTION_ICON[r.reaction_type] || ThumbsUp;
+                return (
+                  <div key={r.id} className="ma-reacted-by-item">
+                    <span style={{display:"inline-flex",alignItems:"center"}}><RIcon size={13} color={REACTION_COLOR[r.reaction_type]}/></span>
+                    <span>{r.posted_by_name}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -92,9 +103,14 @@ function CommentsSection({ post, user, onCommentAdded }) {
     if (!commText.trim() || sending) return;
     setSending(true);
     try {
-      await addCommentAPI(post.id, commText.trim());
+      const newComment = await addCommentAPI(post.id, commText.trim());
       setCommText("");
-      onCommentAdded();
+      // ── FIX: dating "onCommentAdded()" na walang parameter — nag-
+      // trigger ito ng "refreshPosts()" (BUONG LISTAHAN refetch) sa
+      // parent tuwing may bagong comment. Ngayon, ipinapasa na ang
+      // bagong comment mismo pataas, para ma-update ng parent nang
+      // lokal na lang (walang dagdag na network request). ──────────
+      onCommentAdded(newComment);
     } catch(e) { console.error(e); }
     finally { setSending(false); }
   };
@@ -144,7 +160,7 @@ function PostDetailModal({ post, user, onClose, onReact, onCommentAdded }) {
   return (
     <div className="ma-modal-overlay" onClick={onClose}>
       <div className="ma-modal-box" onClick={e => e.stopPropagation()}>
-        <button className="ma-modal-close" onClick={onClose}>✕</button>
+        <button className="ma-modal-close" onClick={onClose}><X size={16}/></button>
         <div className="ma-modal-scroll">
           <div className="ma-post-header">
             <div className="ma-post-meta">
@@ -203,21 +219,34 @@ export default function MemberAnnouncements() {
   const types     = ["All", ...new Set(posts.map(p => p.type).filter(Boolean))];
   const displayed = posts.filter(p => filter === "All" || p.type === filter);
 
-  const refreshPosts = async () => {
-    const updated = await getAnnouncementsAPI();
-    setPosts(updated);
-    savePageCache("announcements", "shared", updated);
-    // ── I-sync din yung laman ng bukas na modal (kung meron) ──
-    setDetailPost(prev => prev ? updated.find(p => p.id === prev.id) || null : null);
-  };
+  // ── BAGO: tinanggal ang "refreshPosts" (buong list refetch) — hindi
+  // na kailangan, lokal na state updates na lang ang ginagamit sa
+  // reactions at comments (tingnan sa ibaba). ──────────────────────────
 
+  // ── FIX: dating nagre-refetch ng BUONG LISTAHAN ng announcements
+  // (getAnnouncementsAPI() via refreshPosts()) tuwing may nag-react sa
+  // isang post — malaking overfetch. Ngayon, gagamitin muna ang
+  // "result" mismo na ibinabalik ng reaction endpoint (kung buong
+  // updated post ang laman nito). Kung hindi kumpleto (walang
+  // "reactions" field), i-fallback na lang sa "getAnnouncementAPI
+  // (postId)" — kinukuha lang ang ISANG post na 'to, hindi na ang
+  // BUONG listahan. ────────────────────────────────────────────────────
   const handleReact = async (postId, reactionType) => {
     try {
-      await reactToAnnouncementAPI(postId, reactionType);
-      // Kailangan din ng buong `reactions` list (para sa "reacted by")
-      // kaya nag-re-refresh tayo — hindi masyadong mabigat naman.
-      await refreshPosts();
+      const result = await reactToAnnouncementAPI(postId, reactionType);
+      const updatedPost = (result && result.reactions !== undefined) ? result : await getAnnouncementAPI(postId);
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updatedPost } : p));
+      setDetailPost(prev => prev && prev.id === postId ? { ...prev, ...updatedPost } : prev);
     } catch(e) { console.error(e); }
+  };
+
+  // ── BAGO: mabilis na lokal na pag-update ng "comments" array ng
+  // partikular na post — walang dagdag na network request, imbes na
+  // buong refetch tuwing may bagong comment. ──────────────────────────
+  const handleCommentAdded = (postId, newComment) => {
+    const appendComment = (p) => p.id === postId ? { ...p, comments: [...(p.comments||[]), newComment] } : p;
+    setPosts(prev => prev.map(appendComment));
+    setDetailPost(prev => prev && prev.id === postId ? appendComment(prev) : prev);
   };
 
   return (
@@ -228,7 +257,7 @@ export default function MemberAnnouncements() {
           user={user}
           onClose={() => setDetailPost(null)}
           onReact={handleReact}
-          onCommentAdded={refreshPosts}
+          onCommentAdded={(newComment) => handleCommentAdded(detailPost.id, newComment)}
         />
       )}
 
@@ -249,7 +278,7 @@ export default function MemberAnnouncements() {
         <div className="ma-feed">
           {displayed.length === 0 ? (
             <div className="ma-empty-state">
-              <div className="ma-empty-icon">📢</div>
+              <div className="ma-empty-icon" style={{display:"flex",justifyContent:"center"}}><Megaphone size={40} color="#ccc"/></div>
               <div className="ma-empty-text">{t("ma_no_announcements")}</div>
             </div>
           ) : displayed.map(post => {
@@ -278,14 +307,14 @@ export default function MemberAnnouncements() {
                 {/* Image — "fit" na parang Facebook, buong picture makikita */}
                 {post.image_url && (
                   <div className="ma-post-image">
-                    <img src={post.image_url} alt="announcement"/>
+                    <img src={post.image_url} alt="announcement" loading="lazy"/>
                   </div>
                 )}
 
                 <div className="ma-post-footer">
                   <ReactionButton myReaction={post.my_reaction} totalReactions={post.total_reactions || 0} reactions={post.reactions} onReact={(type) => handleReact(post.id, type)} stopPropagation/>
-                  <button className="ma-comment-toggle" onClick={(e) => { e.stopPropagation(); setDetailPost(post); }}>
-                    💬 {commentCount} {commentCount!==1 ? t("ma_comment_plural") : t("ma_comment_singular")}
+                  <button className="ma-comment-toggle" onClick={(e) => { e.stopPropagation(); setDetailPost(post); }} style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                    <MessageCircle size={13}/> {commentCount} {commentCount!==1 ? t("ma_comment_plural") : t("ma_comment_singular")}
                   </button>
                   <span className="ma-tap-hint">{t("ma_click_view")}</span>
                 </div>

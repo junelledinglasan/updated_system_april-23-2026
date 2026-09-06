@@ -51,10 +51,10 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
   final Map<String, TextEditingController> _c = {};
   TextEditingController _ctrl(String key) => _c.putIfAbsent(key, () => TextEditingController(text: '${_form[key]}'));
 
-  dynamic _idFrontBytes;
-  dynamic _idBackBytes;
-  String? _idFrontName;
-  String? _idBackName;
+  // ── BAGO: dating "Valid ID" (front + back, 2 uploads) — ngayon
+  // "Birth Certificate" na lang (1 upload). ───────────────────────────
+  dynamic _birthCertBytes;
+  String? _birthCertName;
 
   @override
   void initState() {
@@ -83,24 +83,19 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
     }
   }
 
-  Future<void> _pickId(bool isFront) async {
+  Future<void> _pickBirthCert() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     if (bytes.lengthInBytes > 5 * 1024 * 1024) {
-      setState(() => _errors[isFront ? 'id_front' : 'id_back'] = 'File too large. Maximum is 5MB.');
+      setState(() => _errors['birth_cert'] = 'File too large. Maximum is 5MB.');
       return;
     }
     setState(() {
-      if (isFront) {
-        _idFrontBytes = bytes;
-        _idFrontName = picked.name;
-      } else {
-        _idBackBytes = bytes;
-        _idBackName = picked.name;
-      }
-      _errors.remove(isFront ? 'id_front' : 'id_back');
+      _birthCertBytes = bytes;
+      _birthCertName = picked.name;
+      _errors.remove('birth_cert');
     });
   }
 
@@ -142,8 +137,7 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
       if ('${_form['school_name']}'.trim().isEmpty) e['school_name'] = 'Required';
       if ('${_form['year_level']}'.trim().isEmpty) e['year_level'] = 'Required';
     }
-    if (_idFrontBytes == null) e['id_front'] = 'Please upload the front side of your Valid ID.';
-    if (_idBackBytes == null) e['id_back'] = 'Please upload the back side of your Valid ID.';
+    if (_birthCertBytes == null) e['birth_cert'] = 'Please upload your Birth Certificate.';
     return e;
   }
 
@@ -154,7 +148,7 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
       setState(() => _errors..clear()..addAll(errs));
       const personalFields = ['first_name', 'last_name', 'birth_date', 'place_of_birth', 'sex', 'sex_other', 'contact_number', 'email', 'address', 'occupation'];
       const classFields = ['school_name', 'year_level'];
-      const idFields = ['id_front', 'id_back'];
+      const idFields = ['birth_cert'];
       if (personalFields.any(errs.containsKey)) {
         setState(() => _tabIndex = 0);
       } else if (classFields.any(errs.containsKey)) {
@@ -164,14 +158,11 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
       }
       return;
     }
-    setState(() { _loading = true; _uploadProgress = 'Uploading Valid ID (front)...'; });
+    setState(() { _loading = true; _uploadProgress = 'Uploading Birth Certificate...'; });
     try {
       final ts = DateTime.now().millisecondsSinceEpoch;
-      final frontExt = (_idFrontName ?? 'front.jpg').split('.').last;
-      final idFrontUrl = await SupabaseStorageService.uploadFile(_idFrontBytes, 'valid-ids/${ts}_front.$frontExt', folder: 'valid-ids');
-      setState(() => _uploadProgress = 'Uploading Valid ID (back)...');
-      final backExt = (_idBackName ?? 'back.jpg').split('.').last;
-      final idBackUrl = await SupabaseStorageService.uploadFile(_idBackBytes, 'valid-ids/${ts}_back.$backExt', folder: 'valid-ids');
+      final ext = (_birthCertName ?? 'birth_cert.jpg').split('.').last;
+      final birthCertUrl = await SupabaseStorageService.uploadFile(_birthCertBytes, 'birth-certificates/$ts.$ext', folder: 'birth-certificates');
       setState(() => _uploadProgress = 'Submitting application...');
 
       await MembersService.submitApplication({
@@ -193,7 +184,13 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
         'pension_income': _form['pension_income'].toString().isEmpty ? 0 : _form['pension_income'],
         'job_type': _form['job_type'],
         'monthly_income': _form['monthly_income'].toString().isEmpty ? 0 : _form['monthly_income'],
-        'id_front_url': idFrontUrl, 'id_back_url': idBackUrl,
+        // ── PAALALA: dating "id_front_url"/"id_back_url" ang dalawang
+        // field na 'to (Valid ID front+back). Ngayon isa na lang na
+        // Birth Certificate ang ipinapasa — inilagay ko pa rin sa
+        // "id_front_url" key (backend compatibility, wala akong
+        // access sa backend serializer para malaman kung meron bang
+        // dedikadong field name para dito). ───────────────────────────
+        'id_front_url': birthCertUrl, 'id_back_url': null,
       });
       if (mounted) setState(() => _done = true);
     } catch (e) {
@@ -553,29 +550,27 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
           child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Valid ID Verification (Required)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _AMColors.dark)),
+              Text('Birth Certificate Verification (Required)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _AMColors.dark)),
               SizedBox(height: 6),
-              Text('Upload a clear photo of your Valid ID — both front and back sides.\nAccepted: PhilSys · Driver\'s License · Passport · SSS · GSIS · PRC · Voter\'s ID · Postal ID · Senior Citizen\'s ID · School ID', style: TextStyle(fontSize: 11.5, color: Color(0xFF555555), height: 1.6)),
+              Text('Upload a clear photo or scan of your PSA/NSO-issued Birth Certificate.', style: TextStyle(fontSize: 11.5, color: Color(0xFF555555), height: 1.6)),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        _idUpload('Valid ID — Front Side', true, _idFrontBytes, _idFrontName),
-        const SizedBox(height: 14),
-        _idUpload('Valid ID — Back Side', false, _idBackBytes, _idBackName),
+        _idUpload('Birth Certificate', _birthCertBytes, _birthCertName),
         const SizedBox(height: 14),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFFFE082))),
-          child: const Text('Make sure the ID photo is clear and fully readable. Blurry or incomplete images may cause rejection.', style: TextStyle(fontSize: 11, color: Color(0xFFF57C00))),
+          child: const Text('Make sure the document photo is clear and fully readable. Blurry or incomplete images may cause rejection.', style: TextStyle(fontSize: 11, color: Color(0xFFF57C00))),
         ),
       ],
     );
   }
 
-  Widget _idUpload(String label, bool isFront, dynamic bytes, String? name) {
-    final error = _errors[isFront ? 'id_front' : 'id_back'];
+  Widget _idUpload(String label, dynamic bytes, String? name) {
+    final error = _errors['birth_cert'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -584,12 +579,12 @@ class _ApplyMembershipScreenState extends State<ApplyMembershipScreen> {
         if (bytes != null)
           Stack(children: [
             ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(bytes, width: double.infinity, height: 160, fit: BoxFit.cover)),
-            Positioned(top: 6, right: 6, child: GestureDetector(onTap: () => setState(() { if (isFront) { _idFrontBytes = null; _idFrontName = null; } else { _idBackBytes = null; _idBackName = null; } }), child: Container(width: 26, height: 26, decoration: const BoxDecoration(color: _AMColors.red, shape: BoxShape.circle), child: const Icon(Icons.close, size: 14, color: Colors.white)))),
+            Positioned(top: 6, right: 6, child: GestureDetector(onTap: () => setState(() { _birthCertBytes = null; _birthCertName = null; }), child: Container(width: 26, height: 26, decoration: const BoxDecoration(color: _AMColors.red, shape: BoxShape.circle), child: const Icon(Icons.close, size: 14, color: Colors.white)))),
             Positioned(bottom: 6, left: 6, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(6)), child: Text(name ?? '', style: const TextStyle(fontSize: 10, color: Colors.white)))),
           ])
         else
           InkWell(
-            onTap: () => _pickId(isFront),
+            onTap: _pickBirthCert,
             borderRadius: BorderRadius.circular(10),
             child: Container(
               width: double.infinity,

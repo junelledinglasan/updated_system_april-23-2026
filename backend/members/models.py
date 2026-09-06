@@ -201,6 +201,16 @@ class Member(models.Model):
         ('Suspended',   'Suspended'),
         ('Deactivated', 'Deactivated'),
     ]
+    # ── BAGO: 1x (unang loan), 2x (may masamang payment history),
+    # 3x (magandang payment history) — HINDI ito awtomatikong
+    # nagbabago; ang admin (sa Manage Member) ang direktang
+    # nagde-decide/nagse-set nito, base sa payment behavior ng
+    # miyembro sa mga naunang loan. ─────────────────────────────────
+    LOAN_MULTIPLIER_CHOICES = [
+        (1, '1× — First loan'),
+        (2, '2× — Bad payment history'),
+        (3, '3× — Good payment history'),
+    ]
 
     user              = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='member')
     pre_member        = models.OneToOneField(LeafMemberInfo, on_delete=models.SET_NULL, null=True, blank=True, related_name='converted_member')
@@ -208,6 +218,8 @@ class Member(models.Model):
     membership_date   = models.DateField(auto_now_add=True)
     membership_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
     share_capital     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # ── BAGO ──
+    loan_multiplier   = models.PositiveSmallIntegerField(choices=LOAN_MULTIPLIER_CHOICES, default=1)
     plain_password    = models.CharField(max_length=100, blank=True)
     date_registered   = models.DateTimeField(auto_now_add=True)
 
@@ -252,7 +264,9 @@ class Member(models.Model):
 
     @property
     def max_loanable(self):
-        return float(self.share_capital) * 2
+        # ── FIX: dating naka-hardcode sa "* 2" — gamit na ngayon ang
+        # admin-editable na loan_multiplier (1x/2x/3x). ────────────────
+        return float(self.share_capital) * self.loan_multiplier
 
     @property
     def application_id(self):

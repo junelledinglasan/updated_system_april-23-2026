@@ -12,6 +12,17 @@ class _STColors {
   static const red    = Color(0xFFC62828);
 }
 
+// ── BAGO: salamin ng "DEFAULT_FEATURES_BY_ROLE" sa backend
+// (settings_app/models.py) — ginagamit lang para malaman kung
+// "default" pa ang kasalukuyang permissions ng isang staff (hindi pa
+// na-customize), para maipakita ito sa admin. ─────────────────────────
+const Map<String, List<String>> kDefaultFeaturesByRole = {
+  'cashier':     ['loan-payment'],
+  'collector':   ['loan-payment'],
+  'bookkeeper':  ['reports'],
+  'admin_clerk': ['members', 'applications', 'loan-approval', 'announcement', 'reports'],
+};
+
 class AdminSettingsScreen extends StatefulWidget {
   const AdminSettingsScreen({super.key});
 
@@ -407,6 +418,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               final savedFeatures = ((s['features'] as List?) ?? []).cast<String>();
               final dirty = (perms.toSet().difference(savedFeatures.toSet()).isNotEmpty) || (savedFeatures.toSet().difference(perms.toSet()).isNotEmpty);
               final roleLabel = kStaffRoleLabels[s['staff_role']] ?? s['staff_role'] ?? 'Staff';
+              // ── BAGO: "(default)" indicator — para malinaw sa admin
+              // kung ito pa rin ang sensible na panimulang set (base
+              // sa role) at hindi pa sila mismo nag-customize. ───────
+              final roleDefaults = kDefaultFeaturesByRole[s['staff_role']] ?? [];
+              final isDefault = perms.toSet().difference(roleDefaults.toSet()).isEmpty && roleDefaults.toSet().difference(perms.toSet()).isEmpty;
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: _STColors.border)),
@@ -422,7 +438,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('${s['staff_name']}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                                Text('$roleLabel · ${perms.length} feature${perms.length != 1 ? 's' : ''} enabled', style: const TextStyle(fontSize: 10.5, color: _STColors.sub)),
+                                Text.rich(TextSpan(
+                                  text: '$roleLabel · ${perms.length} feature${perms.length != 1 ? 's' : ''} enabled',
+                                  style: const TextStyle(fontSize: 10.5, color: _STColors.sub),
+                                  children: [
+                                    if (isDefault) const TextSpan(text: '  (default)', style: TextStyle(fontStyle: FontStyle.italic)),
+                                  ],
+                                )),
                               ],
                             ),
                           ),

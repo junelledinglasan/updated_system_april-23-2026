@@ -5,8 +5,6 @@ import '../../widgets/admin/age_group_chart.dart';
 import 'view_edit_member_screen.dart';
 import 'register_member_screen.dart';
 import 'pending_application_screen.dart';
-import 'savings_deposit_screen.dart';
-import 'share_capital_deposit_screen.dart';
 
 class _MMColors {
   static const pageBg      = Color(0xFFD8E8CC);
@@ -57,7 +55,22 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    // ── BAGO: pagkatapos mag-fetch, i-check kung galing sa "Overdue
+    // Loan Alert" widget ng Dashboard (na nagpapasa ng "openMemberId"
+    // via route arguments) — kung meron, awtomatikong buksan ang
+    // profile ng tamang member. ────────────────────────────────────────
+    _fetchData().then((_) => _checkAutoOpenMember());
+  }
+
+  void _checkAutoOpenMember() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['openMemberId'] != null) {
+      final found = _members.firstWhere(
+        (m) => m['id'] == args['openMemberId'],
+        orElse: () => null,
+      );
+      if (found != null) _onViewMember(found);
+    }
   }
 
   Future<void> _fetchData({bool silent = false}) async {
@@ -126,6 +139,36 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
     }
   }
 
+  // ── BAGO: gumagana mula sa DALAWANG status (Inactive AT Deactivated)
+  // pabalik sa Active — kaya generic ang pangalan. Gumagamit ng
+  // generic update endpoint (kaparehong ginagamit ng Edit) imbes na
+  // dedikadong "/activate/" endpoint, dahil walang espesyal na
+  // side-effects ang pag-reactivate (hindi tulad ng pag-deactivate na
+  // nag-co-complete ng mga active loans). ────────────────────────────
+  Future<void> _handleActivate(dynamic member) async {
+    try {
+      await MembersService.updateMember(member['id'], {'status': 'Active', 'membership_status': 'Active'});
+      _showToast('Member reactivated.');
+      _fetchData(silent: true);
+    } catch (_) {
+      _showToast('Failed to reactivate member.', isError: true);
+    }
+  }
+
+  // ── BAGO: "Mark Inactive" — hiwalay sa "Deactivate" (na
+  // awtomatikong nagko-complete ng active loans). Manual na status
+  // lang ito na puwedeng i-set/i-alis ng admin kahit kailan, walang
+  // side-effects. ─────────────────────────────────────────────────────
+  Future<void> _handleMarkInactive(dynamic member) async {
+    try {
+      await MembersService.updateMember(member['id'], {'status': 'Inactive', 'membership_status': 'Inactive'});
+      _showToast('Member marked as inactive.');
+      _fetchData(silent: true);
+    } catch (_) {
+      _showToast('Failed to mark member as inactive.', isError: true);
+    }
+  }
+
   Future<void> _handleDelete(dynamic member) async {
     final password = await showDialog<String>(
       context: context,
@@ -191,39 +234,16 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
     return AdminScreenScaffold(
       activeRouteKey: 'members',
       title: 'Manage Members',
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
-            heroTag: 'add-savings-fab',
-            backgroundColor: const Color(0xFFF57F17),
-            tooltip: 'Add Savings',
-            onPressed: () async {
-              final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context) => const SavingsDepositScreen()));
-              if (changed == true) _fetchData(silent: true);
-            },
-            child: const Icon(Icons.savings_outlined, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          FloatingActionButton(
-            heroTag: 'add-share-capital-fab',
-            backgroundColor: const Color(0xFF1565C0),
-            tooltip: 'Add Share Capital',
-            onPressed: () async {
-              final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context) => const ShareCapitalDepositScreen()));
-              if (changed == true) _fetchData(silent: true);
-            },
-            child: const Icon(Icons.account_balance_outlined, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          FloatingActionButton(
-            heroTag: 'register-fab',
-            onPressed: _onRegisterMember,
-            backgroundColor: _MMColors.green,
-            tooltip: 'Register Member',
-            child: const Icon(Icons.person_add_alt_1, color: Colors.white),
-          ),
-        ],
+      // ── BAGO: tinanggal ang "Add Savings" at "Add Share Capital"
+      // FABs dito — nasa drawer na sila ngayon (tingnan ang
+      // admin_drawer.dart), accessible mula sa kahit anong admin
+      // screen, hindi na limitado sa page na 'to. ─────────────────────
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'register-fab',
+        onPressed: _onRegisterMember,
+        backgroundColor: _MMColors.green,
+        tooltip: 'Register Member',
+        child: const Icon(Icons.person_add_alt_1, color: Colors.white),
       ),
       body: RefreshIndicator(
         onRefresh: () => _fetchData(),
@@ -361,7 +381,7 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
       Wrap(
         spacing: 6,
         children: [
-          ...['All', 'Active', 'Deactivated'].map((s) {
+          ...['All', 'Active', 'Inactive', 'Deactivated'].map((s) {
             final active = _filterStatus == s;
             return ChoiceChip(
               label: Text(s, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF888888))),
@@ -401,6 +421,8 @@ class _ManageMemberScreenState extends State<ManageMemberScreen> {
               member: m,
               onTap: () => _onViewMember(m),
               onDeactivate: () => _handleDeactivate(m),
+              onActivate: () => _handleActivate(m),
+              onMarkInactive: () => _handleMarkInactive(m),
               onDelete: () => _handleDelete(m),
             )),
 
@@ -531,13 +553,22 @@ class _MemberCard extends StatelessWidget {
   final dynamic member;
   final VoidCallback onTap;
   final VoidCallback onDeactivate;
+  final VoidCallback onActivate;
+  final VoidCallback onMarkInactive;
   final VoidCallback onDelete;
-  const _MemberCard({required this.member, required this.onTap, required this.onDeactivate, required this.onDelete});
+  const _MemberCard({required this.member, required this.onTap, required this.onDeactivate, required this.onActivate, required this.onMarkInactive, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     final status = (member['status'] ?? '').toString();
     final isActive = status == 'Active';
+    final isInactive = status == 'Inactive';
+    final isDeactivated = status == 'Deactivated';
+    // ── BAGO: iba-iba na ngayon ang kulay ng status badge kada estado
+    // (dating Active/hindi-Active na lang, dalawang kulay lang). ──────
+    final badgeBg     = isActive ? const Color(0xFFE8F5E9) : isInactive ? const Color(0xFFF5F5F5) : const Color(0xFFFCE4EC);
+    final badgeBorder = isActive ? const Color(0xFFC8E6C9) : isInactive ? const Color(0xFFD0D0D0) : const Color(0xFFF8BBD0);
+    final badgeColor  = isActive ? _MMColors.green : isInactive ? const Color(0xFF616161) : _MMColors.red;
     final age = computeAge(member['birth_date']);
     final fullname = member['fullname'] ?? '${member['first_name'] ?? ''} ${member['last_name'] ?? ''}';
 
@@ -582,18 +613,28 @@ class _MemberCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                     decoration: BoxDecoration(
-                      color: isActive ? const Color(0xFFE8F5E9) : const Color(0xFFFCE4EC),
+                      color: badgeBg,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isActive ? const Color(0xFFC8E6C9) : const Color(0xFFF8BBD0)),
+                      border: Border.all(color: badgeBorder),
                     ),
-                    child: Text(status, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: isActive ? _MMColors.green : _MMColors.red)),
+                    child: Text(status, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: badgeColor)),
                   ),
                   const SizedBox(height: 6),
+                  // ── BAGO: "Mark Inactive" (bago, manual) + "Deactivate"
+                  // kapag Active; "Activate" na lang kapag Inactive o
+                  // Deactivated — kaparehong lohika ng web. ─────────────
                   Row(
                     children: [
-                      if (isActive)
+                      if (isActive) ...[
+                        _RowIconButton(icon: Icons.person_off_outlined, color: const Color(0xFF616161), onTap: onMarkInactive),
+                        const SizedBox(width: 4),
                         _RowIconButton(icon: Icons.power_settings_new, color: _MMColors.orange, onTap: onDeactivate),
-                      const SizedBox(width: 4),
+                        const SizedBox(width: 4),
+                      ],
+                      if (isInactive || isDeactivated) ...[
+                        _RowIconButton(icon: Icons.person_add_alt_1_outlined, color: _MMColors.green, onTap: onActivate),
+                        const SizedBox(width: 4),
+                      ],
                       _RowIconButton(icon: Icons.delete_outline, color: _MMColors.red, onTap: onDelete),
                     ],
                   ),

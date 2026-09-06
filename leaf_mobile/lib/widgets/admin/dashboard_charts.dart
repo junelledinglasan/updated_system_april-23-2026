@@ -152,6 +152,101 @@ class CollectionLineChartCard extends StatelessWidget {
   }
 }
 
+// ─── Member Growth — Line Chart (BAGO) ───────────────────────────────────────
+// Kaparehong istilo ng CollectionLineChartCard, pero para sa bagong
+// miyembro per month (buong numero ang y-axis, hindi piso).
+class MemberGrowthLineChartCard extends StatelessWidget {
+  final List<double> monthlyValues; // 12 values, Jan..Dec
+  final bool loading;
+  const MemberGrowthLineChartCard({super.key, required this.monthlyValues, this.loading = false});
+
+  static const _blue     = Color(0xFF1565C0);
+  static const _blueFill = Color(0x141565C0); // rgba(21,101,192,0.08)
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return _cardShell(
+        title: 'Member Growth',
+        sub: 'New registrations per month',
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    final values = monthlyValues.length == 12 ? monthlyValues : List<double>.filled(12, 0);
+    final rawMax = values.reduce((a, b) => a > b ? a : b) * 1.2;
+    final maxY = rawMax == 0 ? 5.0 : rawMax;
+
+    return _cardShell(
+      title: 'Member Growth',
+      sub: 'New registrations per month',
+      legend: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _LegendDot(color: _blue, label: 'New Members'),
+        ],
+      ),
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: maxY,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: maxY / 4,
+            getDrawingHorizontalLine: (_) => const FlLine(color: _ChartColors.grid, strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 28,
+                // ── BAGO: buong numero lang (bilang ng tao), hindi
+                // piso — kaiba sa CollectionLineChartCard. ────────────
+                getTitlesWidget: (v, meta) => Text(
+                  v.toInt().toString(),
+                  style: const TextStyle(fontSize: 8, color: _ChartColors.sub),
+                ),
+              ),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 18,
+                interval: 1,
+                getTitlesWidget: (v, meta) {
+                  final i = v.toInt();
+                  if (i < 0 || i > 11) return const SizedBox.shrink();
+                  return Text(_kMonthShort[i], style: const TextStyle(fontSize: 8, color: _ChartColors.sub));
+                },
+              ),
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: List.generate(12, (i) => FlSpot(i.toDouble(), values[i])),
+              isCurved: true,
+              color: _blue,
+              barWidth: 2,
+              dotData: const FlDotData(show: true),
+              belowBarData: BarAreaData(show: true, color: _blueFill),
+            ),
+          ],
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (spots) => spots
+                  .map((s) => LineTooltipItem(s.y.toInt().toString(), const TextStyle(color: Colors.white, fontSize: 10)))
+                  .toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Loan Status Summary — Bar Chart ─────────────────────────────────────────
 class LoanStatusBarChartCard extends StatelessWidget {
   final Map<String, int> statusCounts; // e.g. {"For Review":5,"Active":10,...}
@@ -235,8 +330,11 @@ class LoanTypeDoughnutChartCard extends StatelessWidget {
   final bool loading;
   const LoanTypeDoughnutChartCard({super.key, required this.typeCounts, this.loading = false});
 
-  static const _labels = ['Regular Loan','Emergency','Salary','Housing','Business'];
-  static const _colors = [Color(0xFF2E7D32), Color(0xFF4CAF50), Color(0xFFF57C00), Color(0xFF1565C0), Color(0xFFA5D6A7)];
+  // ── FIX: dating luma pang loan types ang fallback dito (Regular/
+  // Emergency/Salary/Housing/Business) — tugma na ngayon sa bagong 4
+  // types (Regular, Petty Cash, Appliance, ATM). ──────────────────────
+  static const _labels = ['Regular Loan','Petty Cash Loan','Appliance Loan','ATM Loan'];
+  static const _colors = [Color(0xFF2E7D32), Color(0xFF4CAF50), Color(0xFFF57C00), Color(0xFF1565C0)];
 
   @override
   Widget build(BuildContext context) {

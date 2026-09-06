@@ -3,7 +3,9 @@ import { getLoansAPI, updateLoanStatusAPI } from "../../api/loans";
 import { Search, Clock, CheckCircle2, XCircle, Wallet } from "lucide-react";
 import "./LoanApproval.css";
 
-const LOAN_TYPES  = ["Regular Loan","Emergency Loan","Salary Loan","Housing Loan","Business Loan","Other Loan"];
+// ── BAGO: 4 na bagong loan types — tugma na sa binago natin sa
+// buong system (Regular, Petty Cash, Appliance, ATM). ────────────────
+const LOAN_TYPES  = ["Regular Loan","Petty Cash Loan","Appliance Loan","ATM Loan"];
 const STATUS_TABS = ["For Review","Approved","Declined","Cancelled"];
 const ROWS_PER_PAGE = 8;
 // NOTE: "Approved" reuses the "status-review" (orange/pending) pill style below.
@@ -33,8 +35,26 @@ function ProcessModal({ loan, onClose, onApprove, onDecline, onRelease }) {
   const totalDeductions = interest + serviceFee + filingFee + insurance + sd + sc;
   const netProceeds = amount - totalDeductions;
 
-  const totalPayable  = amount + interest;
-  const monthlyAmort  = totalPayable / term;
+  // ── FIX: PINAKAMAHALAGANG BUG — dito talaga NA-O-OVERWRITE sa
+  // database ang "monthly_due" tuwing mag-a-approve ang admin ng
+  // isang member-submitted application (via handleApprove → onApprove
+  // → API), gamit pa rin ang LUMANG doblehang-interes na formula
+  // ("(amount + interest) / term"). Ibig sabihin, kahit tama na ang
+  // pagkuha ng monthly_due sa PAGGAWA ng loan (na-fix na natin sa
+  // backend serializers.py), NABABALIK pa rin itong MALI sa
+  // PAG-APPROVE — dahil dito talaga tinatanggap ang online
+  // applications ng mga member (hindi F2F, na dumaan na dapat sa
+  // parehong paraan). Kaparehong ayos ng ibang lugar sa system. ──────
+  // ── FIX: dating "amount + interest" — mali na ito ngayon, dahil
+  // isang beses na lang nakukuha ang interest bilang UPFRONT DEDUCTION
+  // (kinaltas na sa Net Proceeds). Ang aktwal na babayaran ng member
+  // sa buwanang hulog ay ang PRINCIPAL LANG (tugma sa
+  // "monthlyAmort × term"), hindi na dapat idagdag pa ang interest
+  // dito — kung hindi, magmumukhang doble ang binabayad kahit hindi
+  // naman totoo (isang display bug lang ito, hindi apektado ang
+  // aktwal na monthly_due/balance na na-save). ────────────────────────
+  const totalPayable  = amount;
+  const monthlyAmort  = amount / term;
 
   const handleApprove = async () => {
     setLoading(true);
@@ -86,16 +106,18 @@ function ProcessModal({ loan, onClose, onApprove, onDecline, onRelease }) {
           <div className="la-section">
             <div className="la-section-title">Loan Computation</div>
             <div className="la-compute-results">
-              <div className="la-result-item">
-                <span>Interest Rate</span>
-                <span className="fw">{(monthlyRate*100).toFixed(3)}% / month ({(monthlyRate*100*12).toFixed(2)}% / year)</span>
-              </div>
+              {/* ── FIX: dating may hiwalay na "Interest Rate" row dito
+                  PLUS rate details na nasa loob na rin ng "Interest"
+                  deduction row sa ibaba — nagmumukhang naka-doble ang
+                  kaltas kahit hindi naman. Tinanggal na ang linyang
+                  ito, nasa "Interest" deduction row na lang ang rate
+                  info. ─────────────────────────────────────────────── */}
               <div className="la-result-item">
                 <span>Total Interest ({term} months)</span>
                 <span className="orange fw">₱{interest.toFixed(2)}</span>
               </div>
               <div className="la-result-item">
-                <span>Total Payable (Principal + Interest)</span>
+                <span>Total Payable (via Monthly Installments)</span>
                 <span className="fw">₱{totalPayable.toFixed(2)}</span>
               </div>
               <div className="la-result-item highlight">
@@ -277,7 +299,7 @@ export default function LoanApproval() {
         </div>
       </div>
 
-      <div className="la-summary-grid">
+      <div className="la-summary-grid" style={{display:"grid",gridTemplateColumns:"repeat(5, 1fr)",gap:16}}>
         <div className="la-summary-card clickable" onClick={()=>{setFilter("For Review");setPage(1);}}>
           <div className="la-sum-icon" style={{background:"#fff8e1",display:"flex",alignItems:"center",justifyContent:"center"}}><Clock size={20} color="#e65100"/></div>
           <div><div className="la-sum-val orange">{counts.forReview}</div><div className="la-sum-label">For Review</div></div>
@@ -351,7 +373,7 @@ export default function LoanApproval() {
                   <td className="cell-name">{l.member_name}</td>
                   <td><span className="la-type-pill">{l.loan_type}</span></td>
                   <td className="fw green">₱{Number(l.amount||0).toLocaleString()}</td>
-                  <td className="cell-center">{l.term_months}mo</td>
+                  <td className="cell-center">{l.term_months} months</td>
                   <td><span className={`la-badge ${STATUS_COLOR[l.status]}`}>{l.status}</span></td>
                   <td style={{textAlign:"center"}}>
                     <button className={`la-process-btn ${l.status==="For Review"||l.status==="Approved"?"btn-review":"btn-view"}`} onClick={e=>{e.stopPropagation();setProcess(l);}}>

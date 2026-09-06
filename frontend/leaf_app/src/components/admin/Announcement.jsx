@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from "react";
-import { getAnnouncementsAPI, createAnnouncementAPI, updateAnnouncementAPI, deleteAnnouncementAPI, addCommentAPI, deleteCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
+import { getAnnouncementsAPI, getAnnouncementAPI, createAnnouncementAPI, updateAnnouncementAPI, deleteAnnouncementAPI, addCommentAPI, deleteCommentAPI, reactToAnnouncementAPI } from "../../api/announcements";
 import { useAuth } from "../../context/AuthContext";
-import { Search, Pin, Bell, Pencil, Trash2, MessageCircle } from "lucide-react";
+import { Search, Pin, Bell, Pencil, Trash2, MessageCircle, X, ThumbsUp, Heart, Laugh, Frown, Angry as AngryIcon, Sparkles, AlertTriangle, Paperclip } from "lucide-react";
 import "./Announcement.css";
 
 const POST_TYPES = ["Activity","Seminar","Notice","Announcement","Event"];
 const TYPE_COLOR = { Activity:"type-activity", Seminar:"type-seminar", Notice:"type-notice", Announcement:"type-announce", Event:"type-event" };
 
 // ── Reactions (parang Facebook) ──────────────────────────────────────────
-const REACTION_EMOJI = { Like:"👍", Love:"❤️", Haha:"😂", Wow:"😮", Sad:"😢", Angry:"😠" };
+// ── BAGO: dating naka-emoji ito (👍❤️😂😮😢😠) — ngayon totoong
+// lucide-react icons, tugma sa "walang emoji" na patakaran sa buong
+// system. Walang eksaktong lucide icon para sa "surprised/wow" face,
+// kaya "Sparkles" ang ginamit kong pinakamalapit na alternatibo. ──────
+const REACTION_ICON  = { Like: ThumbsUp, Love: Heart, Haha: Laugh, Wow: Sparkles, Sad: Frown, Angry: AngryIcon };
 const REACTION_COLOR = { Like:"#1565c0", Love:"#c62828", Haha:"#f57f17", Wow:"#f57f17", Sad:"#f57f17", Angry:"#e65100" };
 
 // ── Reaction button + "Reacted by" list (hover sa count = makikita ang mga pangalan) ──
@@ -20,7 +24,7 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
   const openPicker = () => { clearTimeout(hideTimer.current); setShowPicker(true); };
   const scheduleHide = () => { hideTimer.current = setTimeout(() => setShowPicker(false), 300); };
 
-  const emoji = myReaction ? REACTION_EMOJI[myReaction] : "👍";
+  const ReactionIcon = myReaction ? REACTION_ICON[myReaction] : ThumbsUp;
   const color = myReaction ? (REACTION_COLOR[myReaction] || "#2e7d32") : "#888";
   const label = myReaction || "Like";
 
@@ -29,16 +33,16 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
       <div className="an-reaction-btn-wrap" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
         {showPicker && (
           <div className="an-reaction-picker" onMouseEnter={openPicker} onMouseLeave={scheduleHide}>
-            {Object.entries(REACTION_EMOJI).map(([type, e]) => (
+            {Object.entries(REACTION_ICON).map(([type, Icon]) => (
               <span key={type} className="an-reaction-emoji" title={type}
                 onClick={(ev) => { ev.stopPropagation(); onReact(type); setShowPicker(false); }}>
-                {e}
+                <Icon size={16} color={REACTION_COLOR[type]}/>
               </span>
             ))}
           </div>
         )}
         <button className="an-reaction-btn" style={{ color }} onClick={(e) => { e.stopPropagation(); onReact(myReaction || "Like"); }}>
-          <span>{emoji}</span>
+          <span style={{display:"inline-flex",alignItems:"center"}}><ReactionIcon size={14}/></span>
           <span style={{ fontWeight: myReaction ? 800 : 600 }}>{label}</span>
         </button>
       </div>
@@ -49,12 +53,15 @@ function ReactionButton({ myReaction, totalReactions, reactions, onReact, stopPr
           <span className="an-reacted-by-count">{totalReactions} reacted</span>
           {showWho && (
             <div className="an-reacted-by-list">
-              {(reactions || []).map(r => (
-                <div key={r.id} className="an-reacted-by-item">
-                  <span>{REACTION_EMOJI[r.reaction_type] || "👍"}</span>
-                  <span>{r.posted_by_name}</span>
-                </div>
-              ))}
+              {(reactions || []).map(r => {
+                const RIcon = REACTION_ICON[r.reaction_type] || ThumbsUp;
+                return (
+                  <div key={r.id} className="an-reacted-by-item">
+                    <span style={{display:"inline-flex",alignItems:"center"}}><RIcon size={13} color={REACTION_COLOR[r.reaction_type]}/></span>
+                    <span>{r.posted_by_name}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -108,7 +115,7 @@ function PostModal({ editPost, onClose, onSave }) {
       <div className="an-modal an-modal-lg" onClick={e=>e.stopPropagation()}>
         <div className="an-modal-header">
           <div className="an-modal-title">{editPost?"Edit Post":"Create New Post"}</div>
-          <button className="an-modal-close" onClick={onClose}>✕</button>
+          <button className="an-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="an-modal-body">
           {/* Type pills */}
@@ -125,7 +132,7 @@ function PostModal({ editPost, onClose, onSave }) {
               <label className="an-label">Options</label>
               <label className="an-checkbox-wrap">
                 <input type="checkbox" checked={pinned} onChange={e=>setPinned(e.target.checked)}/>
-                <span>📌 Pin this post</span>
+                <span style={{display:"inline-flex",alignItems:"center",gap:4}}><Pin size={13}/> Pin this post</span>
               </label>
             </div>
           </div>
@@ -146,12 +153,12 @@ function PostModal({ editPost, onClose, onSave }) {
             <label className="an-label">Attach Image <span className="an-label-optional">(optional)</span></label>
             <label className="an-image-upload-label">
               <input type="file" accept="image/*" onChange={handleImageChange} style={{display:"none"}}/>
-              <div className="an-image-upload-btn">📎 Choose Image</div>
+              <div className="an-image-upload-btn" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Paperclip size={14}/> Choose Image</div>
             </label>
             {preview && (
               <div className="an-image-preview-wrap">
                 <img src={preview} alt="preview" className="an-image-preview"/>
-                <button className="an-image-remove" onClick={()=>{setImage(null);setPreview(null);}}>✕ Remove</button>
+                <button className="an-image-remove" onClick={()=>{setImage(null);setPreview(null);}} style={{display:"flex",alignItems:"center",gap:4,justifyContent:"center"}}><X size={12}/> Remove</button>
               </div>
             )}
           </div>
@@ -166,24 +173,20 @@ function PostModal({ editPost, onClose, onSave }) {
 }
 
 // ─── View Post Modal ───────────────────────────────────────────────────────────
-function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh, onReact }) {
+function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onCommentChange, onReact }) {
   const [comment,  setComment]  = useState("");
   const [comments, setComments] = useState(post?.comments||[]);
   const [loading,  setLoading]  = useState(false);
-  const [fetching, setFetching] = useState(false);
   if (!post) return null;
 
-  useEffect(() => {
-    if (!post?.id) return;
-    setFetching(true);
-    getAnnouncementsAPI()
-      .then(posts => {
-        const found = posts.find(p => p.id === post.id);
-        if (found) setComments(found.comments || []);
-      })
-      .catch(e => console.error(e))
-      .finally(() => setFetching(false));
-  }, [post?.id]);
+  // ── FIX: dating may useEffect dito na tumatawag ng getAnnouncementsAPI()
+  // (KINUKUHA ANG BUONG LISTAHAN ng LAHAT ng announcements) tuwing
+  // magbubukas ng isang post, para lang makuha ang comments ng ISANG
+  // post na 'yon — malaking overfetch, ito ang pangunahing dahilan ng
+  // pagkabagal ng loading. Tinanggal na ito — ang "post.comments" mula
+  // sa parent ay sapat na, dahil sync na ito sa optimistic local updates
+  // sa add/delete comment sa ibaba. ────────────────────────────────────
+  useEffect(() => { setComments(post?.comments||[]); }, [post?.id, post?.comments]);
 
   const handleAddComment = async () => {
     if (!comment.trim()) return;
@@ -192,7 +195,13 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
       const newComment = await addCommentAPI(post.id, comment);
       setComments(prev => [...prev, newComment]);
       setComment("");
-      if (onRefresh) onRefresh();
+      // ── FIX: tinanggal ang "onRefresh()" dito — dating nagre-refetch
+      // ng BUONG LISTAHAN ng announcements para lang sa ISANG bagong
+      // comment, kahit na-update na naman nang tama ang lokal na state
+      // sa itaas. Sa halip, "onCommentChange" na lang — mabilis na
+      // lokal na pag-update ng comment_count sa parent, walang network
+      // request. ──────────────────────────────────────────────────────
+      if (onCommentChange) onCommentChange(post.id, 1);
     } catch { alert("Failed to add comment."); }
     finally { setLoading(false); }
   };
@@ -201,7 +210,8 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
     try {
       await deleteCommentAPI(post.id, cId);
       setComments(prev => prev.filter(c => c.id !== cId));
-      if (onRefresh) onRefresh();
+      // ── FIX: tinanggal din ang "onRefresh()" dito, parehong dahilan. ──
+      if (onCommentChange) onCommentChange(post.id, -1);
     } catch { alert("Failed to delete comment."); }
   };
 
@@ -210,7 +220,7 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
       <div className="an-modal an-modal-view" onClick={e=>e.stopPropagation()}>
         <div className="an-modal-header">
           <div className="an-modal-title">{post.title}</div>
-          <button className="an-modal-close" onClick={onClose}>✕</button>
+          <button className="an-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="an-modal-body">
           <div className="an-view-meta">
@@ -239,7 +249,7 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
           </div>
 
           <div className="an-comments-section">
-            <div className="an-comments-title">💬 Comments ({comments.length})</div>
+            <div className="an-comments-title" style={{display:"flex",alignItems:"center",gap:6}}><MessageCircle size={14}/> Comments ({comments.length})</div>
             <div className="an-comments-list">
               {comments.length===0
                 ? <div className="an-no-comments">No comments yet. Be the first to comment!</div>
@@ -252,7 +262,7 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
                       <div className="an-comment-time">{c.created_at}</div>
                     </div>
                     {(currentUser?.role==="admin"||currentUser?.id===c.posted_by) && (
-                      <button className="an-comment-del" onClick={()=>handleDeleteComment(c.id)}>✕</button>
+                      <button className="an-comment-del" onClick={()=>handleDeleteComment(c.id)}><X size={12}/></button>
                     )}
                   </div>
                 ))
@@ -268,8 +278,8 @@ function ViewPostModal({ post, onClose, onEdit, onDelete, currentUser, onRefresh
           <button className="an-btn-cancel" onClick={onClose}>Close</button>
           {(currentUser?.role==="admin"||currentUser?.role==="staff") && (
             <>
-              <button className="an-btn-edit" onClick={()=>onEdit(post)}>✏ Edit</button>
-              <button className="an-btn-delete" onClick={()=>onDelete(post.id)}>🗑 Delete</button>
+              <button className="an-btn-edit" onClick={()=>onEdit(post)} style={{display:"flex",alignItems:"center",gap:6}}><Pencil size={13}/> Edit</button>
+              <button className="an-btn-delete" onClick={()=>onDelete(post.id)} style={{display:"flex",alignItems:"center",gap:6}}><Trash2 size={13}/> Delete</button>
             </>
           )}
         </div>
@@ -346,16 +356,28 @@ export default function Announcement() {
     } catch { showToast("Failed to delete.", "danger"); }
   };
 
-  // ── Reaction handler — i-update lang lokal, walang buong re-fetch ────────
+  // ── FIX: dating nagre-refetch ng BUONG LISTAHAN ng announcements
+  // (getAnnouncementsAPI()) tuwing may nag-react sa isang post — malaking
+  // overfetch, isa pa sa pangunahing dahilan ng pagkabagal. Ngayon,
+  // gagamitin muna ang "result" mismo na ibinabalik ng reaction endpoint
+  // (kung buong updated post ang laman nito). Kung hindi kumpleto ang
+  // laman nito (walang "reactions" field), i-fallback na lang sa
+  // "getAnnouncementAPI(postId)" — kinukuha lang ang ISANG post na 'to,
+  // hindi na ang BUONG listahan. ───────────────────────────────────────
   const handleReact = async (postId, reactionType) => {
     try {
       const result = await reactToAnnouncementAPI(postId, reactionType);
-      // Kailangan din ng buong `reactions` list (para sa "reacted by") kaya
-      // isang re-fetch lang para dito, hindi masyadong mabigat naman.
-      const updated = await getAnnouncementsAPI();
-      setPosts(updated);
-      setViewPost(prev => prev ? updated.find(p => p.id === postId) || null : prev);
+      const updatedPost = (result && result.reactions !== undefined) ? result : await getAnnouncementAPI(postId);
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updatedPost } : p));
+      setViewPost(prev => prev && prev.id === postId ? { ...prev, ...updatedPost } : prev);
     } catch(e) { console.error(e); }
+  };
+
+  // ── BAGO: mabilis na lokal na pag-update ng comment_count — walang
+  // network request, imbes na buong refetch tuwing may bagong comment. ──
+  const handleCommentChange = (postId, delta) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, comment_count: Math.max(0, (p.comment_count||0) + delta) } : p));
+    setViewPost(prev => prev && prev.id === postId ? { ...prev, comment_count: Math.max(0, (prev.comment_count||0) + delta) } : prev);
   };
 
   const filtered = posts.filter(p => {
@@ -383,18 +405,18 @@ export default function Announcement() {
       {toast && <div className={`an-toast an-toast-${toast.type}`}>{toast.msg}</div>}
       {showCreate && <PostModal onClose={()=>setCreate(false)} onSave={handleCreate}/>}
       {editPost   && <PostModal editPost={editPost} onClose={()=>setEditPost(null)} onSave={handleEdit}/>}
-      {viewPost   && <ViewPostModal post={viewPost} onClose={()=>setViewPost(null)} onEdit={p=>{setViewPost(null);setEditPost(p);}} onDelete={handleDelete} currentUser={user} onRefresh={fetchPosts} onReact={handleReact}/>}
+      {viewPost   && <ViewPostModal post={viewPost} onClose={()=>setViewPost(null)} onEdit={p=>{setViewPost(null);setEditPost(p);}} onDelete={handleDelete} currentUser={user} onCommentChange={handleCommentChange} onReact={handleReact}/>}
 
       {/* ── Custom Delete Confirmation Modal ── */}
       {deleteId && (
         <div className="an-overlay" onClick={()=>setDeleteId(null)}>
           <div className="an-modal" style={{maxWidth:400}} onClick={e=>e.stopPropagation()}>
             <div className="an-modal-header">
-              <div className="an-modal-title" style={{color:"#c62828"}}>🗑 Delete Announcement</div>
-              <button className="an-modal-close" onClick={()=>setDeleteId(null)}>✕</button>
+              <div className="an-modal-title" style={{color:"#c62828",display:"flex",alignItems:"center",gap:6}}><Trash2 size={15}/> Delete Announcement</div>
+              <button className="an-modal-close" onClick={()=>setDeleteId(null)}><X size={16}/></button>
             </div>
             <div className="an-modal-body" style={{textAlign:"center",padding:"24px 20px"}}>
-              <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
+              <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><AlertTriangle size={36} color="#f57c00"/></div>
               <div style={{fontSize:15,fontWeight:600,color:"#333",marginBottom:8}}>Are you sure you want to delete this announcement?</div>
               <div style={{fontSize:13,color:"#999"}}>This action cannot be undone.</div>
             </div>
@@ -428,7 +450,7 @@ export default function Announcement() {
         <div className="an-search-wrap">
           <Search size={13} color="#aaa"/>
           <input className="an-search-input" placeholder="Search Post....." value={search} onChange={e=>setSearch(e.target.value)}/>
-          {search && <button className="an-clear-btn" onClick={()=>setSearch("")}>✕</button>}
+          {search && <button className="an-clear-btn" onClick={()=>setSearch("")}><X size={13}/></button>}
         </div>
         <div className="an-filter-tabs">
           {["All",...POST_TYPES].map(t=>(
@@ -448,7 +470,7 @@ export default function Announcement() {
             const bodyText = post.body || post.caption || "";
             return (
               <div key={post.id} className={`an-post-card ${post.pinned?"pinned":""}`} onClick={()=>setViewPost(post)}>
-                {post.pinned && <div className="an-pinned-bar">📌 Pinned</div>}
+                {post.pinned && <div className="an-pinned-bar" style={{display:"flex",alignItems:"center",gap:6}}><Pin size={12}/> Pinned</div>}
                 <div className="an-post-inner">
                   <div className="an-post-avatar">{(post.posted_by_name||"A")[0].toUpperCase()}</div>
                   <div className="an-post-content">
@@ -462,7 +484,7 @@ export default function Announcement() {
                       </div>
                       <div className="an-post-right" onClick={e=>e.stopPropagation()}>
                         <span className={`an-type-badge ${TYPE_COLOR[post.type]}`}>{post.type}</span>
-                        {post.notified && <span className="an-notified-badge">🔔 Notified</span>}
+                        {post.notified && <span className="an-notified-badge" style={{display:"inline-flex",alignItems:"center",gap:4}}><Bell size={11}/> Notified</span>}
                         {(user?.role==="admin"||user?.role==="staff") && (<>
                           <button className="an-icon-btn edit"   title="Edit"   onClick={e=>{e.stopPropagation();setEditPost(post);}}><Pencil size={12}/></button>
                           <button className="an-icon-btn delete" title="Delete" onClick={e=>{e.stopPropagation();handleDelete(post.id);}}><Trash2 size={12}/></button>
@@ -484,7 +506,7 @@ export default function Announcement() {
                     {/* Image — "fit" na parang Facebook */}
                     {post.image_url && (
                       <div className="an-post-image-wrap">
-                        <img src={post.image_url} alt="post" className="an-post-image"/>
+                        <img src={post.image_url} alt="post" className="an-post-image" loading="lazy"/>
                       </div>
                     )}
 
