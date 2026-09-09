@@ -411,7 +411,7 @@ class _ViewEditMemberScreenState extends State<ViewEditMemberScreen> {
                           ),
                           const Spacer(),
                           if (_savingMultiplier) const Padding(padding: EdgeInsets.only(right: 8), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
-                          if (_multiplierSaved && !_savingMultiplier) const Padding(padding: EdgeInsets.only(right: 8), child: Text('✓ Saved', style: TextStyle(fontSize: 11, color: _VEColors.green, fontWeight: FontWeight.w600))),
+                          if (_multiplierSaved && !_savingMultiplier) const Padding(padding: EdgeInsets.only(right: 8), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 13, color: _VEColors.green), SizedBox(width: 3), Text('Saved', style: TextStyle(fontSize: 11, color: _VEColors.green, fontWeight: FontWeight.w600))])),
                           // ── FIX: dating masyadong mahaba ang naka-
                           // display kapag sarado ang dropdown (hal. "2×
                           // — Bad payment history"), kaya nag-o-overflow

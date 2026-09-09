@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Leaf, Eye, EyeOff, Lock } from "lucide-react";
+import { Leaf, Eye, EyeOff, Lock, User, AlertTriangle, LogIn } from "lucide-react";
 import "./Login.css";
 
 export default function Login() {
@@ -71,8 +71,23 @@ export default function Login() {
       <div className="login-right">
         <div className="login-card">
 
+          {/* ── BAGO: mobile-only branding — dating nawawala nang
+              tuluyan ang buong logo/pangalan ng system kapag maliit
+              ang screen (natatago ang buong .login-left panel), kaya
+              parang "plain" na lang na card ang natitira. Ito ay
+              lumalabas LANG sa maliit na screen (tingnan ang CSS). ── */}
+          <div className="login-mobile-brand">
+            <img src="/logo.png" alt="LEAF MPC" className="login-mobile-brand-img"/>
+            <div className="login-mobile-brand-text">Cooperative Management System</div>
+          </div>
+
+          {/* ── BAGO: dating plain na leaf icon lang — ngayon may
+              circular badge background para mas prominent at hindi
+              "plain." ─────────────────────────────────────────────── */}
           <div className="login-card-icon">
-            <Leaf size={24} color="#4caf50" fill="#4caf50"/>
+            <div className="login-icon-badge">
+              <Leaf size={22} color="#fff" fill="#fff"/>
+            </div>
           </div>
           <div className="login-card-title">Login</div>
           <div className="login-card-sub">Enter your credentials to continue</div>
@@ -81,24 +96,28 @@ export default function Login() {
 
             <div className="login-field">
               <label className="login-label">Username</label>
-              <input
-                className={`login-input ${error ? "login-input-err" : ""}`}
-                type="text"
-                name="username"
-                placeholder="Enter your username"
-                value={form.username}
-                onChange={handle}
-                onKeyDown={handleKeyDown}
-                autoComplete="username"
-                autoFocus
-              />
+              <div className="login-input-wrap">
+                <User size={15} className="login-input-icon"/>
+                <input
+                  className={`login-input login-input-with-icon ${error ? "login-input-err" : ""}`}
+                  type="text"
+                  name="username"
+                  placeholder="Enter your username"
+                  value={form.username}
+                  onChange={handle}
+                  onKeyDown={handleKeyDown}
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
             </div>
 
             <div className="login-field">
               <label className="login-label">Password</label>
               <div className="login-pw-wrap">
+                <Lock size={15} className="login-input-icon"/>
                 <input
-                  className={`login-input ${error ? "login-input-err" : ""}`}
+                  className={`login-input login-input-with-icon ${error ? "login-input-err" : ""}`}
                   type={showPw ? "text" : "password"}
                   name="password"
                   placeholder="Enter your password"
@@ -127,14 +146,14 @@ export default function Login() {
               </button>
             </div>
 
-            {error && <div className="login-error">⚠ {error}</div>}
+            {error && <div className="login-error"><AlertTriangle size={13}/> {error}</div>}
 
             <button
               className="login-btn"
               onClick={handleSubmit}
               disabled={loading}
             >
-              {loading ? <span className="login-spinner" /> : "Login"}
+              {loading ? <span className="login-spinner" /> : <><LogIn size={16}/> Login</>}
             </button>
 
           </div>

@@ -121,6 +121,26 @@ class _GcashRequestDetailScreenState extends State<GcashRequestDetailScreen> {
             ),
             const SizedBox(height: 14),
 
+            // ── BAGO: aling GCash account ang ginamit ng member —
+            // mahalaga ito ngayong marami nang account, para malaman
+            // ng admin kung saang account dapat i-verify ang payment. ──
+            if ('${req['paid_to_number'] ?? ''}'.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFCE93D8))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('PAID TO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF6A1B9A), letterSpacing: 0.5)),
+                    const SizedBox(height: 4),
+                    Text('${req['paid_to_number']}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF4A148C), fontFamily: 'monospace')),
+                    Text('${req['paid_to_name'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
+                  ],
+                ),
+              ),
+            if ('${req['paid_to_number'] ?? ''}'.isNotEmpty) const SizedBox(height: 12),
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),

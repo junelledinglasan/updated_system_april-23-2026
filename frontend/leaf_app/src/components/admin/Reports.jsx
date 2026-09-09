@@ -20,9 +20,10 @@ import {
   BarChart2, TrendingUp, FileText, Link2, Users, PieChart,
   Wallet, ClipboardList, AlertTriangle, PiggyBank,
   CreditCard, Link, Trophy, BarChart, Database,
-  TrendingDown, Calendar, UserPlus, Shield, Target,
+  Calendar, UserPlus, Shield,
   Activity, Clock, CheckCircle, XCircle, Percent,
   BookOpen, Layers, Award, ArrowUpRight, Coins,
+  X, Download, Eye, Check,
 } from "lucide-react";
 import "./Reports.css";
 
@@ -30,7 +31,9 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElemen
 
 const COLORS = ["#2e7d32","#4caf50","#f57c00","#1565c0","#c62828","#6a1b9a","#00838f","#ff8a65","#64b5f6","#ba68c8"];
 const YEAR   = new Date().getFullYear();
-const YEARS  = ["All", ...Array.from({length: 6}, (_, i) => YEAR - 3 + i)];
+// ── BAGO: tinanggal ang "YEARS" array (fixed 6-year list) — hindi na
+// kailangan, ang year filter ay prev/next navigation na, kaya kahit
+// anong taon ay maaabot. ─────────────────────────────────────────────
 
 const REPORT_TYPES = [
   "Financial Summary","Collection Report","Loan Summary","Member Report",
@@ -78,10 +81,10 @@ function ReportPreviewModal({ type, dateFrom, dateTo, onClose }) {
       <div className="rp-modal rp-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="rp-modal-header">
           <div>
-            <div className="rp-modal-title">📄 {type}</div>
+            <div className="rp-modal-title" style={{display:"flex",alignItems:"center",gap:8}}><FileText size={17}/> {type}</div>
             <div className="rp-modal-sub">{dateFrom} to {dateTo}</div>
           </div>
-          <button className="rp-modal-close" onClick={onClose}>✕</button>
+          <button className="rp-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="rp-modal-body">
           {loading ? (
@@ -129,8 +132,8 @@ function ReportPreviewModal({ type, dateFrom, dateTo, onClose }) {
         </div>
         <div className="rp-modal-footer">
           <button className="rp-btn-cancel" onClick={onClose}>Close</button>
-          <button className="rp-btn-export excel" onClick={doExcel} disabled={!!exporting}>{exporting==="excel"?"Exporting...":"⬇ Excel"}</button>
-          <button className="rp-btn-export pdf"   onClick={doPDF}   disabled={!!exporting}>{exporting==="pdf"?"Exporting...":"📄 PDF"}</button>
+          <button className="rp-btn-export excel" onClick={doExcel} disabled={!!exporting} style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>{exporting==="excel"?"Exporting...":<><Download size={13}/> Excel</>}</button>
+          <button className="rp-btn-export pdf"   onClick={doPDF}   disabled={!!exporting} style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>{exporting==="pdf"?"Exporting...":<><FileText size={13}/> PDF</>}</button>
         </div>
       </div>
     </div>
@@ -273,31 +276,18 @@ export default function Reports() {
         } else if (activeTab === "audit") {
           const al = await getAuditLogAPI(selectedYear).catch(() => []);
           setAuditLog(al);
-        } else if (activeTab === "repayment") {
-          const r = await getRepaymentProgressAPI(selectedYear).catch(()=>[]);
-          setRepayment(r);
-        } else if (activeTab === "delinquency") {
-          const r = await getDelinquencyAPI(delinqMonths).catch(()=>({count:0,data:[]}));
-          setDelinquency(r);
-        } else if (activeTab === "efficiency") {
-          const r = await getCollectionEfficiencyAPI(selectedYear).catch(()=>({data:[],expected_monthly:0}));
-          setEfficiency(r);
-        } else if (activeTab === "growth") {
-          const r = await getMemberGrowthAPI(selectedYear).catch(()=>({data:[],total_members:0}));
-          setMemberGrowth(r);
-        } else if (activeTab === "approval") {
-          const r = await getLoanApprovalRateAPI(selectedYear).catch(()=>({by_type:[],monthly:[]}));
-          setApprovalRate(r);
-        } else if (activeTab === "maturities") {
-          const r = await getUpcomingMaturitiesAPI(maturMonths).catch(()=>({count:0,data:[]}));
-          setMaturities(r);
-        } else if (activeTab === "firsttimers") {
-          const r = await getFirstTimeBorrowersAPI(selectedYear).catch(()=>({count:0,data:[]}));
-          setFirstTimers(r);
-        } else if (activeTab === "risk") {
-          const r = await getRiskAssessmentAPI().catch(()=>({summary:{},data:[]}));
-          setRiskData(r);
         }
+        // ── FIX: dating may 8 pang "else if" branches dito (repayment,
+        // delinquency, efficiency, growth, approval, maturities,
+        // firsttimers, risk) — pero DEAD CODE ang mga ito, dahil ang
+        // "activeTab" ay HINDI KAILANMAN puwedeng maging alinman sa mga
+        // values na 'to (isa lang ang setTab() call sa buong file, at 6
+        // lang ang tab keys doon: overview/charts/classification/
+        // performance/generate/audit). Tinanggal na ang mga hindi
+        // maaabot na branch na 'to — ang datos na sana kukunin nila ay
+        // kinukuha na rin naman sa "overview"/"charts"/"classification"/
+        // "performance" branches sa itaas, para sa mga naka-embed nang
+        // bersyon ng parehong reports doon. ─────────────────────────────
         setFetchedTabs(p => ({ ...p, [key]: true }));
       } catch(e) { console.error(e); }
       finally { setLoading(false); }
@@ -310,13 +300,24 @@ export default function Reports() {
     labels: monthly.map(m => m.month),
     datasets: [{ label:"Collection", data:monthly.map(m=>m.total), backgroundColor:"#2e7d32", borderRadius:6, hoverBackgroundColor:"#1b5e20" }],
   };
+  // ── FIX: dating kulang ang fallback (5 lang, walang "Approved" at
+  // "Cancelled" na estado na naidagdag na natin dati sa loans/models.py
+  // STATUS_CHOICES — 7 estado na dapat ngayon). Ang fallback na 'to ay
+  // makikita lang kapag walang totoong datos pa mula sa backend (zero-
+  // state placeholder), pero dapat pa ring tama ang laman nito. ────────
   const loanStatData = {
-    labels: Object.keys(loanStat).length ? Object.keys(loanStat) : ["For Review","Active","Declined","Completed","Overdue"],
-    datasets: [{ data: Object.keys(loanStat).length ? Object.values(loanStat) : [0,0,0,0,0], backgroundColor:["#f57c00","#2e7d32","#e53935","#1565c0","#c62828"], borderRadius:6 }],
+    labels: Object.keys(loanStat).length ? Object.keys(loanStat) : ["For Review","Approved","Active","Declined","Completed","Overdue","Cancelled"],
+    datasets: [{ data: Object.keys(loanStat).length ? Object.values(loanStat) : [0,0,0,0,0,0,0], backgroundColor:["#f57c00","#ffb300","#2e7d32","#e53935","#1565c0","#c62828","#9e9e9e"], borderRadius:6 }],
   };
+  // ── FIX: dating "Regular","Emergency","Salary","Housing","Business"
+  // ang fallback — LUMANG 5 loan types na 'to, na napalitan na natin ng
+  // 4 bagong types (Regular Loan, Petty Cash Loan, Appliance Loan, ATM
+  // Loan) sa buong system. Makikita lang ito kapag walang totoong
+  // datos pa (zero-state), pero dapat pa ring tumutugma sa aktwal na
+  // mga loan type na ginagamit ngayon. ─────────────────────────────────
   const loanTypeData = {
-    labels: Object.keys(loanType).length ? Object.keys(loanType) : ["Regular","Emergency","Salary","Housing","Business"],
-    datasets: [{ data: Object.keys(loanType).length ? Object.values(loanType) : [0,0,0,0,0], backgroundColor:COLORS, borderWidth:0 }],
+    labels: Object.keys(loanType).length ? Object.keys(loanType) : ["Regular Loan","Petty Cash Loan","Appliance Loan","ATM Loan"],
+    datasets: [{ data: Object.keys(loanType).length ? Object.values(loanType) : [0,0,0,0], backgroundColor:COLORS, borderWidth:0 }],
   };
   const payBehavData = {
     labels: ["On Time","Late","Overdue"],
@@ -370,8 +371,8 @@ export default function Reports() {
             const c = classification[ctx.dataIndex];
             if (!c || c.total_payments===0) return `${ctx.dataset.label}: No payments yet`;
             return ctx.dataset.label.includes("On-Time")
-              ? [`✅ On-Time: ${ctx.parsed.y}%`, `   ${c.on_time_payments} of ${c.total_payments} payments`]
-              : [`⚠️ Late: ${ctx.parsed.y}%`, `   ${c.late_payments} of ${c.total_payments} payments`];
+              ? [`On-Time: ${ctx.parsed.y}%`, `   ${c.on_time_payments} of ${c.total_payments} payments`]
+              : [`Late: ${ctx.parsed.y}%`, `   ${c.late_payments} of ${c.total_payments} payments`];
           },
         },
         backgroundColor:"rgba(20,20,20,0.9)", titleFont:{size:12,weight:"bold"}, bodyFont:{size:11}, padding:10, cornerRadius:8,
@@ -396,12 +397,31 @@ export default function Reports() {
           <div className="rp-page-title">Reports &amp; Analytics</div>
           <div className="rp-page-sub">Financial analytics, loan performance, member insights, and report generation.</div>
         </div>
+        {/* ── FIX: dating limitado lang sa 6 taon (current year ±3) ang
+            dropdown na 'to — hindi mapipili ang mga taon sa labas ng
+            range na 'yon. Ngayon, may prev/next arrow para makapunta sa
+            KAHIT ANONG taon, hindi na basta pinipili sa fixed na
+            listahan. Nananatili pa rin ang "All Years" bilang toggle. ── */}
         <div className="rp-year-selector">
-          <label style={{fontSize:12,color:"#888",marginRight:6}}>Year:</label>
-          <select value={selectedYear} onChange={e=>setYear(e.target.value==="All"?"All":Number(e.target.value))}
-            style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid #c8ddc8",fontSize:12,fontFamily:"inherit",color:"#333",outline:"none"}}>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <button
+            className="rp-year-btn"
+            onClick={() => setYear(selectedYear === "All" ? YEAR - 1 : selectedYear - 1)}
+            title="Previous year"
+          >‹</button>
+          <div className="rp-year-display">
+            {selectedYear === "All" ? "All Years" : selectedYear}
+          </div>
+          <button
+            className="rp-year-btn"
+            onClick={() => setYear(selectedYear === "All" ? YEAR + 1 : selectedYear + 1)}
+            title="Next year"
+          >›</button>
+          <button
+            className={`rp-year-all-btn ${selectedYear === "All" ? "active" : ""}`}
+            onClick={() => setYear(selectedYear === "All" ? YEAR : "All")}
+          >
+            {selectedYear === "All" ? "Back to This Year" : "All Years"}
+          </button>
         </div>
       </div>
 
@@ -784,7 +804,7 @@ export default function Reports() {
           {/* Share Capital table */}
           <div className="rp-chart-card">
             <div className="rp-chart-title">Share Capital — Top 20 Members</div>
-            <div className="rp-chart-sub">Members with highest share capital · Max Loanable = Share Capital</div>
+            <div className="rp-chart-sub">Members with highest share capital</div>
             <ProTable
               columns={[
                 {label:"#",            tdStyle:{textAlign:"center",fontWeight:700,color:"#2e7d32",width:40}, render:(_,i)=>i+1},
@@ -794,7 +814,7 @@ export default function Reports() {
                 {label:"Loans",        key:"loan_count",  tdStyle:{textAlign:"center"}},
                 {label:"Total Loaned", key:"total_loaned",render:r=>`₱${Number(r.total_loaned).toLocaleString()}`},
                 {label:"Share Capital",key:"share_capital",render:r=>`₱${Number(r.share_capital).toLocaleString()}`,tdStyle:{fontWeight:700,color:"#1b5e20"}},
-                {label:"Max Loanable (×3)", key:"max_loanable", render:r=>`₱${Number(r.max_loanable).toLocaleString()}`,tdStyle:{fontWeight:700,color:"#1565c0"}},
+                {label:"Max Loanable", key:"max_loanable", render:r=>`₱${Number(r.max_loanable).toLocaleString()}`,tdStyle:{fontWeight:700,color:"#1565c0"}},
                 {label:"Savings",      key:"savings_balance",render:r=>`₱${Number(r.savings_balance||0).toLocaleString()}`,tdStyle:{color:"#e65100"}},
               ]}
               rows={shareCapital}
@@ -879,7 +899,7 @@ export default function Reports() {
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           {/* Header */}
           <div className="rp-chart-card">
-            <div style={{fontSize:18,fontWeight:800,color:"#1b5e20",marginBottom:4}}>📄 Generate Report</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#1b5e20",marginBottom:4,display:"flex",alignItems:"center",gap:8}}><FileText size={19}/> Generate Report</div>
             <div style={{fontSize:12,color:"#888"}}>Select a report type and date range, then preview or export as Excel/PDF.</div>
           </div>
 
@@ -913,7 +933,7 @@ export default function Reports() {
                      <Database size={16} color="#555"/>}
                     </span>
                     {t}
-                    {reportType===t && <span style={{marginLeft:"auto",fontSize:16}}>✓</span>}
+                    {reportType===t && <span style={{marginLeft:"auto",display:"flex"}}><Check size={16} color="#2e7d32"/></span>}
                   </button>
                 ))}
               </div>
@@ -990,20 +1010,20 @@ export default function Reports() {
 
               {/* Action buttons */}
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <button className="rp-gen-btn preview" style={{width:"100%",padding:"13px",fontSize:14,textAlign:"center"}}
+                <button className="rp-gen-btn preview" style={{width:"100%",padding:"13px",fontSize:14,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
                   onClick={()=>setPreview(true)} disabled={!reportType}>
-                  👁 Preview Report
+                  <Eye size={15}/> Preview Report
                 </button>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <button className="rp-gen-btn excel" style={{padding:"13px",fontSize:13,textAlign:"center"}}
+                  <button className="rp-gen-btn excel" style={{padding:"13px",fontSize:13,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
                     disabled={!reportType||exporting==="excel"}
                     onClick={async()=>{setExp("excel");try{await exportExcel(reportType,dateFrom,dateTo);}catch{alert("Failed.");}finally{setExp("");}}}>
-                    {exporting==="excel"?"Exporting...":"⬇ Export Excel"}
+                    {exporting==="excel"?"Exporting...":<><Download size={13}/> Export Excel</>}
                   </button>
-                  <button className="rp-gen-btn pdf" style={{padding:"13px",fontSize:13,textAlign:"center"}}
+                  <button className="rp-gen-btn pdf" style={{padding:"13px",fontSize:13,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
                     disabled={!reportType||exporting==="pdf"}
                     onClick={async()=>{setExp("pdf");try{await exportPDF(reportType,dateFrom,dateTo);}catch{alert("Failed.");}finally{setExp("");}}}>
-                    {exporting==="pdf"?"Exporting...":"📄 Export PDF"}
+                    {exporting==="pdf"?"Exporting...":<><FileText size={13}/> Export PDF</>}
                   </button>
                 </div>
               </div>
@@ -1016,7 +1036,7 @@ export default function Reports() {
       {/* ══ AUDIT LOG ════════════════════════════════════════════════════════ */}
       {activeTab === "audit" && (
         <div className="rp-chart-card">
-          <div className="rp-chart-title">🔗 Blockchain Audit Log ({selectedYear})</div>
+          <div className="rp-chart-title" style={{display:"flex",alignItems:"center",gap:6}}><Link size={14}/> Blockchain Audit Log ({selectedYear})</div>
           <div className="rp-chart-sub">All recorded loan payments with SHA-256 hash and blockchain transaction ID</div>
           <ProTable
             columns={[
@@ -1033,312 +1053,6 @@ export default function Reports() {
             rows={auditLog}
             empty={`No transactions recorded for ${selectedYear}.`}
           />
-        </div>
-      )}
-
-      {/* ══ REPAYMENT PROGRESS ═══════════════════════════════════════════════ */}
-      {activeTab === "repayment" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Loan Repayment Progress</div>
-            <div className="rp-chart-sub">Active and overdue loans — how much has been paid vs remaining balance</div>
-            <ProTable
-              columns={[
-                {label:"Loan ID",    key:"loan_id",     tdStyle:{fontFamily:"monospace",fontSize:11}},
-                {label:"Member",     key:"member_name", tdStyle:{fontWeight:600}},
-                {label:"Member ID",  key:"member_id",   tdStyle:{fontFamily:"monospace",fontSize:11,color:"#888"}},
-                {label:"Type",       key:"loan_type"},
-                {label:"Principal",  key:"principal",   render:r=>`₱${Number(r.principal).toLocaleString()}`},
-                {label:"Paid",       key:"paid",        render:r=>`₱${Number(r.paid).toLocaleString()}`, tdStyle:{color:"#2e7d32",fontWeight:700}},
-                {label:"Balance",    key:"balance",     render:r=>`₱${Number(r.balance).toLocaleString()}`, tdStyle:{color:"#c62828",fontWeight:700}},
-                {label:"Progress",   key:"pct_paid",    render:r=>(
-                  <div style={{display:"flex",alignItems:"center",gap:8,minWidth:120}}>
-                    <div style={{flex:1,height:8,background:"#f0f0f0",borderRadius:4,overflow:"hidden"}}>
-                      <div style={{width:`${r.pct_paid}%`,height:"100%",background:r.pct_paid>=80?"#2e7d32":r.pct_paid>=50?"#f57c00":"#c62828",borderRadius:4,transition:"width 0.3s"}}/>
-                    </div>
-                    <span style={{fontSize:11,fontWeight:700,color:"#555",flexShrink:0}}>{r.pct_paid}%</span>
-                  </div>
-                )},
-                {label:"Status",     key:"status",      render:r=><span style={{background:r.status==="Active"?"#e8f5e9":"#ffebee",color:r.status==="Active"?"#2e7d32":"#c62828",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:700}}>{r.status}</span>},
-              ]}
-              rows={repayment}
-              empty="No active loans."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ DELINQUENCY REPORT ════════════════════════════════════════════════ */}
-      {activeTab === "delinquency" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#555"}}>Show members with no payment for:</span>
-            {[1,2,3,6].map(m => (
-              <button key={m} onClick={()=>{ setDelinqMonths(m); setFetchedTabs(p=>({...p,delinquency:false})); }}
-                style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${delinqMonths===m?"#c62828":"#e0e0e0"}`,background:delinqMonths===m?"#ffebee":"#fff",color:delinqMonths===m?"#c62828":"#888",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                {m} month{m>1?"s":""}
-              </button>
-            ))}
-            <span style={{fontSize:12,color:"#aaa",marginLeft:4}}>{delinquency.count} member{delinquency.count!==1?"s":""} found</span>
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Delinquency Report</div>
-            <div className="rp-chart-sub">Members with no payment recorded in the past {delinqMonths} month{delinqMonths>1?"s":""}</div>
-            <ProTable
-              columns={[
-                {label:"Loan ID",     key:"loan_id",     tdStyle:{fontFamily:"monospace",fontSize:11}},
-                {label:"Member",      key:"member_name", tdStyle:{fontWeight:600}},
-                {label:"Member ID",   key:"member_id",   tdStyle:{fontFamily:"monospace",fontSize:11,color:"#888"}},
-                {label:"Type",        key:"loan_type"},
-                {label:"Balance",     key:"balance",     render:r=>`₱${Number(r.balance).toLocaleString()}`, tdStyle:{color:"#c62828",fontWeight:700}},
-                {label:"Monthly Due", key:"monthly_due", render:r=>`₱${Number(r.monthly_due).toLocaleString()}`},
-                {label:"Last Payment",key:"last_payment",tdStyle:{color:"#f57c00"}},
-                {label:"Days Since",  key:"days_since",  render:r=><span style={{fontWeight:700,color:r.days_since>90?"#c62828":r.days_since>60?"#f57c00":"#555"}}>{r.days_since}d</span>},
-                {label:"Status",      key:"status",      render:r=><span style={{background:r.status==="Overdue"?"#ffebee":"#fff8e1",color:r.status==="Overdue"?"#c62828":"#f57c00",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:700}}>{r.status}</span>},
-              ]}
-              rows={delinquency.data||[]}
-              empty={`No delinquent members found for ${delinqMonths} month${delinqMonths>1?"s":""}.`}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ COLLECTION EFFICIENCY ════════════════════════════════════════════ */}
-      {activeTab === "efficiency" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-            <div className="rp-kpi-card green">
-              <div style={{fontSize:24}}>🎯</div>
-              <div className="rp-kpi-val">₱{Number(efficiency.expected_monthly||0).toLocaleString()}</div>
-              <div className="rp-kpi-label">Expected Monthly Collection</div>
-            </div>
-            <div className="rp-kpi-card blue">
-              <div style={{display:"flex"}}><ClipboardList size={22} color="#1565c0"/></div>
-              <div className="rp-kpi-val">{efficiency.active_loans||0}</div>
-              <div className="rp-kpi-label">Active Loans</div>
-            </div>
-            <div className="rp-kpi-card orange">
-              <div style={{display:"flex"}}><BarChart2 size={22} color="#e65100"/></div>
-              <div className="rp-kpi-val">{efficiency.data?.length||0} months</div>
-              <div className="rp-kpi-label">Months with Data</div>
-            </div>
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Collection Efficiency ({selectedYear})</div>
-            <div className="rp-chart-sub">Actual collected vs expected monthly collection from active loans</div>
-            <ProTable
-              columns={[
-                {label:"Month",      key:"month",          tdStyle:{fontWeight:600}},
-                {label:"Expected",   key:"expected",       render:r=>`₱${Number(r.expected).toLocaleString()}`, tdStyle:{color:"#1565c0"}},
-                {label:"Collected",  key:"collected",      render:r=>`₱${Number(r.collected).toLocaleString()}`, tdStyle:{fontWeight:700,color:"#2e7d32"}},
-                {label:"Efficiency", key:"efficiency_pct", render:r=>(
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{flex:1,height:8,background:"#f0f0f0",borderRadius:4,overflow:"hidden",minWidth:80}}>
-                      <div style={{width:`${Math.min(r.efficiency_pct,100)}%`,height:"100%",background:r.efficiency_pct>=90?"#2e7d32":r.efficiency_pct>=70?"#f57c00":"#c62828",borderRadius:4}}/>
-                    </div>
-                    <span style={{fontWeight:700,fontSize:12,color:r.efficiency_pct>=90?"#2e7d32":r.efficiency_pct>=70?"#f57c00":"#c62828"}}>{r.efficiency_pct}%</span>
-                  </div>
-                )},
-                {label:"Transactions",key:"tx_count",      tdStyle:{textAlign:"center"}},
-              ]}
-              rows={efficiency.data||[]}
-              empty="No collection data yet."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ MEMBER GROWTH ════════════════════════════════════════════════════ */}
-      {activeTab === "growth" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div className="rp-kpi-card green" style={{maxWidth:280}}>
-            <div style={{display:"flex"}}><Users size={22} color="#2e7d32"/></div>
-            <div className="rp-kpi-val">{memberGrowth.total_members||0}</div>
-            <div className="rp-kpi-label">Total Members (All-time)</div>
-          </div>
-          {memberGrowth.data?.length > 0 && (
-            <div className="rp-chart-card">
-              <div className="rp-chart-title">Member Growth Timeline</div>
-              <div className="rp-chart-sub">New registrations and cumulative membership count per month</div>
-              <div style={{height:240}}>
-                <Line
-                  data={{
-                    labels: memberGrowth.data.map(m=>m.month),
-                    datasets: [
-                      {label:"New Members",      data:memberGrowth.data.map(m=>m.new),         borderColor:"#4caf50",  backgroundColor:"rgba(76,175,80,0.1)",  fill:true,  tension:0.4, pointBackgroundColor:"#4caf50"},
-                      {label:"Cumulative Total", data:memberGrowth.data.map(m=>m.cumulative),  borderColor:"#1565c0",  backgroundColor:"rgba(21,101,192,0.05)", fill:false, tension:0.4, pointBackgroundColor:"#1565c0"},
-                    ],
-                  }}
-                  options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"top"}},scales:{x:{grid:{display:false}},y:{grid:{color:"#f0f4f1"}}}}}
-                />
-              </div>
-            </div>
-          )}
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Monthly Registrations</div>
-            <ProTable
-              columns={[
-                {label:"Month",          key:"month",       tdStyle:{fontWeight:600}},
-                {label:"New Members",    key:"new",         tdStyle:{textAlign:"center",fontWeight:700,color:"#2e7d32"}},
-                {label:"Cumulative",     key:"cumulative",  tdStyle:{textAlign:"center",color:"#1565c0",fontWeight:700}},
-              ]}
-              rows={memberGrowth.data||[]}
-              empty="No registration data yet."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ LOAN APPROVAL RATE ═══════════════════════════════════════════════ */}
-      {activeTab === "approval" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-            {[
-              {label:"Total Applications", val:approvalRate.total||0,    color:"blue",   icon:<ClipboardList size={22} color="#1565c0"/>},
-              {label:"Approved",           val:approvalRate.approved||0,  color:"green",  icon:<CheckCircle size={22} color="#2e7d32"/>},
-              {label:"Declined",           val:approvalRate.declined||0,  color:"red",    icon:<XCircle size={22} color="#c62828"/>},
-              {label:"Approval Rate",      val:`${approvalRate.approval_rate||0}%`, color:"purple", icon:<Percent size={22} color="#6a1b9a"/>},
-            ].map((c,i) => (
-              <div key={i} className={`rp-kpi-card ${c.color}`}>
-                <div style={{display:"flex"}}>{c.icon}</div>
-                <div className="rp-kpi-val">{c.val}</div>
-                <div className="rp-kpi-label">{c.label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Approval Rate by Loan Type</div>
-            <ProTable
-              columns={[
-                {label:"Loan Type",     key:"loan_type",  tdStyle:{fontWeight:600}},
-                {label:"Total",         key:"total",      tdStyle:{textAlign:"center"}},
-                {label:"Approved",      key:"approved",   tdStyle:{textAlign:"center",color:"#2e7d32",fontWeight:700}},
-                {label:"Declined",      key:"declined",   tdStyle:{textAlign:"center",color:"#c62828"}},
-                {label:"Approval Rate", key:"rate",       render:r=><span style={{fontWeight:700,color:r.rate>=80?"#2e7d32":r.rate>=60?"#f57c00":"#c62828"}}>{r.rate}%</span>},
-              ]}
-              rows={approvalRate.by_type||[]}
-              empty="No loan data yet."
-            />
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Monthly Application Trend</div>
-            <ProTable
-              columns={[
-                {label:"Month",    key:"month",    tdStyle:{fontWeight:600}},
-                {label:"Total",    key:"total",    tdStyle:{textAlign:"center"}},
-                {label:"Approved", key:"approved", tdStyle:{textAlign:"center",color:"#2e7d32",fontWeight:700}},
-                {label:"Declined", key:"declined", tdStyle:{textAlign:"center",color:"#c62828"}},
-              ]}
-              rows={approvalRate.monthly||[]}
-              empty="No data yet."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ UPCOMING MATURITIES ══════════════════════════════════════════════ */}
-      {activeTab === "maturities" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#555"}}>Show loans maturing within:</span>
-            {[1,2,3,6].map(m => (
-              <button key={m} onClick={()=>{ setMaturMonths(m); setFetchedTabs(p=>({...p,maturities:false})); }}
-                style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${maturMonths===m?"#1565c0":"#e0e0e0"}`,background:maturMonths===m?"#e3f2fd":"#fff",color:maturMonths===m?"#1565c0":"#888",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                {m} month{m>1?"s":""}
-              </button>
-            ))}
-            <span style={{fontSize:12,color:"#aaa"}}>{maturities.count} loan{maturities.count!==1?"s":""} maturing</span>
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">Upcoming Loan Maturities</div>
-            <div className="rp-chart-sub">Active loans completing within the next {maturMonths} month{maturMonths>1?"s":""}</div>
-            <ProTable
-              columns={[
-                {label:"Loan ID",     key:"loan_id",     tdStyle:{fontFamily:"monospace",fontSize:11}},
-                {label:"Member",      key:"member_name", tdStyle:{fontWeight:600}},
-                {label:"Type",        key:"loan_type"},
-                {label:"Amount",      key:"amount",      render:r=>`₱${Number(r.amount).toLocaleString()}`},
-                {label:"Balance",     key:"balance",     render:r=>`₱${Number(r.balance).toLocaleString()}`, tdStyle:{color:"#c62828",fontWeight:700}},
-                {label:"Monthly Due", key:"monthly_due", render:r=>`₱${Number(r.monthly_due).toLocaleString()}`},
-                {label:"Maturity",    key:"maturity",    tdStyle:{fontWeight:600,color:"#1565c0"}},
-                {label:"Days Left",   key:"days_left",   render:r=><span style={{fontWeight:700,color:r.days_left<=30?"#c62828":r.days_left<=60?"#f57c00":"#2e7d32"}}>{r.days_left}d</span>},
-              ]}
-              rows={maturities.data||[]}
-              empty={`No loans maturing in the next ${maturMonths} month${maturMonths>1?"s":""}.`}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ FIRST-TIME BORROWERS ══════════════════════════════════════════════ */}
-      {activeTab === "firsttimers" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div className="rp-kpi-card green" style={{maxWidth:280}}>
-            <div style={{display:"flex"}}><UserPlus size={22} color="#2e7d32"/></div>
-            <div className="rp-kpi-val">{firstTimers.count||0}</div>
-            <div className="rp-kpi-label">First-time Borrowers ({selectedYear})</div>
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title">First-time Borrowers</div>
-            <div className="rp-chart-sub">Members applying for their very first loan in {selectedYear}</div>
-            <ProTable
-              columns={[
-                {label:"#",           tdStyle:{textAlign:"center",width:40,fontWeight:700,color:"#2e7d32"}, render:(_,i)=>i+1},
-                {label:"Member ID",   key:"member_id",    tdStyle:{fontFamily:"monospace",fontSize:11,color:"#888"}},
-                {label:"Member",      key:"member_name",  tdStyle:{fontWeight:600}},
-                {label:"Type",        key:"classification"},
-                {label:"Loan ID",     key:"loan_id",      tdStyle:{fontFamily:"monospace",fontSize:11}},
-                {label:"Loan Type",   key:"loan_type"},
-                {label:"Amount",      key:"amount",       render:r=>`₱${Number(r.amount).toLocaleString()}`, tdStyle:{fontWeight:700,color:"#2e7d32"}},
-                {label:"Status",      key:"status",       render:r=><span style={{background:r.status==="Active"?"#e8f5e9":r.status==="Declined"?"#ffebee":"#fff8e1",color:r.status==="Active"?"#2e7d32":r.status==="Declined"?"#c62828":"#f57c00",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:700}}>{r.status}</span>},
-                {label:"Date",        key:"applied_at",   tdStyle:{color:"#888",fontSize:11}},
-              ]}
-              rows={firstTimers.data||[]}
-              empty={`No first-time borrowers for ${selectedYear}.`}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ══ RISK ASSESSMENT ═══════════════════════════════════════════════════ */}
-      {activeTab === "risk" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-            {[
-              {label:"Critical Risk", val:riskData.summary?.critical||0, bg:"#ffebee", color:"#c62828", icon:"🔴"},
-              {label:"High Risk",     val:riskData.summary?.high||0,     bg:"#fff3e0", color:"#e65100", icon:"🟠"},
-              {label:"Medium Risk",   val:riskData.summary?.medium||0,   bg:"#fff8e1", color:"#f57c00", icon:"🟡"},
-            ].map((c,i) => (
-              <div key={i} style={{background:c.bg,border:`1.5px solid ${c.color}33`,borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:6}}>
-                <div style={{fontSize:28}}>{c.icon}</div>
-                <div style={{fontSize:28,fontWeight:800,color:c.color}}>{c.val}</div>
-                <div style={{fontSize:11,color:c.color,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>{c.label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="rp-chart-card">
-            <div className="rp-chart-title" style={{display:"flex",alignItems:"center",gap:6}}><Shield size={14} color="#1b5e20"/> Risk Assessment Report</div>
-            <div className="rp-chart-sub">Members at risk of default — based on overdue status, days since last payment, and outstanding balance</div>
-            <ProTable
-              columns={[
-                {label:"Loan ID",    key:"loan_id",     tdStyle:{fontFamily:"monospace",fontSize:11}},
-                {label:"Member",     key:"member_name", tdStyle:{fontWeight:600}},
-                {label:"Member ID",  key:"member_id",   tdStyle:{fontFamily:"monospace",fontSize:11,color:"#888"}},
-                {label:"Type",       key:"loan_type"},
-                {label:"Balance",    key:"balance",     render:r=>`₱${Number(r.balance).toLocaleString()}`, tdStyle:{fontWeight:700,color:"#c62828"}},
-                {label:"Last Payment",key:"last_payment",tdStyle:{color:"#888",fontSize:11}},
-                {label:"Days Since", key:"days_since",  render:r=><span style={{fontWeight:700,color:r.days_since>90?"#c62828":r.days_since>60?"#f57c00":"#555"}}>{r.days_since}d</span>},
-                {label:"Risk Flags", key:"risk_flags",  render:r=>r.risk_flags?.join(" · ")},
-                {label:"Risk Level", key:"risk_level",  render:r=>{
-                  const s={Critical:{bg:"#ffebee",c:"#c62828"},High:{bg:"#fff3e0",c:"#e65100"},Medium:{bg:"#fff8e1",c:"#f57c00"}};
-                  const st=s[r.risk_level]||{bg:"#eee",c:"#555"};
-                  return <span style={{background:st.bg,color:st.c,border:`1px solid ${st.c}33`,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{r.risk_level}</span>;
-                }},
-              ]}
-              rows={riskData.data||[]}
-              empty="No at-risk loans detected."
-            />
-          </div>
         </div>
       )}
 

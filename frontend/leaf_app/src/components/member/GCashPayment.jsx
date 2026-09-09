@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { submitGCashRequestAPI } from "../../api/loans";
-import { getGCashSettingsAPI } from "../../api/settings";
+import { getActiveGCashAccountsAPI } from "../../api/settings";
 import { useLanguage } from "../../context/LanguageContext";
 import { Smartphone, Copy, CheckCircle, X, AlertCircle, Upload, Image, Trash2 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
@@ -27,20 +27,26 @@ export default function GCashPayment({ loan, onClose, onSuccess }) {
   const [scrPreview, setScrPreview]= useState("");     // preview URL
   const [uploading,  setUploading] = useState(false);
 
-  const [gcashNumber, setGcashNumber] = useState(FALLBACK_GCASH_NUMBER);
-  const [gcashName,   setGcashName]   = useState(FALLBACK_GCASH_NAME);
+  // ── BAGO: maraming GCash account na puwedeng piliin ng member —
+  // dating iisang number/name lang. ────────────────────────────────────
+  const [gcashAccounts, setGcashAccounts] = useState([]);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const selectedAccount = gcashAccounts.find(a => a.id === selectedAccountId) || null;
 
   useEffect(() => {
-    getGCashSettingsAPI()
+    getActiveGCashAccountsAPI()
       .then(data => {
-        if (data.gcash_number) setGcashNumber(data.gcash_number);
-        if (data.gcash_name)   setGcashName(data.gcash_name);
+        setGcashAccounts(data);
+        if (data.length > 0) setSelectedAccountId(data[0].id);
       })
-      .catch(() => { /* silent — gagamitin na lang ang fallback values */ });
+      .catch(() => { /* silent — walang ipapakitang account, ipapakita na lang ang generic instructions */ });
   }, []);
 
+  const displayNumber = selectedAccount?.number || FALLBACK_GCASH_NUMBER;
+  const displayName   = selectedAccount?.account_name || FALLBACK_GCASH_NAME;
+
   const copyNumber = () => {
-    navigator.clipboard.writeText(gcashNumber.replace(/-/g, ""));
+    navigator.clipboard.writeText(displayNumber.replace(/-/g, ""));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -110,6 +116,10 @@ export default function GCashPayment({ loan, onClose, onSuccess }) {
         reference_number: form.reference_number.trim(),
         note:             form.note.trim(),
         screenshot_url:   screenshotUrl,
+        // ── BAGO: kasama na kung aling GCash account ang ginamit —
+        // para malaman ng admin saang account dapat i-verify. ────────
+        paid_to_number: displayNumber,
+        paid_to_name:   displayName,
       });
       setResult(res);
       setStep(3);
@@ -178,11 +188,35 @@ export default function GCashPayment({ loan, onClose, onSuccess }) {
                 </div>
               </div>
 
+              {/* ── BAGO: kung mahigit isa ang aktibong account,
+                  pipiliin muna ng member kung saan magbabayad. ─────── */}
+              {gcashAccounts.length > 1 && (
+                <div style={{background:"#fff",borderRadius:12,padding:"12px 14px",border:"1px solid #e0e0e0"}}>
+                  <div style={{fontSize:11,color:"#555",fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>Choose GCash Account</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {gcashAccounts.map(acc => (
+                      <label key={acc.id} style={{
+                        display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,cursor:"pointer",
+                        border:"1.5px solid "+(selectedAccountId===acc.id?"#2e7d32":"#e0e0e0"),
+                        background:selectedAccountId===acc.id?"#e8f5e9":"#fff",
+                      }}>
+                        <input type="radio" name="gcashAcct" checked={selectedAccountId===acc.id} onChange={()=>setSelectedAccountId(acc.id)}/>
+                        <div>
+                          {acc.label && <span style={{fontSize:9,fontWeight:700,color:"#2e7d32",marginRight:6}}>{acc.label}</span>}
+                          <span style={{fontSize:13,fontFamily:"monospace",fontWeight:700}}>{acc.number}</span>
+                          <div style={{fontSize:11,color:"#888"}}>{acc.account_name}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* GCash number */}
               <div style={{background:"#e8f5e9",borderRadius:12,padding:"16px",border:"1px solid #a5d6a7",textAlign:"center"}}>
                 <div style={{fontSize:11,color:"#2e7d32",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>{t("gc_send_payment_to")}</div>
-                <div style={{fontSize:24,fontWeight:800,color:"#1b5e20",letterSpacing:2,marginBottom:4}}>{gcashNumber}</div>
-                <div style={{fontSize:13,color:"#555",marginBottom:12}}>{gcashName}</div>
+                <div style={{fontSize:24,fontWeight:800,color:"#1b5e20",letterSpacing:2,marginBottom:4}}>{displayNumber}</div>
+                <div style={{fontSize:13,color:"#555",marginBottom:12}}>{displayName}</div>
                 <button onClick={copyNumber} style={{
                   display:"inline-flex",alignItems:"center",gap:6,
                   padding:"8px 16px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
@@ -198,7 +232,7 @@ export default function GCashPayment({ loan, onClose, onSuccess }) {
                 <div style={{fontSize:12,fontWeight:700,color:"#f57f17",marginBottom:8}}>{t("gc_how_to_pay")}</div>
                 {[
                   t("gc_step1"),
-                  t("gc_step2", { number: gcashNumber, name: gcashName }),
+                  t("gc_step2", { number: displayNumber, name: displayName }),
                   t("gc_step3"),
                   t("gc_step4"),
                   t("gc_step5"),

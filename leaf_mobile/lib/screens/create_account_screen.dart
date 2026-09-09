@@ -109,17 +109,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _CAColors.green,
       ][_strengthLevel];
 
-  InputDecoration _dec({String? error, Widget? suffixIcon}) => InputDecoration(
+  InputDecoration _dec({String? error, Widget? suffixIcon, Widget? prefixIcon}) => InputDecoration(
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         errorText: error,
         suffixIcon: suffixIcon,
+        prefixIcon: prefixIcon,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE0E0E0), width: 1.5)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: error != null ? _CAColors.red : const Color(0xFFE0E0E0), width: 1.5)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _CAColors.green, width: 1.5)),
       );
 
-  Widget _field(String label, TextEditingController ctrl, {bool required = false, String? errorKey, TextInputType? type, bool obscure = false, Widget? suffixIcon, void Function(String)? onChanged}) {
+  Widget _field(String label, TextEditingController ctrl, {bool required = false, String? errorKey, TextInputType? type, bool obscure = false, Widget? suffixIcon, Widget? prefixIcon, void Function(String)? onChanged}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -133,7 +134,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           keyboardType: type,
           style: const TextStyle(fontSize: 13),
           onChanged: onChanged ?? (_) => setState(() => _errors.remove(errorKey)),
-          decoration: _dec(error: errorKey != null ? _errors[errorKey] : null, suffixIcon: suffixIcon),
+          decoration: _dec(error: errorKey != null ? _errors[errorKey] : null, suffixIcon: suffixIcon, prefixIcon: prefixIcon),
         ),
       ],
     );
@@ -223,6 +224,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           ),
           child: Column(
             children: [
+              // ── BAGO: idinagdag ang aktwal na logo image, tugma sa
+              // web redesign — dating text lang na "LEAF MPC". ────────
+              Image.asset('assets/images/logo.png', height: 44, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              const SizedBox(height: 6),
               const Text('LEAF MPC', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70, letterSpacing: 1)),
               const SizedBox(height: 6),
               const Text('Create Account', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -266,14 +271,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               ),
               const SizedBox(height: 14),
 
-              _field('First Name', _firstNameCtrl, required: true, errorKey: 'first_name'),
+              _field('First Name', _firstNameCtrl, required: true, errorKey: 'first_name', prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFFBBBBBB))),
               const SizedBox(height: 12),
-              _field('Last Name', _lastNameCtrl, required: true, errorKey: 'last_name'),
+              _field('Last Name', _lastNameCtrl, required: true, errorKey: 'last_name', prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFFBBBBBB))),
               const SizedBox(height: 12),
-              _field('Middle Name', _middleNameCtrl),
+              _field('Middle Name', _middleNameCtrl, prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFFBBBBBB))),
               const SizedBox(height: 12),
 
-              _field('Username', _usernameCtrl, required: true, errorKey: 'username'),
+              _field('Username', _usernameCtrl, required: true, errorKey: 'username', prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFFBBBBBB))),
               const SizedBox(height: 4),
               const Text('Min 4 characters, no spaces allowed.', style: TextStyle(fontSize: 10.5, color: _CAColors.sub)),
               const SizedBox(height: 12),
@@ -281,13 +286,38 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               _field(
                 'Password', _passwordCtrl, required: true, errorKey: 'password', obscure: !_showPassword,
                 onChanged: (_) => setState(() => _errors.remove('password')),
+                prefixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFFBBBBBB)),
                 suffixIcon: IconButton(
                   icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility, size: 17, color: const Color(0xFFAAAAAA)),
                   onPressed: () => setState(() => _showPassword = !_showPassword),
                 ),
               ),
               const SizedBox(height: 12),
-              _field('Confirm Password', _confirmCtrl, required: true, errorKey: 'confirmPassword', obscure: !_showPassword),
+              _field(
+                'Confirm Password', _confirmCtrl, required: true, errorKey: 'confirmPassword', obscure: !_showPassword,
+                prefixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFFBBBBBB)),
+                onChanged: (_) => setState(() => _errors.remove('confirmPassword')),
+              ),
+              // ── BAGO: live indicator kung tumutugma na ang dalawang
+              // password — lumalabas lang kapag may laman na ang
+              // Confirm Password field. ─────────────────────────────────
+              if (_confirmCtrl.text.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      _passwordCtrl.text == _confirmCtrl.text ? Icons.check_circle : Icons.cancel,
+                      size: 13,
+                      color: _passwordCtrl.text == _confirmCtrl.text ? _CAColors.green : _CAColors.red,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _passwordCtrl.text == _confirmCtrl.text ? 'Passwords match' : 'Passwords do not match',
+                      style: TextStyle(fontSize: 11, color: _passwordCtrl.text == _confirmCtrl.text ? _CAColors.green : _CAColors.red),
+                    ),
+                  ],
+                ),
+              ],
 
               if (_passwordCtrl.text.isNotEmpty) ...[
                 const SizedBox(height: 10),

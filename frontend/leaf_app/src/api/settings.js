@@ -23,6 +23,24 @@ export const getGCashSettingsAPI = () =>
 export const updateGCashSettingsAPI = (data) =>
   api.patch("/settings/gcash/", data).then(r => r.data);
 
+// ── BAGO: maraming GCash account (multiple accounts support) —
+// dating iisang number/name lang, kaya paulit-ulit natamaan ang
+// limit ng isang account. Puwede na ngayong magdagdag ng ilan pa. ───
+export const getGCashAccountsAPI = () =>
+  api.get("/settings/gcash-accounts/").then(r => r.data);
+
+export const getActiveGCashAccountsAPI = () =>
+  api.get("/settings/gcash-accounts/active/").then(r => r.data);
+
+export const createGCashAccountAPI = (data) =>
+  api.post("/settings/gcash-accounts/", data).then(r => r.data);
+
+export const updateGCashAccountAPI = (id, data) =>
+  api.patch(`/settings/gcash-accounts/${id}/`, data).then(r => r.data);
+
+export const deleteGCashAccountAPI = (id) =>
+  api.delete(`/settings/gcash-accounts/${id}/`).then(r => r.data);
+
 // ── Staff Feature Permissions ──────────────────────────────────────
 export const getAvailableFeaturesAPI = () =>
   api.get("/settings/features/").then(r => r.data);

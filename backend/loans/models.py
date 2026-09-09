@@ -185,6 +185,12 @@ class GCashPaymentRequest(models.Model):
     amount          = models.DecimalField(max_digits=12, decimal_places=2)
     reference_number= models.CharField(max_length=20)
     screenshot_url  = models.URLField(max_length=500, blank=True)
+    # ── BAGO: kung aling GCash account ang ginamit ng member (dahil
+    # marami na ngayong puwedeng piliin) — plain text lang ito (hindi
+    # FK papuntang GCashAccount), para hindi masira ang record na 'to
+    # kahit ma-delete o mabago pa ang account sa hinaharap. ─────────────
+    paid_to_number  = models.CharField(max_length=20, blank=True)
+    paid_to_name    = models.CharField(max_length=100, blank=True)
     status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     note            = models.CharField(max_length=200, blank=True)
     verified_by     = models.CharField(max_length=100, blank=True)

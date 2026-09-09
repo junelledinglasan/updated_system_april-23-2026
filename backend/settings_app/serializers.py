@@ -1,7 +1,7 @@
 # backend/settings_app/serializers.py
 
 from rest_framework import serializers
-from .models import SystemSettings, StaffFeaturePermission, AVAILABLE_FEATURES
+from .models import SystemSettings, StaffFeaturePermission, AVAILABLE_FEATURES, GCashAccount
 
 
 class SystemSettingsSerializer(serializers.ModelSerializer):
@@ -24,6 +24,13 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(url)
             return url
         return None
+
+
+# ── BAGO: para sa maraming GCash account ─────────────────────────────
+class GCashAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = GCashAccount
+        fields = ['id', 'label', 'number', 'account_name', 'is_active', 'created_at']
 
 
 class StaffFeaturePermissionSerializer(serializers.ModelSerializer):

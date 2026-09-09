@@ -1117,7 +1117,12 @@ def share_capital_deposit_view(request, pk):
         'member_id':     member.member_id,
         'old_sc':        old_sc,
         'new_sc':        float(member.share_capital),
-        'max_loanable':  float(member.share_capital) * 2,
+        # ── FIX: dating "float(member.share_capital) * 2" — parehong
+        # hardcoded-×2 bug na paulit-ulit nating nakita sa iba't ibang
+        # bahagi ng system, hindi ginagamit ang admin-editable na
+        # loan_multiplier (1x/2x/3x). Gamit na ngayon ang totoong
+        # "member.max_loanable" property. ────────────────────────────
+        'max_loanable':  member.max_loanable,
     }, status=200)
 
 @api_view(['GET'])

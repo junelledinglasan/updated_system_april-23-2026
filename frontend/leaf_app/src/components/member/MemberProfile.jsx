@@ -4,6 +4,7 @@ import { getMyProfileAPI, getMyApplicationAPI, getMyOnlineAppAPI, updateMemberAP
 import { useLanguage } from "../../context/LanguageContext";
 import { getPageCache, savePageCache } from "../../utils/pageCache";
 import api from "../../api/axiosInstance";
+import { ClipboardList, Clock, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
 import "./MemberProfile.css";
 
 function computeAge(birthDate) {
@@ -157,7 +158,7 @@ export default function MemberProfile() {
           <div className="mp-card-title">{t("mp_application_status_title")}</div>
           {!appStatus ? (
             <div style={{padding:"32px 0",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-              <div style={{width:64,height:64,background:"#e8f5e9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>📋</div>
+              <div style={{width:64,height:64,background:"#e8f5e9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}><ClipboardList size={28} color="#2e7d32"/></div>
               <div style={{fontWeight:700,color:"#1b5e20",fontSize:15}}>{t("mp_no_application")}</div>
               <div style={{fontSize:13,color:"#888",maxWidth:320,lineHeight:1.6}}>{t("mp_no_application_sub")}</div>
               <a href="/member/apply-membership" style={{background:"#1b5e20",color:"#fff",borderRadius:10,padding:"11px 28px",fontWeight:700,fontSize:13,textDecoration:"none",marginTop:4}}>
@@ -171,7 +172,9 @@ export default function MemberProfile() {
                 background:  appStatus==="Pending"?"#fff8e1":appStatus==="Approved"?"#e8f5e9":"#ffebee",
                 borderColor: appStatus==="Pending"?"#ffe082":appStatus==="Approved"?"#a5d6a7":"#ef9a9a",
               }}>
-                <div style={{fontSize:32,flexShrink:0}}>{appStatus==="Pending"?"⏳":appStatus==="Approved"?"✅":"❌"}</div>
+                <div style={{flexShrink:0}}>
+                  {appStatus==="Pending" ? <Clock size={30} color="#f57c00"/> : appStatus==="Approved" ? <CheckCircle size={30} color="#2e7d32"/> : <XCircle size={30} color="#c62828"/>}
+                </div>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:15,color:appStatus==="Approved"?"#1b5e20":appStatus==="Rejected"?"#c62828":"#f57c00",marginBottom:4}}>
                     {appStatus==="Pending"?t("mp_status_pending"):appStatus==="Approved"?t("mp_status_approved"):t("mp_status_rejected")}
@@ -259,7 +262,12 @@ export default function MemberProfile() {
           </div>
           <div className="mp-stat-divider"/>
           <div className="mp-stat-item">
-            <span className="mp-stat-val">₱{(parseFloat(PROFILE.share_capital||0)*2).toLocaleString()}</span>
+            {/* ── FIX: dating hardcoded "× 2" ito — hindi na tama
+                mula nang idagdag ang Loan Multiplier feature (1x/2x/3x).
+                Gamit na ngayon ang "max_loanable" mismo mula sa
+                backend, na tama nang gumagalang sa multiplier ng
+                member. ─────────────────────────────────────────────── */}
+            <span className="mp-stat-val">₱{parseFloat(PROFILE.max_loanable||0).toLocaleString()}</span>
             <span className="mp-stat-label">{t("mp_max_loanable")}</span>
           </div>
           <div className="mp-stat-divider"/>
@@ -468,7 +476,7 @@ export default function MemberProfile() {
                     autoComplete="current-password"
                     onChange={e => { handlePass(e); setPassError(""); }}/>
                   <button type="button" className="mp-eye" onClick={() => setShowCurr(s=>!s)}>
-                    {showCurr?"🙈":"👁"}
+                    {showCurr ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
                 </div>
               </div>
@@ -480,7 +488,7 @@ export default function MemberProfile() {
                     autoComplete="new-password"
                     onChange={e => { handlePass(e); setPassError(""); }}/>
                   <button type="button" className="mp-eye" onClick={() => setShowNew(s=>!s)}>
-                    {showNew?"🙈":"👁"}
+                    {showNew ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
                 </div>
                 {passForm.newPass && (
@@ -502,7 +510,7 @@ export default function MemberProfile() {
                     autoComplete="new-password"
                     onChange={e => { handlePass(e); setPassError(""); }}/>
                   <button type="button" className="mp-eye" onClick={() => setShowConf(s=>!s)}>
-                    {showConf?"🙈":"👁"}
+                    {showConf ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
                 </div>
               </div>

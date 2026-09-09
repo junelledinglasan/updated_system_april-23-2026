@@ -324,7 +324,18 @@ function buildNotifsFromRaw(raw, t) {
           id:`sharecap-${tItem.id || i}`, type:"sharecap",
           title:t("nf_sharecap_title", { type: typeLabel, amt: `₱${Number(tItem.amount).toLocaleString()}` }),
           msg:t("nf_sharecap_msg", { type: typeLabel.toLowerCase() }),
-          details:[[t("nf_detail_amount"), `₱${Number(tItem.amount).toLocaleString()}`], [t("nf_detail_new_balance"), `₱${Number(tItem.balance_after).toLocaleString()}`], [t("nf_detail_max_loanable"), `₱${(Number(tItem.balance_after)*2).toLocaleString()}`], ...(tItem.note ? [[t("nf_detail_note"), tItem.note]] : [])],
+          // ── FIX: dating "₱{balance_after × 2}" para sa Max Loanable
+          // dito — pareho itong hardcoded-×2 bug na nakita rin natin sa
+          // MemberProfile.jsx at member_profile_screen.dart. Dito sa
+          // notification builder, WALANG maaasahang access sa aktwal
+          // na "loan_multiplier" (1x/2x/3x) ng member, kaya kung
+          // ipagpatuloy ang pag-compute nito rito, madalas itong magiging
+          // MALI (2x lang ang tama kung eksaktong 2x nga ang multiplier
+          // ng member — 1x o 3x na members ay makakakita ng maling
+          // halaga). Mas ligtas na tanggalin ang linyang ito kaysa
+          // magpakita ng maaaring maling impormasyon — makikita naman
+          // ng member ang TAMANG Max Loanable sa Dashboard/Profile nila. ──
+          details:[[t("nf_detail_amount"), `₱${Number(tItem.amount).toLocaleString()}`], [t("nf_detail_new_balance"), `₱${Number(tItem.balance_after).toLocaleString()}`], ...(tItem.note ? [[t("nf_detail_note"), tItem.note]] : [])],
           time:timeAgo(tItem.created_at, t), date:tItem.created_at,
           read:false, route:"/member/dashboard", actionLabel:t("nf_action_view_dashboard"),
         });

@@ -254,7 +254,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       try {
         final allLoans = await LoansService.getLoans();
         for (final l in allLoans.where((l) => l['status'] == 'Overdue')) {
-          built.add(NotifItem(id: 'overdue-${l['id']}', type: 'overdue', title: '⚠ Overdue Payment — ${l['loan_id']}', msg: "Your ${l['loan_type']} (${l['loan_id']}) is OVERDUE with balance ₱${(double.tryParse('${l['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}. Please settle immediately to avoid additional penalties.", date: _parseDate(l['next_due_date']), read: false, route: 'my-loans', actionLabel: 'Pay Now'));
+          final totalPenalty = double.tryParse('${l['total_penalty'] ?? 0}') ?? 0;
+          built.add(NotifItem(
+            id: 'overdue-${l['id']}', type: 'overdue',
+            title: 'Overdue Payment — ${l['loan_id']}',
+            msg: "Your ${l['loan_type']} (${l['loan_id']}) is OVERDUE with balance ₱${(double.tryParse('${l['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}. Please settle immediately to avoid additional penalties.",
+            // ── BAGO: "details" — dating kulang dito (hindi tulad ng
+            // ibang notification types na may details), tugma na ngayon
+            // sa pattern, kasama ang penalty kung meron. ────────────────
+            details: [
+              ['Loan ID', '${l['loan_id']}'],
+              ['Balance', '₱${(double.tryParse('${l['balance'] ?? 0}') ?? 0).toStringAsFixed(0)}'],
+              ['Due Date', '${l['next_due_date'] ?? '—'}'],
+              if (totalPenalty > 0) ['Penalty', '₱${totalPenalty.toStringAsFixed(0)}'],
+            ],
+            date: _parseDate(l['next_due_date']), read: false, route: 'my-loans', actionLabel: 'Pay Now',
+          ));
         }
         // ── BAGO: "Approved" — hindi pa "Active", waiting pa para
         // ma-release ang pera sa opisina. Hiwalay ito sa "Active"
@@ -362,7 +377,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 details: [
                   ['Amount', '₱${amt.toStringAsFixed(0)}'],
                   ['New Balance', '₱${bal.toStringAsFixed(0)}'],
-                  ['Max Loanable', '₱${(bal * 2).toStringAsFixed(0)}'],
+                  // ── FIX: dating "₱{bal × 2}" para sa Max Loanable dito
+                  // — pareho itong hardcoded-×2 bug na nakita rin natin
+                  // sa MemberProfile.jsx, member_profile_screen.dart, at
+                  // Notifications.jsx (web). Walang maaasahang access
+                  // dito sa aktwal na "loan_multiplier" (1x/2x/3x) ng
+                  // member, kaya kung ipagpatuloy, madalas itong magiging
+                  // MALI. Mas ligtas na tanggalin kaysa magpakita ng
+                  // maaaring maling impormasyon. ─────────────────────────
                   if (t['note'] != null && '${t['note']}'.isNotEmpty) ['Note', '${t['note']}'],
                 ],
                 date: _parseDate(t['created_at']), read: false, route: 'dashboard', actionLabel: 'View Dashboard',

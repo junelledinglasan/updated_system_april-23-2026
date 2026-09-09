@@ -278,7 +278,7 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Column(children: [
-                      Container(width: 64, height: 64, decoration: BoxDecoration(color: const Color(0xFFE8F5E9), shape: BoxShape.circle), alignment: Alignment.center, child: const Text('📋', style: TextStyle(fontSize: 28))),
+                      Container(width: 64, height: 64, decoration: BoxDecoration(color: const Color(0xFFE8F5E9), shape: BoxShape.circle), alignment: Alignment.center, child: const Icon(Icons.assignment_outlined, size: 28, color: _MPColors.green)),
                       const SizedBox(height: 10),
                       const Text('No application submitted yet', style: TextStyle(fontWeight: FontWeight.w700, color: _MPColors.dark, fontSize: 14)),
                       const SizedBox(height: 6),
@@ -302,7 +302,7 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(appStatus == 'Pending' ? '⏳' : appStatus == 'Approved' ? '✅' : '❌', style: const TextStyle(fontSize: 30)),
+                        Icon(appStatus == 'Pending' ? Icons.access_time : appStatus == 'Approved' ? Icons.check_circle : Icons.cancel, size: 30, color: appStatus == 'Pending' ? const Color(0xFFF57C00) : appStatus == 'Approved' ? _MPColors.green : const Color(0xFFC62828)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -439,7 +439,11 @@ class _MemberProfileScreenState extends State<MemberProfileScreen> {
                       ),
                     ),
                     Container(width: 1, height: 30, color: Colors.white.withOpacity(0.2)),
-                    Expanded(child: _HeaderStat(_peso(shareCapital * 2), 'Max Loanable')),
+                    // ── FIX: dating hardcoded "× 2" ito — hindi na tama
+                    // mula nang idagdag ang Loan Multiplier feature
+                    // (1x/2x/3x). Gamit na ngayon ang "max_loanable"
+                    // mismo mula sa backend. ─────────────────────────────
+                    Expanded(child: _HeaderStat(_peso(double.tryParse('${_profile?['max_loanable'] ?? 0}') ?? 0), 'Max Loanable')),
                     Container(width: 1, height: 30, color: Colors.white.withOpacity(0.2)),
                     Expanded(
                       child: Column(children: [
@@ -755,14 +759,16 @@ class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
 
+  // ── BAGO: dating underline lang sa ibaba — ngayon may green accent
+  // bar sa kaliwa, tugma sa redesign na ginawa natin sa web version. ──
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(bottom: 8),
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE8F5E9)))),
-      child: Text(text.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: _MPColors.green, letterSpacing: 1)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(left: 10),
+      decoration: const BoxDecoration(border: Border(left: BorderSide(color: _MPColors.green, width: 4))),
+      child: Text(text.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _MPColors.green, letterSpacing: 0.5)),
     );
   }
 }
@@ -780,24 +786,31 @@ class _InfoGrid extends StatelessWidget {
     }
     return Column(
       children: pairs.map((pair) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 10),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: _infoCell(pair[0])),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(child: pair.length > 1 ? _infoCell(pair[1]) : const SizedBox.shrink()),
             ]),
           )).toList(),
     );
   }
 
+  // ── BAGO: dating plain na text lang (label sa itaas, value sa
+  // ibaba, walang background/border) — ngayon "chip"-style box, tugma
+  // sa redesign na ginawa natin sa web version. ────────────────────────
   Widget _infoCell(List<String> r) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(r[0].toUpperCase(), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFFBBBBBB), letterSpacing: 0.4)),
-        const SizedBox(height: 2),
-        Text(r[1], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors?[r[0]] ?? const Color(0xFF222222))),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: const Color(0xFFF9FEF9), border: Border.all(color: const Color(0xFFE8F5E9)), borderRadius: BorderRadius.circular(8)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(r[0].toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF8A9A7A), letterSpacing: 0.4)),
+          const SizedBox(height: 2),
+          Text(r[1], style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: colors?[r[0]] ?? const Color(0xFF222222))),
+        ],
+      ),
     );
   }
 }

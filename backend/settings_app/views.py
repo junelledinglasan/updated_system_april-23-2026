@@ -5,8 +5,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from .models import SystemSettings, StaffFeaturePermission, AVAILABLE_FEATURES, get_default_features
-from .serializers import SystemSettingsSerializer, StaffFeaturePermissionSerializer
+from .models import SystemSettings, StaffFeaturePermission, AVAILABLE_FEATURES, get_default_features, GCashAccount
+from .serializers import SystemSettingsSerializer, StaffFeaturePermissionSerializer, GCashAccountSerializer
 
 User = get_user_model()
 
@@ -104,6 +104,98 @@ def gcash_settings_view(request):
         'gcash_number': settings_obj.gcash_number,
         'gcash_name':   settings_obj.gcash_name,
     }, status=200)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  BAGO: MARAMING GCASH ACCOUNT — dating iisang number/name lang
+#  (tingnan ang "gcash_settings_view" sa itaas, na iniwan pa rin para
+#  sa backward compatibility). Ito na ang PANGUNAHING gagamitin ng
+#  bagong "Pay via GCash" flow — puwede nang magdagdag ang admin ng
+#  ILAN pang account, at pipiliin ng member kung saan magbabayad.
+# ══════════════════════════════════════════════════════════════════
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def gcash_accounts_list_view(request):
+    """GET — listahan ng LAHAT ng GCash accounts (aktibo man o hindi)
+    — para sa Settings management table, ADMIN lang makakakita nito.
+    POST — magdagdag ng bagong account — ADMIN ONLY."""
+    GCashAccount.ensure_default()
+
+    if request.method == 'GET':
+        if request.user.role != 'admin':
+            return Response({'error': 'Unauthorized. Admin access only.'}, status=403)
+        accounts = GCashAccount.objects.all()
+        return Response(GCashAccountSerializer(accounts, many=True).data)
+
+    # POST — ADMIN ONLY
+    if request.user.role != 'admin':
+        return Response({'error': 'Unauthorized. Admin access only.'}, status=403)
+
+    number = request.data.get('number', '').strip()
+    name   = request.data.get('account_name', '').strip()
+    label  = request.data.get('label', '').strip()
+
+    if not number:
+        return Response({'error': 'GCash number is required.'}, status=400)
+    if not name:
+        return Response({'error': 'Account name is required.'}, status=400)
+
+    account = GCashAccount.objects.create(
+        label=label, number=number, account_name=name,
+        is_active=True, updated_by=request.user,
+    )
+    return Response(GCashAccountSerializer(account).data, status=201)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def gcash_accounts_active_view(request):
+    """Ibalik lang ang mga AKTIBONG GCash accounts — ito ang tinatawag
+    ng member sa "Pay via GCash" modal, para makapagpakita ng listahan
+    ng mga puwedeng piliin. Kahit sinong naka-login (member man o
+    staff) ay puwedeng tumawag dito."""
+    GCashAccount.ensure_default()
+    accounts = GCashAccount.objects.filter(is_active=True)
+    return Response(GCashAccountSerializer(accounts, many=True).data)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def gcash_account_detail_view(request, pk):
+    """PATCH — i-edit ang isang account (kasama ang pag-toggle ng
+    is_active). DELETE — permanenteng burahin. ADMIN ONLY sa pareho."""
+    if request.user.role != 'admin':
+        return Response({'error': 'Unauthorized. Admin access only.'}, status=403)
+
+    try:
+        account = GCashAccount.objects.get(pk=pk)
+    except GCashAccount.DoesNotExist:
+        return Response({'error': 'GCash account not found.'}, status=404)
+
+    if request.method == 'DELETE':
+        account.delete()
+        return Response(status=204)
+
+    # PATCH
+    if 'number' in request.data:
+        number = request.data.get('number', '').strip()
+        if not number:
+            return Response({'error': 'GCash number is required.'}, status=400)
+        account.number = number
+    if 'account_name' in request.data:
+        name = request.data.get('account_name', '').strip()
+        if not name:
+            return Response({'error': 'Account name is required.'}, status=400)
+        account.account_name = name
+    if 'label' in request.data:
+        account.label = request.data.get('label', '').strip()
+    if 'is_active' in request.data:
+        account.is_active = bool(request.data.get('is_active'))
+
+    account.updated_by = request.user
+    account.save()
+    return Response(GCashAccountSerializer(account).data, status=200)
 
 
 # ══════════════════════════════════════════════════════════════════

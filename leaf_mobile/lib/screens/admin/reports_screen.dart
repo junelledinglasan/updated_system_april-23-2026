@@ -258,6 +258,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
+  // ── FIX: dating gumagamit ng "years" list na LIMITADO sa 12 taon
+  // lang (current+1 pababa hanggang 10 taon nakaraan) — hindi mapipili
+  // ang mga taon sa labas ng range na 'yon. Ngayon, prev/next navigation
+  // na lang, tulad ng ginawa nating fix sa web, para makapunta sa
+  // KAHIT ANONG taon. ───────────────────────────────────────────────────
+  void _changeYear(int delta) {
+    final currentYear = DateTime.now().year;
+    final baseYear = _selectedYear == 'All' ? currentYear : (int.tryParse(_selectedYear) ?? currentYear);
+    _onYearChange('${baseYear + delta}');
+  }
+
+  void _toggleAllYears() {
+    _onYearChange(_selectedYear == 'All' ? '${DateTime.now().year}' : 'All');
+  }
+
   void _onYearChange(String? y) {
     if (y == null) return;
     setState(() { _selectedYear = y; _chartsFetched = false; _classFetched = false; _perfFetched = false; _auditFetched = false; });
@@ -278,9 +293,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentYear = DateTime.now().year;
-    final years = ['All', ...List.generate(12, (i) => '${currentYear + 1 - i}')]; // All, tapos current+1 pababa hanggang 10 taon nakaraan
-
     return AdminScreenScaffold(
       activeRouteKey: 'reports',
       body: RefreshIndicator(
@@ -302,17 +314,45 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(border: Border.all(color: _RPColors.border), borderRadius: BorderRadius.circular(8), color: Colors.white),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedYear,
-                    isExpanded: true,
-                    icon: const Icon(Icons.calendar_today, size: 14),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF555555)),
-                    items: years.map((y) => DropdownMenuItem(value: y, child: Text(y == 'All' ? 'All Years' : 'Year: $y'))).toList(),
-                    onChanged: _onYearChange,
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                decoration: BoxDecoration(border: Border.all(color: _RPColors.border), borderRadius: BorderRadius.circular(10), color: Colors.white),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => _changeYear(-1),
+                      icon: const Icon(Icons.chevron_left, size: 18),
+                      color: _RPColors.green,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Previous year',
+                    ),
+                    Expanded(
+                      child: Text(
+                        _selectedYear == 'All' ? 'All Years' : _selectedYear,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _RPColors.title),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _changeYear(1),
+                      icon: const Icon(Icons.chevron_right, size: 18),
+                      color: _RPColors.green,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Next year',
+                    ),
+                    const SizedBox(width: 4),
+                    OutlinedButton(
+                      onPressed: _toggleAllYears,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: _selectedYear == 'All' ? _RPColors.green : Colors.white,
+                        foregroundColor: _selectedYear == 'All' ? Colors.white : const Color(0xFF555555),
+                        side: BorderSide(color: _selectedYear == 'All' ? _RPColors.green : _RPColors.border),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
+                      ),
+                      child: Text(_selectedYear == 'All' ? 'This Year' : 'All Years'),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 12),
@@ -601,7 +641,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         title: 'Overdue Analysis by Classification',
         sub: '$_selectedYear — overdue loans by member classification',
         child: _overdueAnalysis.isEmpty
-            ? const _NoData(text: 'No overdue loans. 🎉')
+            ? const _NoData(text: 'No overdue loans.', icon: Icons.celebration_outlined)
             : BarChart(BarChartData(
                 maxY: (_overdueAnalysis.map((d) => (double.tryParse('${d['count'] ?? 0}') ?? 0)).reduce((a, b) => a > b ? a : b)) * 1.3,
                 gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFF0F4F1), strokeWidth: 1)),
@@ -969,7 +1009,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 10),
             if (delinqData.isEmpty)
-              const _NoData(text: 'No delinquent loans found. 🎉')
+              const _NoData(text: 'No delinquent loans found.', icon: Icons.celebration_outlined)
             else
               ...delinqData.take(10).map((row) => Container(
                     margin: const EdgeInsets.only(bottom: 6),
@@ -1584,13 +1624,21 @@ class _LegendDot extends StatelessWidget {
 
 class _NoData extends StatelessWidget {
   final String text;
-  const _NoData({this.text = 'No data yet.'});
+  final IconData? icon;
+  const _NoData({this.text = 'No data yet.', this.icon});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(child: Text(text, style: const TextStyle(color: _RPColors.sub, fontSize: 12, fontStyle: FontStyle.italic))),
+      child: Center(
+        child: Column(
+          children: [
+            if (icon != null) ...[Icon(icon, size: 22, color: const Color(0xFFA5D6A7)), const SizedBox(height: 6)],
+            Text(text, style: const TextStyle(color: _RPColors.sub, fontSize: 12, fontStyle: FontStyle.italic)),
+          ],
+        ),
+      ),
     );
   }
 }

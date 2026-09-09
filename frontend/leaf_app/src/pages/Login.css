@@ -55,10 +55,10 @@
   margin-top: -6px;
 }
 
-/* ─── Right Panel ─── */
+/* ─── Right Panel — BAGO: subtle gradient imbes na flat na kulay ──── */
 .login-right {
   flex: 1;
-  background: #d8e8cc;
+  background: linear-gradient(160deg, #e3efd9 0%, #d8e8cc 45%, #c9e0b8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,7 +67,7 @@
   overflow-y: auto;
 }
 
-/* ─── Card ─── */
+/* ─── Card — BAGO: mas malalim na shadow, may accent bar sa itaas ─── */
 .login-card {
   background: #ffffff;
   border-radius: 18px;
@@ -78,9 +78,19 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+  box-shadow: 0 12px 40px rgba(27,94,32,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  border-top: 4px solid #2e7d32;
+  position: relative;
 }
-.login-card-icon { margin-bottom: 2px; }
+.login-card-icon { margin-bottom: 6px; }
+/* ── BAGO: circular badge sa likod ng leaf icon, dating plain lang ── */
+.login-icon-badge {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2e7d32, #4caf50);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(46,125,50,0.3);
+}
 .login-card-title {
   font-size: 26px;
   font-weight: 800;
@@ -93,6 +103,11 @@
   color: #999;
   margin-bottom: 4px;
 }
+
+/* ── BAGO: mobile-only branding — lumalabas LANG kapag nawala na ang
+   .login-left panel (maliit na screen), para hindi tuluyang mawala
+   ang branding/pangalan ng system. Nakatago by default sa desktop. ── */
+.login-mobile-brand { display: none; }
 
 /* ─── Form ─── */
 .login-form {
@@ -130,6 +145,19 @@
 }
 .login-input-err { border-color: #e53935 !important; }
 .login-input::placeholder { color: #c0c0c0; }
+
+/* ── BAGO: icon sa loob ng field (kaliwa) — dating walang icon,
+   plain text field lang. ─────────────────────────────────────────── */
+.login-input-wrap { position: relative; }
+.login-input-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #bbb;
+  pointer-events: none;
+}
+.login-input-with-icon { padding-left: 38px; }
 
 /* Password eye */
 .login-pw-wrap { position: relative; }
@@ -179,11 +207,14 @@
   padding: 8px 12px;
   font-size: 12.5px;
   color: #c62828;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* Button */
+/* Button — BAGO: gradient imbes na flat na kulay, may icon+text gap ── */
 .login-btn {
-  background: #2e7d32;
+  background: linear-gradient(135deg, #2e7d32, #388e3c);
   color: #fff;
   border: none;
   border-radius: 11px;
@@ -197,12 +228,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   margin-top: 2px;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 .login-btn:hover:not(:disabled) {
-  background: #1b5e20;
-  box-shadow: 0 4px 14px rgba(46,125,50,0.28);
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  box-shadow: 0 6px 18px rgba(46,125,50,0.32);
+  transform: translateY(-1px);
 }
 .login-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
@@ -269,5 +302,19 @@
 /* ─── Responsive ─── */
 @media (max-width: 640px) {
   .login-left { display: none; }
-  .login-right { background: #d8e8cc; }
+  .login-right { background: linear-gradient(160deg, #e3efd9 0%, #d8e8cc 45%, #c9e0b8 100%); }
+  /* ── BAGO: ipinapakita ang compact branding sa loob ng card kapag
+     nawala na ang buong .login-left panel — dating tuluyang nawawala
+     ang logo/pangalan ng system sa maliit na screen. ────────────────── */
+  .login-mobile-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .login-mobile-brand-img { width: 90px; height: auto; object-fit: contain; }
+  .login-mobile-brand-text { font-size: 11px; font-weight: 700; color: #2e4a2e; text-align: center; opacity: 0.75; }
 }

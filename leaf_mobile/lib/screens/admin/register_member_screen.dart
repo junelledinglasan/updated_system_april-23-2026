@@ -284,7 +284,7 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
                           onPressed: _loading ? null : _handleSubmit,
                           child: _loading
                               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('✓ Register Member'),
+                              : const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check, size: 15, color: Colors.white), SizedBox(width: 6), Text('Register Member')]),
                         ),
                       ),
                   ],
@@ -364,9 +364,17 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)),
-              child: Text(
-                'Share Capital = ₱${((double.tryParse('${_form['share_capital']}') ?? 0) * 2).toStringAsFixed(0)} (paid × 2) · Max Loanable = ₱${((double.tryParse('${_form['share_capital']}') ?? 0) * 2).toStringAsFixed(0)}',
-                style: const TextStyle(fontSize: 10.5, color: _RMColors.green, fontWeight: FontWeight.w600),
+              child: Row(
+                children: [
+                  const Icon(Icons.lightbulb_outline, size: 13, color: _RMColors.green),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Share Capital = ₱${((double.tryParse('${_form['share_capital']}') ?? 0) * 2).toStringAsFixed(0)} (paid × 2) · Max Loanable = ₱${((double.tryParse('${_form['share_capital']}') ?? 0) * 2).toStringAsFixed(0)} (×1, new member default)',
+                      style: const TextStyle(fontSize: 10.5, color: _RMColors.green, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
               ),
             ),
           SizedBox(

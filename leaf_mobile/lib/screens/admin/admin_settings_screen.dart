@@ -50,15 +50,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   int? _savingStaffId;
   final Map<int, List<String>> _localPerms = {};
 
-  // ── BAGO: GCash Payment settings state ──────────────────────────────
+  // ── BAGO: maraming GCash account (multiple accounts) — dating
+  // iisang number/name lang. ───────────────────────────────────────────
   bool _loadingGcash = true;
-  final _gcashNumberCtrl = TextEditingController();
-  final _gcashNameCtrl = TextEditingController();
-  String _savedGcashNumber = '';
-  String _savedGcashName = '';
-  bool _gcashSaving = false;
+  List<Map<String, dynamic>> _gcashAccounts = [];
   String? _gcashError;
   String? _gcashSuccess;
+  bool _gcashSaving = false;
+  int? _editingId;
+  final _editLabelCtrl = TextEditingController();
+  final _editNumberCtrl = TextEditingController();
+  final _editNameCtrl = TextEditingController();
+  bool _showAddForm = false;
+  final _addLabelCtrl = TextEditingController();
+  final _addNumberCtrl = TextEditingController();
+  final _addNameCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -68,8 +74,12 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   @override
   void dispose() {
-    _gcashNumberCtrl.dispose();
-    _gcashNameCtrl.dispose();
+    _editLabelCtrl.dispose();
+    _editNumberCtrl.dispose();
+    _editNameCtrl.dispose();
+    _addLabelCtrl.dispose();
+    _addNumberCtrl.dispose();
+    _addNameCtrl.dispose();
     super.dispose();
   }
 
@@ -101,46 +111,99 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     }
   }
 
-  // ── BAGO: kunin ang kasalukuyang GCash number/account name ─────────
+  // ── BAGO: kunin ang listahan ng LAHAT ng GCash accounts ──────────────
   Future<void> _loadGcash() async {
-    if (_savedGcashNumber.isNotEmpty) return; // load once lang
+    if (_gcashAccounts.isNotEmpty) return; // load once lang
     setState(() => _loadingGcash = true);
     try {
-      final data = await SettingsService.getGCashSettings(forceRefresh: true);
-      if (mounted) {
-        setState(() {
-          _savedGcashNumber = data['gcash_number'] ?? '';
-          _savedGcashName = data['gcash_name'] ?? '';
-          _gcashNumberCtrl.text = _savedGcashNumber;
-          _gcashNameCtrl.text = _savedGcashName;
-          _loadingGcash = false;
-        });
-      }
+      final data = await SettingsService.getGCashAccounts();
+      if (mounted) setState(() { _gcashAccounts = data; _loadingGcash = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingGcash = false);
+      if (mounted) setState(() { _gcashError = 'Failed to load GCash accounts.'; _loadingGcash = false; });
     }
   }
 
-  bool get _gcashDirty => _gcashNumberCtrl.text.trim() != _savedGcashNumber || _gcashNameCtrl.text.trim() != _savedGcashName;
-
-  Future<void> _handleSaveGcash() async {
+  Future<void> _handleAddAccount() async {
     setState(() { _gcashError = null; _gcashSuccess = null; });
-    if (_gcashNumberCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'GCash number is required.'); return; }
-    if (_gcashNameCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'Account name is required.'); return; }
+    if (_addNumberCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'GCash number is required.'); return; }
+    if (_addNameCtrl.text.trim().isEmpty)   { setState(() => _gcashError = 'Account name is required.'); return; }
     setState(() => _gcashSaving = true);
     try {
-      await SettingsService.updateGCashSettings(_gcashNumberCtrl.text.trim(), _gcashNameCtrl.text.trim());
+      final created = await SettingsService.createGCashAccount(
+        number: _addNumberCtrl.text.trim(), accountName: _addNameCtrl.text.trim(), label: _addLabelCtrl.text.trim(),
+      );
       if (mounted) {
         setState(() {
-          _savedGcashNumber = _gcashNumberCtrl.text.trim();
-          _savedGcashName = _gcashNameCtrl.text.trim();
-          _gcashSuccess = 'GCash payment details updated! Members will see the new number right away.';
+          _gcashAccounts = [..._gcashAccounts, created];
+          _addLabelCtrl.clear(); _addNumberCtrl.clear(); _addNameCtrl.clear();
+          _showAddForm = false;
+          _gcashSuccess = 'New GCash account added!';
           _gcashSaving = false;
         });
-        Future.delayed(const Duration(milliseconds: 3500), () { if (mounted) setState(() => _gcashSuccess = null); });
+        Future.delayed(const Duration(milliseconds: 3000), () { if (mounted) setState(() => _gcashSuccess = null); });
       }
     } catch (e) {
-      if (mounted) setState(() { _gcashError = 'Failed to update GCash settings.'; _gcashSaving = false; });
+      if (mounted) setState(() { _gcashError = 'Failed to add GCash account.'; _gcashSaving = false; });
+    }
+  }
+
+  void _startEdit(Map<String, dynamic> acc) {
+    setState(() {
+      _editingId = acc['id'];
+      _editLabelCtrl.text = acc['label'] ?? '';
+      _editNumberCtrl.text = acc['number'] ?? '';
+      _editNameCtrl.text = acc['account_name'] ?? '';
+      _gcashError = null;
+    });
+  }
+
+  Future<void> _handleSaveEdit(int id) async {
+    if (_editNumberCtrl.text.trim().isEmpty) { setState(() => _gcashError = 'GCash number is required.'); return; }
+    if (_editNameCtrl.text.trim().isEmpty)   { setState(() => _gcashError = 'Account name is required.'); return; }
+    setState(() => _gcashSaving = true);
+    try {
+      final updated = await SettingsService.updateGCashAccount(id, {
+        'label': _editLabelCtrl.text.trim(), 'number': _editNumberCtrl.text.trim(), 'account_name': _editNameCtrl.text.trim(),
+      });
+      if (mounted) {
+        setState(() {
+          _gcashAccounts = _gcashAccounts.map((a) => a['id'] == id ? updated : a).toList();
+          _editingId = null;
+          _gcashSaving = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _gcashError = 'Failed to update GCash account.'; _gcashSaving = false; });
+    }
+  }
+
+  Future<void> _handleToggleActive(Map<String, dynamic> acc) async {
+    try {
+      final updated = await SettingsService.updateGCashAccount(acc['id'], {'is_active': !(acc['is_active'] as bool)});
+      if (mounted) setState(() => _gcashAccounts = _gcashAccounts.map((a) => a['id'] == acc['id'] ? updated : a).toList());
+    } catch (_) {
+      if (mounted) setState(() => _gcashError = 'Failed to update account status.');
+    }
+  }
+
+  Future<void> _handleDeleteAccount(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete GCash Account?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await SettingsService.deleteGCashAccount(id);
+      if (mounted) setState(() => _gcashAccounts = _gcashAccounts.where((a) => a['id'] != id).toList());
+    } catch (_) {
+      if (mounted) setState(() => _gcashError = 'Failed to delete GCash account.');
     }
   }
 
@@ -331,8 +394,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-  // ── BAGO: GCash Payment tab — para ma-edit ng admin ang GCash
-  // number/account name na ipinapakita sa members. ────────────────────
+  // ── BAGO: GCash Payment tab — dating iisang number/name lang, ngayon
+  // puwede nang magdagdag ng ILAN pang account, para maiwasan ang
+  // limit ng isang account lang. ───────────────────────────────────────
   Widget _buildGcashTab() {
     if (_loadingGcash) return const Center(child: CircularProgressIndicator(color: _STColors.green));
     return SingleChildScrollView(
@@ -340,55 +404,107 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _STColors.border)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: const [
-                  Icon(Icons.smartphone, size: 15, color: _STColors.green),
-                  SizedBox(width: 8),
-                  Expanded(child: Text('Ito ang numero at pangalan na makikita ng mga member sa "Pay via GCash" na modal.', style: TextStyle(fontSize: 11, color: _STColors.sub, height: 1.5))),
-                ]),
-                const SizedBox(height: 16),
+          Row(children: const [
+            Icon(Icons.smartphone, size: 15, color: _STColors.green),
+            SizedBox(width: 8),
+            Expanded(child: Text('Ang mga aktibong account sa ibaba ay ipapakita bilang mga choices sa member sa "Pay via GCash" modal.', style: TextStyle(fontSize: 11, color: _STColors.sub, height: 1.5))),
+          ]),
+          const SizedBox(height: 14),
 
-                const Text('GCASH NUMBER', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+          if (_gcashError != null) Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8)), child: Text(_gcashError!, style: const TextStyle(fontSize: 11.5, color: _STColors.red, fontWeight: FontWeight.w600))),
+          if (_gcashSuccess != null) Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: Text(_gcashSuccess!, style: const TextStyle(fontSize: 11.5, color: _STColors.green, fontWeight: FontWeight.w600))),
+
+          ..._gcashAccounts.map((acc) {
+            final isActive = acc['is_active'] as bool? ?? true;
+            final isEditing = _editingId == acc['id'];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isActive ? const Color(0xFFF9FEF9) : const Color(0xFFFAFAFA),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isActive ? const Color(0xFFC8E6C9) : const Color(0xFFEEEEEE)),
+              ),
+              child: isEditing
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      TextField(controller: _editLabelCtrl, decoration: InputDecoration(hintText: 'Label (e.g. Primary)', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                      const SizedBox(height: 8),
+                      TextField(controller: _editNumberCtrl, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700), decoration: InputDecoration(hintText: 'GCash Number', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                      const SizedBox(height: 8),
+                      TextField(controller: _editNameCtrl, decoration: InputDecoration(hintText: 'Account Name', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                      const SizedBox(height: 10),
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                        TextButton(onPressed: () => setState(() => _editingId = null), child: const Text('Cancel')),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: _STColors.green, foregroundColor: Colors.white),
+                          onPressed: _gcashSaving ? null : () => _handleSaveEdit(acc['id']),
+                          child: const Text('Save'),
+                        ),
+                      ]),
+                    ])
+                  : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            if ((acc['label'] as String?)?.isNotEmpty == true)
+                              Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)), child: Text(acc['label'], style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: _STColors.green))),
+                            if (!isActive) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1), decoration: BoxDecoration(color: const Color(0xFFEEEEEE), borderRadius: BorderRadius.circular(20)), child: const Text('Inactive', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFF888888)))),
+                          ]),
+                          const SizedBox(height: 4),
+                          Text(acc['number'] ?? '', style: const TextStyle(fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+                          Text(acc['account_name'] ?? '', style: const TextStyle(fontSize: 11.5, color: Color(0xFF666666))),
+                        ]),
+                      ),
+                      Column(children: [
+                        Switch(value: isActive, activeColor: _STColors.green, onChanged: (_) => _handleToggleActive(acc)),
+                        Row(children: [
+                          IconButton(onPressed: () => _startEdit(acc), icon: const Icon(Icons.edit_outlined, size: 16), color: const Color(0xFF555555), visualDensity: VisualDensity.compact),
+                          IconButton(onPressed: () => _handleDeleteAccount(acc['id']), icon: const Icon(Icons.delete_outline, size: 16), color: _STColors.red, visualDensity: VisualDensity.compact),
+                        ]),
+                      ]),
+                    ]),
+            );
+          }),
+
+          if (_showAddForm)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: const Color(0xFFF9FEF9), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFA5D6A7), style: BorderStyle.solid)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('LABEL (OPTIONAL)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
                 const SizedBox(height: 6),
-                TextField(
-                  controller: _gcashNumberCtrl,
-                  onChanged: (_) => setState(() => _gcashError = null),
-                  style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, letterSpacing: 1),
-                  decoration: InputDecoration(hintText: 'e.g. 0967-006-3500', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-                const SizedBox(height: 14),
-
-                const Text('ACCOUNT NAME', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+                TextField(controller: _addLabelCtrl, decoration: InputDecoration(hintText: 'e.g. Backup', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                const SizedBox(height: 10),
+                const Text('GCASH NUMBER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
                 const SizedBox(height: 6),
-                TextField(
-                  controller: _gcashNameCtrl,
-                  onChanged: (_) => setState(() => _gcashError = null),
-                  decoration: InputDecoration(hintText: 'e.g. LEAF MPC', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-
-                if (_gcashError != null) Container(margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFFCE4EC), borderRadius: BorderRadius.circular(8)), child: Text(_gcashError!, style: const TextStyle(fontSize: 11.5, color: _STColors.red, fontWeight: FontWeight.w600))),
-                if (_gcashSuccess != null) Container(margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: Text(_gcashSuccess!, style: const TextStyle(fontSize: 11.5, color: _STColors.green, fontWeight: FontWeight.w600))),
-
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
+                TextField(controller: _addNumberCtrl, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700), decoration: InputDecoration(hintText: 'e.g. 0967-006-3500', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                const SizedBox(height: 10),
+                const Text('ACCOUNT NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF555555))),
+                const SizedBox(height: 6),
+                TextField(controller: _addNameCtrl, decoration: InputDecoration(hintText: 'e.g. LEAF MPC', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton(onPressed: () => setState(() { _showAddForm = false; _addLabelCtrl.clear(); _addNumberCtrl.clear(); _addNameCtrl.clear(); }), child: const Text('Cancel')),
+                  const SizedBox(width: 6),
+                  ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: _STColors.green, foregroundColor: Colors.white),
-                    onPressed: (!_gcashDirty || _gcashSaving) ? null : _handleSaveGcash,
-                    child: _gcashSaving
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Save GCash Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    onPressed: _gcashSaving ? null : _handleAddAccount,
+                    child: _gcashSaving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Add Account'),
                   ),
-                ),
-              ],
+                ]),
+              ]),
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _showAddForm = true),
+                style: OutlinedButton.styleFrom(foregroundColor: _STColors.green, side: const BorderSide(color: Color(0xFFA5D6A7)), padding: const EdgeInsets.symmetric(vertical: 12)),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Another GCash Account', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              ),
             ),
-          ),
         ],
       ),
     );

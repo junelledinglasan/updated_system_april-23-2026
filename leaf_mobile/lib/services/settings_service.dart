@@ -114,6 +114,74 @@ class SettingsService {
   }
 
   // ══════════════════════════════════════════════════════════════
+  //  BAGO: MARAMING GCASH ACCOUNT (multiple accounts) — dating
+  //  iisang number/name lang (tingnan sa itaas), kaya paulit-ulit
+  //  natatamaan ang limit ng isang account. Puwede nang magdagdag ng
+  //  ilan pa, at pipiliin ng member kung saan magbabayad.
+  // ══════════════════════════════════════════════════════════════
+
+  // Admin-only — listahan ng LAHAT ng accounts (aktibo man o hindi)
+  static Future<List<Map<String, dynamic>>> getGCashAccounts() async {
+    final res = await http.get(Uri.parse('${AppConstants.baseUrl}/settings/gcash-accounts/'), headers: await _authHeader());
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final list = jsonDecode(utf8.decode(res.bodyBytes)) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    }
+    throw Exception('Failed to load GCash accounts (${res.statusCode})');
+  }
+
+  // Kahit sinong naka-login — mga AKTIBONG account lang, para sa
+  // "Pay via GCash" account selector.
+  static Future<List<Map<String, dynamic>>> getActiveGCashAccounts() async {
+    final res = await http.get(Uri.parse('${AppConstants.baseUrl}/settings/gcash-accounts/active/'), headers: await _authHeader());
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final list = jsonDecode(utf8.decode(res.bodyBytes)) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  // Admin-only — magdagdag ng bagong account
+  static Future<Map<String, dynamic>> createGCashAccount({required String number, required String accountName, String label = ''}) async {
+    final res = await http.post(
+      Uri.parse('${AppConstants.baseUrl}/settings/gcash-accounts/'),
+      headers: {...await _authHeader(), 'Content-Type': 'application/json'},
+      body: jsonEncode({'number': number, 'account_name': accountName, 'label': label}),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    }
+    final body = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+    throw Exception(body['error'] ?? 'Failed to add GCash account (${res.statusCode})');
+  }
+
+  // Admin-only — i-edit ang isang account (kasama ang pag-toggle ng
+  // is_active — ipasa lang ang mga field na gustong baguhin).
+  static Future<Map<String, dynamic>> updateGCashAccount(int id, Map<String, dynamic> fields) async {
+    final res = await http.patch(
+      Uri.parse('${AppConstants.baseUrl}/settings/gcash-accounts/$id/'),
+      headers: {...await _authHeader(), 'Content-Type': 'application/json'},
+      body: jsonEncode(fields),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    }
+    final body = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+    throw Exception(body['error'] ?? 'Failed to update GCash account (${res.statusCode})');
+  }
+
+  // Admin-only — burahin ang isang account
+  static Future<void> deleteGCashAccount(int id) async {
+    final res = await http.delete(
+      Uri.parse('${AppConstants.baseUrl}/settings/gcash-accounts/$id/'),
+      headers: await _authHeader(),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Failed to delete GCash account (${res.statusCode})');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  STAFF FEATURE PERMISSIONS
   // ══════════════════════════════════════════════════════════════
 

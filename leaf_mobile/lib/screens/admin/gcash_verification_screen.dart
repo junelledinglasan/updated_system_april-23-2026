@@ -251,6 +251,18 @@ class _RequestCard extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(height: 6),
+                // ── BAGO: aling GCash account ang ginamit ng member —
+                // mahalaga ngayong marami nang account. ─────────────────
+                if ('${req['paid_to_number'] ?? ''}'.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(children: [
+                      const Icon(Icons.account_balance_wallet_outlined, size: 12, color: Color(0xFF6A1B9A)),
+                      const SizedBox(width: 4),
+                      Text('Paid to: ', style: const TextStyle(fontSize: 10, color: Color(0xFF6A1B9A))),
+                      Text('${req['paid_to_number']}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF4A148C), fontFamily: 'monospace')),
+                    ]),
+                  ),
                 Row(children: [
                   Icon(hasProof ? Icons.image_outlined : Icons.image_not_supported_outlined, size: 13, color: hasProof ? _GVColors.blue : const Color(0xFFCCCCCC)),
                   const SizedBox(width: 4),

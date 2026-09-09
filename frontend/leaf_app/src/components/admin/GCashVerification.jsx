@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getGCashRequestsAPI, verifyGCashRequestAPI } from "../../api/loans";
-import { Smartphone, CheckCircle, XCircle, Clock, Search, Eye } from "lucide-react";
+import { Smartphone, CheckCircle, XCircle, Clock, Search, Eye, X, Image, AlertTriangle, ExternalLink, ArrowLeft } from "lucide-react";
 
 const STATUS_COLOR = {
   Pending:  { bg:"#fff8e1", color:"#f57c00", border:"#ffe082" },
@@ -43,7 +43,7 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
             </div>
             <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{req.created_at}</div>
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"#aaa",fontSize:18}}>✕</button>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"#aaa",display:"flex"}}><X size={18}/></button>
         </div>
 
         <div style={{padding:"16px 18px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:14}}>
@@ -72,6 +72,17 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
             ))}
           </div>
 
+          {/* ── BAGO: aling GCash account ang ginamit ng member —
+              mahalaga ito ngayong marami nang account, para malaman
+              ng admin kung saang account dapat i-verify ang payment. ── */}
+          {req.paid_to_number && (
+            <div style={{background:"#f3e5f5",borderRadius:10,padding:"10px 14px",border:"1px solid #ce93d8"}}>
+              <div style={{fontSize:10,color:"#6a1b9a",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Paid To</div>
+              <div style={{fontSize:15,fontWeight:800,color:"#4a148c",fontFamily:"monospace"}}>{req.paid_to_number}</div>
+              <div style={{fontSize:12,color:"#666"}}>{req.paid_to_name}</div>
+            </div>
+          )}
+
           {/* Reference Number — most important */}
           <div style={{background:"#e3f2fd",borderRadius:12,padding:"16px",textAlign:"center",border:"2px solid #90caf9"}}>
             <div style={{fontSize:11,color:"#1565c0",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>GCash Reference Number</div>
@@ -88,8 +99,8 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
           {/* Screenshot proof — always shown */}
           <div>
             <div style={{fontSize:12,fontWeight:700,color:"#555",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-              🖼 Payment Proof Screenshot
-              {!req.screenshot_url && <span style={{fontSize:10,color:"#c62828",fontWeight:600,background:"#ffebee",padding:"2px 8px",borderRadius:10,border:"1px solid #ef9a9a"}}>⚠ No screenshot submitted</span>}
+              <Image size={14}/> Payment Proof Screenshot
+              {!req.screenshot_url && <span style={{fontSize:10,color:"#c62828",fontWeight:600,background:"#ffebee",padding:"2px 8px",borderRadius:10,border:"1px solid #ef9a9a",display:"inline-flex",alignItems:"center",gap:4}}><AlertTriangle size={10}/> No screenshot submitted</span>}
             </div>
             {req.screenshot_url ? (
               <div>
@@ -102,8 +113,8 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
                   />
                 </div>
                 <a href={req.screenshot_url} target="_blank" rel="noopener noreferrer"
-                  style={{fontSize:11,color:"#1565c0",fontWeight:600,display:"block",marginTop:6}}>
-                  🔗 Open full size
+                  style={{fontSize:11,color:"#1565c0",fontWeight:600,display:"flex",alignItems:"center",gap:4,marginTop:6}}>
+                  <ExternalLink size={11}/> Open full size
                 </a>
               </div>
             ) : (
@@ -120,14 +131,14 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
           )}
 
           {req.status === "Verified" && (
-            <div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 14px",border:"1px solid #a5d6a7",fontSize:12,color:"#2e7d32",fontWeight:600}}>
-              ✅ Verified by {req.verified_by} on {req.verified_at}
+            <div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 14px",border:"1px solid #a5d6a7",fontSize:12,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+              <CheckCircle size={14}/> Verified by {req.verified_by} on {req.verified_at}
             </div>
           )}
 
           {req.status === "Rejected" && req.reject_reason && (
-            <div style={{background:"#ffebee",borderRadius:8,padding:"10px 14px",border:"1px solid #ef9a9a",fontSize:12,color:"#c62828"}}>
-              ❌ Rejected: {req.reject_reason}
+            <div style={{background:"#ffebee",borderRadius:8,padding:"10px 14px",border:"1px solid #ef9a9a",fontSize:12,color:"#c62828",display:"flex",alignItems:"center",gap:6}}>
+              <XCircle size={14}/> Rejected: {req.reject_reason}
             </div>
           )}
 
@@ -158,7 +169,7 @@ function RequestDetailModal({ req, onClose, onVerify, onReject }) {
               <CheckCircle size={13}/> {loading?"Verifying...":"Verify & Record Payment"}
             </button>
           </>) : rejectMode ? (<>
-            <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{padding:"8px 16px",border:"1px solid #e0e0e0",borderRadius:8,background:"#fff",color:"#666",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>← Back</button>
+            <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{padding:"8px 16px",border:"1px solid #e0e0e0",borderRadius:8,background:"#fff",color:"#666",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}><ArrowLeft size={13}/> Back</button>
             <button onClick={handleReject} disabled={!rejectReason.trim()||loading} style={{padding:"8px 18px",background:"#c62828",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!rejectReason.trim()||loading?0.5:1}}>
               {loading?"Rejecting...":"Confirm Rejection"}
             </button>
@@ -305,7 +316,7 @@ export default function GCashVerification() {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{background:"#f8f9fa",borderBottom:"2px solid #e0e0e0"}}>
-                {["Date","Member","Loan ID","Reference No.","Amount","Proof","Status","Action"].map(h => (
+                {["Date","Member","Loan ID","Reference No.","Amount","Paid To","Proof","Status","Action"].map(h => (
                   <th key={h} style={{padding:"10px 14px",textAlign:"left",fontWeight:700,color:"#555",fontSize:11,textTransform:"uppercase",letterSpacing:0.3}}>{h}</th>
                 ))}
               </tr>
@@ -323,9 +334,12 @@ export default function GCashVerification() {
                     <td style={{padding:"10px 14px",fontFamily:"monospace",color:"#1565c0",fontSize:11}}>{r.loan_id}</td>
                     <td style={{padding:"10px 14px",fontFamily:"monospace",fontWeight:700,color:"#0d47a1",letterSpacing:1}}>{r.reference_number}</td>
                     <td style={{padding:"10px 14px",fontWeight:700,color:"#2e7d32"}}>₱{Number(r.amount).toLocaleString()}</td>
+                    <td style={{padding:"10px 14px",fontSize:11,color:"#6a1b9a"}}>
+                      {r.paid_to_number ? <><div style={{fontFamily:"monospace",fontWeight:700}}>{r.paid_to_number}</div><div style={{fontSize:9.5,color:"#999"}}>{r.paid_to_name}</div></> : "—"}
+                    </td>
                     <td style={{padding:"10px 14px",textAlign:"center"}}>
                       {r.screenshot_url
-                        ? <a href={r.screenshot_url} target="_blank" rel="noopener noreferrer" style={{fontSize:18}} title="View proof">🖼</a>
+                        ? <a href={r.screenshot_url} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex"}} title="View proof"><Image size={15} color="#1565c0"/></a>
                         : <span style={{color:"#ccc",fontSize:12}}>—</span>}
                     </td>
                     <td style={{padding:"12px 18px"}}>

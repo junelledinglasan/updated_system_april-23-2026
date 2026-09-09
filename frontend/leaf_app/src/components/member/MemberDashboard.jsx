@@ -6,7 +6,7 @@ import {
   PointElement, LineElement, ArcElement,
   Title, Tooltip, Legend, Filler,
 } from "chart.js";
-import { Wallet, CalendarClock, CheckCircle2, TrendingUp, CreditCard, Megaphone, Bell } from "lucide-react";
+import { Wallet, CalendarClock, CheckCircle2, TrendingUp, CreditCard, Megaphone, Clock, AlertTriangle } from "lucide-react";
 import { getLoansAPI } from "../../api/loans";
 import { getPaymentsAPI } from "../../api/payments";
 import { getAnnouncementsAPI } from "../../api/announcements";
@@ -39,7 +39,7 @@ function NonOfficialWelcome({ member, navigate }) {
       </div>
       <div className="md-unofficial-card">
         <div className="md-unofficial-header">
-          <div className="md-unofficial-icon">⏳</div>
+          <div className="md-unofficial-icon"><Clock size={22} color="#e65100"/></div>
           <div>
             <div className="md-unofficial-title">{t("dash_not_official_title")}</div>
             <div className="md-unofficial-sub">{t("dash_not_official_sub")}</div>
@@ -105,12 +105,25 @@ export default function MemberDashboard() {
   // Conditional return AFTER all hooks
   if (!member.isOfficial) return <NonOfficialWelcome member={member} navigate={navigate} />;
 
-  const activeLoan   = loans.find(l => l.status === "Active") || loans[0] || null;
+  // ── FIX: dating "status === 'Active'" LANG ang hinahanap — kaya
+  // kung ang tanging loan ng member ay "Overdue" na (hindi "Active"),
+  // nahuhulog ito sa "loans[0]" fallback sa halip, na puwedeng MALING
+  // loan ang ipakita kung marami silang loans. Isinama na ngayon ang
+  // "Overdue" bilang parehong "kasalukuyang" loan. ────────────────────
+  const activeLoan   = loans.find(l => ["Active","Overdue"].includes(l.status)) || loans[0] || null;
   const totalLoan    = parseFloat(activeLoan?.amount || 0);
   const balance      = parseFloat(activeLoan?.balance || 0);
-  const totalPaid    = totalLoan - balance;
+  // ── FIX: dating "totalLoan - balance" — nasira ito ngayon dahil
+  // puwede nang LUMAKI ang balance (dahil sa 2% penalty), hindi na
+  // laging lumiliit lang (dahil sa pagbabayad). Nagreresulta ito ng
+  // NEGATIVE na "Total Paid" kapag may naipong penalty. Ang tamang
+  // paraan: i-sum ang AKTWAL na mga payment record ng loan na 'to. ──
+  const loanPaymentsForTotal = payments.filter(p => p.loan === activeLoan?.id || String(p.loan_code) === String(activeLoan?.loan_id));
+  const totalPaid    = loanPaymentsForTotal.reduce((s,p) => s + parseFloat(p.amount||0), 0);
   const monthlyDue   = parseFloat(activeLoan?.monthly_due || 0);
-  const paidPct      = totalLoan > 0 ? Math.round((totalPaid / totalLoan) * 100) : 0;
+  const paidPct      = totalLoan > 0 ? Math.max(0, Math.min(100, Math.round((totalPaid / totalLoan) * 100))) : 0;
+  const totalPenalty = parseFloat(activeLoan?.total_penalty || 0);
+  const monthsOverdue = activeLoan?.months_overdue_penalized || 0;
   const shareCapital = parseFloat(member.share_capital || 0);
   const firstname    = member.name.split(" ")[0];
 
@@ -146,6 +159,18 @@ export default function MemberDashboard() {
           <span className="md-active-badge">{t("dash_active")}</span>
         </div>
       </div>
+
+      {/* ── BAGO: penalty warning — makikita agad ng member kung bakit
+          tumaas ang balance nila, sa pinaka-unang bahagi ng dashboard
+          na tinitingnan nila. ─────────────────────────────────────── */}
+      {totalPenalty > 0 && (
+        <div style={{background:"#fce4ec", border:"1px solid #f8bbd0", borderRadius:12, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:10}}>
+          <AlertTriangle size={18} color="#c62828"/>
+          <div style={{fontSize:12.5, color:"#c62828", lineHeight:1.5}}>
+            You have a <strong>₱{totalPenalty.toLocaleString()} penalty</strong> for {monthsOverdue} month{monthsOverdue!==1?"s":""} of late payment (2% of your Monthly Due per month), already included in your Remaining Balance. Pay as soon as possible to avoid further penalties.
+          </div>
+        </div>
+      )}
 
       <div className="md-kpi-grid">
         <div className="md-kpi-card md-kpi-danger">
@@ -197,7 +222,7 @@ export default function MemberDashboard() {
           <div className="md-loan-details">
             <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_principal")}</span><span className="md-ld-val">₱{totalLoan.toLocaleString()}</span></div>
             <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_monthly_due")}</span><span className="md-ld-val green">₱{monthlyDue.toLocaleString()}</span></div>
-            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_status")}</span><span className="md-loan-status-badge current">{activeLoan?.status || "—"}</span></div>
+            <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_status")}</span><span className="md-loan-status-badge current" style={activeLoan?.status==="Overdue"?{background:"#ffebee",color:"#c62828",borderColor:"#ef9a9a"}:undefined}>{activeLoan?.status || "—"}</span></div>
             <div className="md-loan-detail-item"><span className="md-ld-label">{t("dash_next_due")}</span><span className="md-ld-val">{activeLoan?.next_due_date || "—"}</span></div>
           </div>
         </div>

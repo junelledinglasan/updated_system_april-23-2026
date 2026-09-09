@@ -37,9 +37,16 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   bool _uploading = false;
   Map<String, dynamic>? _result;
 
-  // ── BAGO: GCash number/name mula sa Settings API ────────────────────
-  String _gcashNumber = _kFallbackGcashNumber;
-  String _gcashName = _kFallbackGcashName;
+  // ── BAGO: maraming GCash account na puwedeng piliin ng member —
+  // dating iisang number/name lang. ────────────────────────────────────
+  List<Map<String, dynamic>> _gcashAccounts = [];
+  int? _selectedAccountId;
+  Map<String, dynamic>? get _selectedAccount {
+    if (_gcashAccounts.isEmpty) return null;
+    return _gcashAccounts.firstWhere((a) => a['id'] == _selectedAccountId, orElse: () => _gcashAccounts.first);
+  }
+  String get _displayNumber => _selectedAccount?['number'] ?? _kFallbackGcashNumber;
+  String get _displayName => _selectedAccount?['account_name'] ?? _kFallbackGcashName;
 
   late final TextEditingController _amountCtrl;
   final _refCtrl = TextEditingController();
@@ -57,11 +64,11 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   }
 
   Future<void> _loadGcashSettings() async {
-    final data = await SettingsService.getGCashSettings();
+    final data = await SettingsService.getActiveGCashAccounts();
     if (mounted) {
       setState(() {
-        if ((data['gcash_number'] ?? '').isNotEmpty) _gcashNumber = data['gcash_number']!;
-        if ((data['gcash_name'] ?? '').isNotEmpty) _gcashName = data['gcash_name']!;
+        _gcashAccounts = data;
+        if (data.isNotEmpty) _selectedAccountId = data.first['id'];
       });
     }
   }
@@ -75,7 +82,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
   }
 
   void _copyNumber() {
-    Clipboard.setData(ClipboardData(text: _gcashNumber.replaceAll('-', '')));
+    Clipboard.setData(ClipboardData(text: _displayNumber.replaceAll('-', '')));
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
@@ -142,6 +149,10 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
         'reference_number': _refCtrl.text.trim(),
         'note': _noteCtrl.text.trim(),
         'screenshot_url': screenshotUrl,
+        // ── BAGO: kasama na kung aling GCash account ang ginamit —
+        // para malaman ng admin saang account dapat i-verify. ────────
+        'paid_to_number': _displayNumber,
+        'paid_to_name': _displayName,
       });
       if (mounted) {
         setState(() {
@@ -257,7 +268,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
     // compile-time constants. ───────────────────────────────────────
     final steps = [
       'Open your GCash app',
-      'Send payment to $_gcashNumber ($_gcashName)',
+      'Send payment to $_displayNumber ($_displayName)',
       'Enter the amount you want to pay',
       'Complete the transaction',
       'Note your 13-digit reference number',
@@ -288,6 +299,52 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
         ),
         const SizedBox(height: 14),
 
+        // ── BAGO: kung mahigit isa ang aktibong account, pipiliin
+        // muna ng member kung saan magbabayad. ─────────────────────────
+        if (_gcashAccounts.length > 1) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('CHOOSE GCASH ACCOUNT', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF555555), letterSpacing: 0.5)),
+                const SizedBox(height: 8),
+                ..._gcashAccounts.map((acc) {
+                  final selected = _selectedAccountId == acc['id'];
+                  return InkWell(
+                    onTap: () => setState(() => _selectedAccountId = acc['id']),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFFE8F5E9) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: selected ? _GPColors.green : const Color(0xFFE0E0E0), width: 1.5),
+                      ),
+                      child: Row(children: [
+                        Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off, size: 18, color: selected ? _GPColors.green : const Color(0xFFBBBBBB)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if ((acc['label'] as String?)?.isNotEmpty == true)
+                              Text(acc['label'], style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _GPColors.green)),
+                            Text(acc['number'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                            Text(acc['account_name'] ?? '', style: const TextStyle(fontSize: 10.5, color: Color(0xFF888888))),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+
         // GCash number
         Container(
           width: double.infinity,
@@ -297,9 +354,9 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen> {
             children: [
               const Text('SEND GCASH PAYMENT TO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _GPColors.green, letterSpacing: 0.5)),
               const SizedBox(height: 6),
-              Text(_gcashNumber, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _GPColors.dark, letterSpacing: 2)),
+              Text(_displayNumber, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _GPColors.dark, letterSpacing: 2)),
               const SizedBox(height: 4),
-              Text(_gcashName, style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+              Text(_displayName, style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _copyNumber,

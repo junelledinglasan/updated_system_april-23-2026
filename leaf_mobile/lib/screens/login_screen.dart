@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateAccountScreen()));
   }
 
-  InputDecoration _fieldDecoration({required String hint, Widget? suffixIcon}) {
+  InputDecoration _fieldDecoration({required String hint, Widget? suffixIcon, Widget? prefixIcon}) {
     OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: color, width: width),
@@ -138,14 +138,24 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       focusedBorder: border(_LoginColors.focusGreen, 1.5),
       suffixIcon: suffixIcon,
+      prefixIcon: prefixIcon,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _LoginColors.rightBg,
-      body: SafeArea(
+      body: Container(
+        // ── BAGO: gradient na background — dating flat na kulay lang. ──
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE3EFD9), Color(0xFFD8E8CC), Color(0xFFC9E0B8)],
+            stops: [0.0, 0.45, 1.0],
+          ),
+        ),
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -196,13 +206,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Card (matches .login-card) ──────────────────────────
+                  // ── Card (matches .login-card) — BAGO: may accent
+                  // bar sa itaas ngayon (dating wala). ─────────────────
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
                     decoration: BoxDecoration(
                       color: _LoginColors.cardBg,
                       borderRadius: BorderRadius.circular(18),
+                      border: const Border(top: BorderSide(color: _LoginColors.btnGreen, width: 4)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.16),
@@ -220,8 +232,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.eco, size: 24, color: _LoginColors.leafGreen),
-                        const SizedBox(height: 6),
+                        // ── BAGO: circular badge sa likod ng leaf icon,
+                        // dating plain icon lang. ─────────────────────
+                        Container(
+                          width: 48, height: 48,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            gradient: const LinearGradient(colors: [_LoginColors.btnGreen, _LoginColors.leafGreen], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                            boxShadow: [BoxShadow(color: _LoginColors.btnGreen.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 4))],
+                          ),
+                          child: const Icon(Icons.eco, size: 22, color: Colors.white),
+                        ),
+                        const SizedBox(height: 10),
                         const Text(
                           'Login',
                           style: TextStyle(
@@ -248,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _usernameCtrl,
                           textInputAction: TextInputAction.next,
                           style: const TextStyle(fontSize: 13.5, color: Color(0xFF222222)),
-                          decoration: _fieldDecoration(hint: 'Enter your username'),
+                          decoration: _fieldDecoration(hint: 'Enter your username', prefixIcon: const Icon(Icons.person_outline, size: 18, color: _LoginColors.eyeIdle)),
                           onChanged: (_) {
                             if (_error != null) setState(() => _error = null);
                           },
@@ -271,6 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           decoration: _fieldDecoration(
                             hint: 'Enter your password',
+                            prefixIcon: const Icon(Icons.lock_outline, size: 18, color: _LoginColors.eyeIdle),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _showPassword ? Icons.visibility_off : Icons.visibility,
@@ -353,14 +376,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 15),
 
-                        // Login button
-                        SizedBox(
+                        // Login button — BAGO: gradient na ngayon, dating
+                        // flat na kulay lang. ────────────────────────────
+                        Container(
                           width: double.infinity,
                           height: 46,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(11),
+                            gradient: LinearGradient(
+                              colors: _loading
+                                  ? [_LoginColors.btnGreen.withOpacity(0.65), _LoginColors.btnGreenDk.withOpacity(0.65)]
+                                  : [_LoginColors.btnGreen, const Color(0xFF388E3C)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _LoginColors.btnGreen,
-                              disabledBackgroundColor: _LoginColors.btnGreen.withOpacity(0.65),
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
@@ -385,9 +419,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
-                                    'Login',
-                                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.login, size: 17, color: Colors.white),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Login',
+                                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                                      ),
+                                    ],
                                   ),
                           ),
                         ),
@@ -419,6 +460,7 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

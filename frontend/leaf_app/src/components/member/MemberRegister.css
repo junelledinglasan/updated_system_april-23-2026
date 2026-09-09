@@ -1,6 +1,7 @@
 .mr-page { min-height: 100vh; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .mr-card { background: #fff; border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,0.10); width: 100%; max-width: 600px; overflow: hidden; }
 .mr-header { background: linear-gradient(135deg, #1b5e20, #2e7d32); color: #fff; padding: 28px 28px 20px; text-align: center; }
+.mr-logo-img { width: 70px; height: auto; object-fit: contain; margin-bottom: 8px; }
 .mr-logo { font-size: 15px; font-weight: 700; opacity: 0.85; margin-bottom: 8px; }
 .mr-title { font-size: 22px; font-weight: 800; }
 .mr-sub   { font-size: 12px; opacity: 0.75; margin-top: 4px; }
@@ -15,10 +16,25 @@
 .mr-full  { grid-column: 1 / -1; }
 .mr-label { font-size: 11px; font-weight: 600; color: #555; }
 .mr-req   { color: #e53935; }
-.mr-input { border: 1.5px solid #e0e0e0; border-radius: 7px; padding: 9px 12px; font-size: 13px; outline: none; transition: border 0.2s; font-family: inherit; }
+.mr-input { border: 1.5px solid #e0e0e0; border-radius: 7px; padding: 9px 12px; font-size: 13px; outline: none; transition: border 0.2s; font-family: inherit; width: 100%; box-sizing: border-box; }
 .mr-input:focus { border-color: #2e7d32; }
 .mr-err   { border-color: #e53935 !important; }
 .mr-field-err { font-size: 11px; color: #e53935; }
+/* ── BAGO: icon sa loob ng field (kaliwa) + password show/hide toggle
+   (kanan) — dating wala ang mga feature na 'to. ────────────────────── */
+.mr-input-wrap { position: relative; }
+.mr-input-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: #bbb; pointer-events: none; display: flex;
+}
+.mr-input-with-icon { padding-left: 34px; }
+.mr-input-with-toggle { padding-right: 36px; }
+.mr-pw-eye {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: #bbb;
+  padding: 2px; display: flex; align-items: center; transition: color 0.15s;
+}
+.mr-pw-eye:hover { color: #555; }
 .mr-notice { font-size: 11px; color: #888; background: #f9fbe7; border-radius: 6px; padding: 8px 12px; border-left: 3px solid #c5e1a5; }
 .mr-notice-sm { font-size: 11px; color: #888; }
 .mr-strength { display: flex; align-items: center; gap: 6px; }
@@ -40,7 +56,7 @@
 .mr-login-link { text-align: center; font-size: 12px; color: #888; }
 .mr-login-link button { background: none; border: none; color: #2e7d32; font-weight: 600; cursor: pointer; text-decoration: underline; }
 .mr-success-card { background: #fff; border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,0.10); max-width: 480px; width: 100%; padding: 40px 32px; text-align: center; }
-.mr-success-icon  { font-size: 52px; margin-bottom: 12px; }
+.mr-success-icon  { display: flex; justify-content: center; margin-bottom: 12px; }
 .mr-success-title { font-size: 20px; font-weight: 800; color: #1b5e20; margin-bottom: 10px; }
 .mr-success-text  { font-size: 13px; color: #555; line-height: 1.7; margin-bottom: 16px; }
 .mr-success-notice { background: #f1f8e9; border-radius: 10px; padding: 14px 16px; font-size: 12px; color: #555; margin-bottom: 20px; border-left: 3px solid #2e7d32; text-align: left; }

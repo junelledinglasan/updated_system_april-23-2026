@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { getMembersAPI, getMemberStatsAPI, getMemberAPI, updateMemberAPI, deleteMemberAPI, getApplicationsAPI, updateApplicationStatusAPI, convertToMemberAPI, getOnlineApplicationsAPI, convertOnlineAppAPI, registerMemberAPI, getMemberSavingsAPI } from "../../api/members";
-import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff, UserCheck, UserX, ShieldAlert, CheckCircle2, XCircle, Info, ArrowLeft, User, Wallet, GraduationCap, Lock, TrendingUp, Check, EyeOff, PiggyBank, FileText, CreditCard, ArrowUpCircle, ArrowDownCircle, Sprout } from "lucide-react";
+import { Users, Clock, Eye, Pencil, Trash2, Search, ArrowUpDown, IdCard, X, PowerOff, UserCheck, UserX, ShieldAlert, CheckCircle2, XCircle, Info, ArrowLeft, User, Wallet, GraduationCap, Lock, TrendingUp, Check, EyeOff, PiggyBank, FileText, CreditCard, ArrowUpCircle, ArrowDownCircle, Sprout, Lightbulb, ClipboardList, PartyPopper, Briefcase } from "lucide-react";
 import api from "../../api/axiosInstance";
 import "./ManageMember.css";
 
@@ -9,10 +9,10 @@ const STATUS_OPTIONS = ["All","Active","Inactive","Deactivated"];
 const ROWS_PER_PAGE  = 10;
 
 const SORT_OPTIONS = [
-  { value: "newest",    label: "⬇ Newest First"   },
-  { value: "oldest",    label: "⬆ Oldest First"    },
-  { value: "az",        label: "🔤 Name A → Z"     },
-  { value: "za",        label: "🔤 Name Z → A"     },
+  { value: "newest",    label: "Newest First"   },
+  { value: "oldest",    label: "Oldest First"    },
+  { value: "az",        label: "Name A to Z"     },
+  { value: "za",        label: "Name Z to A"     },
 ];
 
 async function getMemberFinancialSummary(memberId) {
@@ -735,7 +735,7 @@ function DeactivateModal({ member, onClose, onConfirm }) {
       <div className="modal-box modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title" style={{color:"#e65100"}}>Deactivate Member</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="modal-body">
           <div style={{textAlign:"center",padding:"12px 0"}}>
@@ -794,7 +794,7 @@ function DeleteModal({ member, onClose, onConfirm }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-sm" onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><div className="modal-title danger-title">Delete Member</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-header"><div className="modal-title danger-title">Delete Member</div><button className="modal-close" onClick={onClose}><X size={16}/></button></div>
         <div className="modal-body">
           <div className="delete-warning-icon">️</div>
           <p className="delete-confirm-text">Are you sure you want to delete <strong>{member.fullname||`${member.first_name} ${member.last_name}`}</strong>?</p>
@@ -847,7 +847,7 @@ function PendingModal({ app, onClose, onConvert }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box mm-view-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><div className="modal-title">Pending Application</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-header"><div className="modal-title">Pending Application</div><button className="modal-close" onClick={onClose}><X size={16}/></button></div>
         <div className="modal-body">
           <div className="mm-view-header">
             <div className="mm-view-avatar">{(app.first_name||"A")[0]}</div>
@@ -856,17 +856,17 @@ function PendingModal({ app, onClose, onConvert }) {
               <div className="mm-view-id">{app.app_id}</div>
               <div className="mm-view-username">Submitted {(app.created_at||"").slice(0,10)}</div>
             </div>
-            <span className="mm-pending-badge">⏳ Pending</span>
+            <span className="mm-pending-badge" style={{display:"inline-flex",alignItems:"center",gap:4}}><Clock size={11}/> Pending</span>
           </div>
-          <div className="mm-pending-notice">📋 This applicant has been approved online. They need to visit the office to complete the process.</div>
+          <div className="mm-pending-notice" style={{display:"flex",alignItems:"center",gap:6}}><ClipboardList size={13}/> This applicant has been approved online. They need to visit the office to complete the process.</div>
           <div className="modal-field" style={{marginTop:12}}>
             <div className="modal-field-label">Amount Paid for Membership (₱) <span style={{color:"#e53935"}}>*</span></div>
             <div style={{border:"1px solid #ddd",borderRadius:8,overflow:"hidden",display:"flex"}}>
               <span style={{padding:"0 10px",color:"#aaa",fontSize:14,display:"flex",alignItems:"center"}}>₱</span>
               <input style={{border:"none",outline:"none",padding:"9px 8px",fontSize:14,width:"100%"}} type="number" value={sharePaid} onChange={e=>setSharePaid(e.target.value)} placeholder="e.g. 4000"/>
             </div>
-            {sharePaid>0&&<div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-              💡 Share Capital = ₱{(parseFloat(sharePaid||0)*2).toLocaleString()} · Max Loanable = ₱{(parseFloat(sharePaid||0)*2).toLocaleString()}
+            {sharePaid>0&&<div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+              <Lightbulb size={12}/> Share Capital = ₱{(parseFloat(sharePaid||0)*2).toLocaleString()} · Max Loanable = ₱{(parseFloat(sharePaid||0)*2).toLocaleString()} (×1, new member default)
             </div>}
           </div>
           <div className="mm-view-section-title">Personal Information</div>
@@ -889,8 +889,8 @@ function PendingModal({ app, onClose, onConvert }) {
 
           <div className="mm-view-section-title">Documents Submitted</div>
           <div className="modal-grid">
-            <div className="modal-field"><div className="modal-field-label">Birth Certificate</div><div className="modal-field-value">{app.birth_certificate ? "✅ Submitted" : "❌ Not submitted"}</div></div>
-            <div className="modal-field"><div className="modal-field-label">Marriage Certificate</div><div className="modal-field-value">{app.marriage_certificate ? "✅ Submitted" : "❌ Not submitted"}</div></div>
+            <div className="modal-field"><div className="modal-field-label">Birth Certificate</div><div className="modal-field-value" style={{display:"flex",alignItems:"center",gap:4}}>{app.birth_certificate ? <><CheckCircle2 size={13} color="#2e7d32"/> Submitted</> : <><XCircle size={13} color="#c62828"/> Not submitted</>}</div></div>
+            <div className="modal-field"><div className="modal-field-label">Marriage Certificate</div><div className="modal-field-value" style={{display:"flex",alignItems:"center",gap:4}}>{app.marriage_certificate ? <><CheckCircle2 size={13} color="#2e7d32"/> Submitted</> : <><XCircle size={13} color="#c62828"/> Not submitted</>}</div></div>
           </div>
 
           {(app.id_front_url || app.id_back_url) && (<>
@@ -913,7 +913,7 @@ function PendingModal({ app, onClose, onConvert }) {
         </div>
         <div className="modal-footer">
           <button className="btn-modal-close" onClick={onClose}>Close</button>
-          <button className="btn-modal-save" onClick={() => onConvert(app)}>✓ Convert to Official Member</button>
+          <button className="btn-modal-save" onClick={() => onConvert(app)} style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}><Check size={14}/> Convert to Official Member</button>
         </div>
       </div>
     </div>
@@ -925,7 +925,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
   const [loading,setLoading]=useState(false);
   const [errors,setErrors]=useState({});
   const [result,setResult]=useState(null);
-  const TABS=[{key:"personal",label:"👤 Personal Info"},{key:"spouse",label:"👪 Spouse & Family"},{key:"classification",label:"📋 Classification"},{key:"account",label:"🔐 Account Info"}];
+  const TABS=[{key:"personal",icon:<User size={13}/>,label:"Personal Info"},{key:"spouse",icon:<Users size={13}/>,label:"Spouse & Family"},{key:"classification",icon:<ClipboardList size={13}/>,label:"Classification"},{key:"account",icon:<Lock size={13}/>,label:"Account Info"}];
   const [form,setForm]=useState({
     first_name:"",last_name:"",middle_name:"",birth_date:"",place_of_birth:"",
     sex:"Male",sex_other:"",civil_status:"Single",tin_no:"",sss_gsis_no:"",
@@ -959,17 +959,17 @@ function RegisterMemberModal({ onClose, onSuccess }) {
       };
       // ── PANSAMANTALANG DEBUG LOG — para makita kung ano talaga ang
       // ipinapadala. Puwede mong i-delete ito pagkatapos ma-ayos. ──────
-      console.log("🚀 REGISTER PAYLOAD BEING SENT:", payload);
+      console.log("REGISTER PAYLOAD BEING SENT:", payload);
       const res=await registerMemberAPI(payload);
       await onSuccess(res.member || res);setResult(res);setTab("account");
     }catch(err){const msg=err.response?.data?.error||"Failed to register member.";setErrors({first_name:msg});setTab("personal");}finally{setLoading(false);}};
   return(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box mm-view-modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-header"><div className="modal-title">Register New Member (v2)</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-header"><div className="modal-title">Register New Member (v2)</div><button className="modal-close" onClick={onClose}><X size={16}/></button></div>
         <div style={{fontSize:12,color:"#888",padding:"6px 20px",background:"#f9fbe7",borderBottom:"1px solid #eee"}}>Walk-in / F2F member registration at the office</div>
         <div style={{display:"flex",borderBottom:"2px solid #e8f5e9"}}>
-          {TABS.map((t,i)=>(<button key={t.key} onClick={()=>!result&&setTab(t.key)} style={{flex:1,padding:"10px 8px",fontSize:12,fontWeight:600,color:tab===t.key?"#2e7d32":"#888",background:tab===t.key?"#f9fef9":"none",border:"none",borderBottom:tab===t.key?"2px solid #2e7d32":"none",marginBottom:tab===t.key?-2:0,cursor:result?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span style={{width:20,height:20,borderRadius:"50%",fontSize:11,background:tab===t.key?"#2e7d32":"#e0e0e0",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>{t.label}</button>))}
+          {TABS.map((t,i)=>(<button key={t.key} onClick={()=>!result&&setTab(t.key)} style={{flex:1,padding:"10px 8px",fontSize:12,fontWeight:600,color:tab===t.key?"#2e7d32":"#888",background:tab===t.key?"#f9fef9":"none",border:"none",borderBottom:tab===t.key?"2px solid #2e7d32":"none",marginBottom:tab===t.key?-2:0,cursor:result?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span style={{width:20,height:20,borderRadius:"50%",fontSize:11,background:tab===t.key?"#2e7d32":"#e0e0e0",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>{t.icon}{t.label}</button>))}
         </div>
         <div className="modal-body">
           {tab==="personal"&&<div className="modal-grid">
@@ -995,8 +995,8 @@ function RegisterMemberModal({ onClose, onSuccess }) {
                 <span style={{padding:"0 10px",color:"#aaa",fontSize:14}}>₱</span>
                 <input style={{border:"none",outline:"none",padding:"9px 8px",fontSize:14,width:"100%"}} type="number" name="share_capital" value={form.share_capital||""} onChange={handle} placeholder="e.g. 4000"/>
               </div>
-              {form.share_capital>0&&<div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600}}>
-                💡 Share Capital = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (paid × 2) · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()}
+              {form.share_capital>0&&<div style={{marginTop:6,padding:"6px 10px",background:"#e8f5e9",borderRadius:8,fontSize:11,color:"#2e7d32",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                <Lightbulb size={12}/> Share Capital = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (paid × 2) · Max Loanable = ₱{(parseFloat(form.share_capital||0)*2).toLocaleString()} (×1, new member default)
               </div>}
             </div>
             <RegisterField label="Complete Address" name="address" full form={form} handle={handle} errors={errors}/>
@@ -1026,7 +1026,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
               <div className="modal-field-label">Member Classification <span style={{color:"#e53935"}}>*</span></div>
               <div style={{display:"flex",gap:12,marginTop:8}}>
                 {["Student","Senior","Employed"].map(c=>(<div key={c} onClick={()=>setForm(p=>({...p,classification:c}))} style={{flex:1,border:`2px solid ${form.classification===c?"#2e7d32":"#e0e0e0"}`,borderRadius:10,padding:"16px 10px",textAlign:"center",cursor:"pointer",background:form.classification===c?"#e8f5e9":"#fafafa",transition:"all 0.2s"}}>
-                  <div style={{fontSize:26,marginBottom:6}}>{c==="Student"?"🎓":c==="Senior"?"👴":"💼"}</div>
+                  <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}>{c==="Student"?<GraduationCap size={26} color="#1565c0"/>:c==="Senior"?<User size={26} color="#6a1b9a"/>:<Briefcase size={26} color="#e65100"/>}</div>
                   <div style={{fontSize:12,fontWeight:700,color:"#2e7d32"}}>{c}</div>
                 </div>))}
               </div>
@@ -1037,7 +1037,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
           </div>}
           {tab==="account"&&<div className="modal-grid">
             {result?(<>
-              <div className="modal-field full" style={{textAlign:"center",padding:"12px 0"}}><div style={{fontSize:36,marginBottom:8}}>🎉</div><div style={{fontSize:15,fontWeight:800,color:"#1b5e20",marginBottom:4}}>{result.member?.fullname||`${form.first_name} ${form.last_name}`} is now an official member!</div><div style={{fontSize:12,color:"#888"}}>Share the credentials below with the member.</div></div>
+              <div className="modal-field full" style={{textAlign:"center",padding:"12px 0"}}><div style={{marginBottom:8,display:"flex",justifyContent:"center"}}><PartyPopper size={32} color="#f57c00"/></div><div style={{fontSize:15,fontWeight:800,color:"#1b5e20",marginBottom:4}}>{result.member?.fullname||`${form.first_name} ${form.last_name}`} is now an official member!</div><div style={{fontSize:12,color:"#888"}}>Share the credentials below with the member.</div></div>
               <div className="modal-field full" style={{background:"#f1f8e9",borderRadius:10,padding:16}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[["Member ID",result.member_id],["Username",result.username],["Password",result.plain_password],["Status","Active"]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:"#888",fontWeight:600}}>{k}</div><div style={{fontSize:13,fontWeight:700,color:"#1b5e20",fontFamily:"monospace"}}>{v}</div></div>))}</div></div>
               <div className="modal-field full" style={{fontSize:11,color:"#f57c00",background:"#fff8e1",padding:"10px 14px",borderRadius:8,borderLeft:"3px solid #ff9800"}}> Please save or print these credentials.</div>
             </>):<div className="modal-field full" style={{textAlign:"center",padding:"24px 0",color:"#888"}}>Complete Personal Info and Classification tabs first, then submit.</div>}
@@ -1047,7 +1047,7 @@ function RegisterMemberModal({ onClose, onSuccess }) {
           {!result?(<>
             {tab!=="personal"&&<button className="btn-modal-close" onClick={()=>{const keys=TABS.map(t=>t.key);setTab(keys[keys.indexOf(tab)-1]);}}>← Previous</button>}
             {tab==="personal"&&<button className="btn-modal-close" onClick={onClose}>Cancel</button>}
-            {tab!=="classification"?<button className="btn-modal-save" onClick={()=>{const keys=TABS.map(t=>t.key);setTab(keys[keys.indexOf(tab)+1]);}}>Next →</button>:<button className="btn-modal-save" onClick={handleSubmit} disabled={loading}>{loading?"Registering...":"✓ Register Member"}</button>}
+            {tab!=="classification"?<button className="btn-modal-save" onClick={()=>{const keys=TABS.map(t=>t.key);setTab(keys[keys.indexOf(tab)+1]);}}>Next →</button>:<button className="btn-modal-save" onClick={handleSubmit} disabled={loading} style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>{loading?"Registering...":<><Check size={14}/> Register Member</>}</button>}
           </>):<button className="btn-modal-save" onClick={onClose}>Done</button>}
         </div>
       </div>
@@ -1178,7 +1178,7 @@ export default function ManageMember() {
   };
 
   const handleConvert  = async (app, sharePaid=0) => { try{const r=await convertOnlineAppAPI(app.id, { share_capital: sharePaid });
-    setPending(prev=>prev.filter(p=>p.id!==app.id));setViewPending(null);showToast(`✓ ${app.first_name} ${app.last_name} is now an official member! ID: ${r.member_id}`,"success");fetchData(false);}catch(err){showToast(err.response?.data?.error||"Failed to convert member.","danger");} };
+    setPending(prev=>prev.filter(p=>p.id!==app.id));setViewPending(null);showToast(`${app.first_name} ${app.last_name} is now an official member! ID: ${r.member_id}`,"success");fetchData(false);}catch(err){showToast(err.response?.data?.error||"Failed to convert member.","danger");} };
 
   return (
     <div className="mm-wrapper">
@@ -1227,7 +1227,7 @@ export default function ManageMember() {
             <div className="mm-search-wrap">
               <span className="mm-search-icon"><Search size={13} color="#aaa"/></span>
               <input className="mm-search-input" placeholder="Search by Name or Member ID..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
-              {search&&<button className="mm-clear-btn" onClick={()=>{setSearch("");setPage(1);}}>✕</button>}
+              {search&&<button className="mm-clear-btn" onClick={()=>{setSearch("");setPage(1);}}><X size={13}/></button>}
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -1324,7 +1324,7 @@ export default function ManageMember() {
                     <td style={{fontSize:11,color:"#888"}}>{(p.created_at||"").slice(0,10)}</td>
                     <td><div className="action-btns" onClick={e=>e.stopPropagation()}>
                       <button className="action-btn view-btn" onClick={()=>setViewPending(p)}><Eye size={13}/></button>
-                      <button className="mm-convert-btn" onClick={()=>handleConvert(p)}>✓</button>
+                      <button className="mm-convert-btn" onClick={()=>handleConvert(p)}><Check size={13}/></button>
                     </div></td>
                   </tr>
                 ))}</tbody>

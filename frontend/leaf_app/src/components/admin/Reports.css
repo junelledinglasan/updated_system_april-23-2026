@@ -55,14 +55,14 @@
 .rp-kpi-card.red    .rp-kpi-val { color: #c62828; }
 .rp-kpi-card.gray   .rp-kpi-val { color: #555; }
 
-/* ─── Chart Cards ─────────────────────────────────────────────────────────── */
+/* ─── Chart Cards — BAGO: mas malalim na shadow, accent bar sa title ── */
 .rp-chart-card {
   background: #fff; border-radius: 12px; border: 1.5px solid #c8ddc8;
-  padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 18px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
   min-width: 0;
 }
 .rp-chart-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:8px; flex-wrap:wrap; }
-.rp-chart-title  { font-size:13px; font-weight:700; color:#1b5e20; }
+.rp-chart-title  { font-size:13px; font-weight:700; color:#1b5e20; padding-left:10px; border-left:3px solid #2e7d32; }
 .rp-legend-row   { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .rp-legend-item  { display:flex; align-items:center; gap:4px; font-size:10px; color:#888; font-weight:500; }
 .rp-legend-dot   { width:8px; height:8px; min-width:8px; border-radius:50%; }
@@ -316,8 +316,23 @@
   padding: 10px 14px;
   border-left: 3px solid #2e7d32;
 }
-/* ─── Year Selector ──────────────────────────────────────────── */
-.rp-year-selector { display:flex; align-items:center; }
+/* ─── Year Selector — BAGO: prev/next arrow navigator, hindi na
+   limitado sa fixed na 6-year dropdown ─────────────────────────── */
+.rp-year-selector { display:flex; align-items:center; gap:6px; background:#fff; border:1.5px solid #c8ddc8; border-radius:10px; padding:4px 6px; }
+.rp-year-btn {
+  width:26px; height:26px; border-radius:7px; border:none; background:#f0f8f0;
+  color:#2e7d32; font-size:16px; font-weight:700; cursor:pointer; font-family:inherit;
+  display:flex; align-items:center; justify-content:center; line-height:1; transition:background 0.15s;
+}
+.rp-year-btn:hover { background:#c8e6c9; }
+.rp-year-display { min-width:64px; text-align:center; font-size:13px; font-weight:800; color:#1b5e20; padding:0 4px; }
+.rp-year-all-btn {
+  padding:6px 12px; border-radius:8px; border:1.5px solid #c8ddc8; background:#fafcfa;
+  color:#555; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;
+  white-space:nowrap; transition:all 0.15s; margin-left:4px;
+}
+.rp-year-all-btn:hover  { background:#f0f8f0; border-color:#a5d6a7; color:#2e7d32; }
+.rp-year-all-btn.active { background:#2e7d32; border-color:#2e7d32; color:#fff; }
 
 /* ─── Chart subtitle ─────────────────────────────────────────── */
 .rp-chart-sub { font-size:11px; color:#888; margin-bottom:12px; line-height:1.4; }
@@ -340,44 +355,54 @@
 .rp-audit-table th:nth-child(2),
 .rp-audit-table td:nth-child(2) { display:table-cell !important; }
 
-/* ─── Professional Table ──────────────────────────────────────────────────── */
+/* ─── Professional Table — BAGO: sticky header (para sa mahahabang
+   tables), mas malalim na shadow, mas magandang spacing ──────────────── */
 .rp-pro-table-wrap {
   overflow-x: auto;
-  border-radius: 10px;
+  overflow-y: auto;
+  max-height: 560px;
+  border-radius: 12px;
   border: 1px solid #e4f0e5;
   margin-top: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 .rp-pro-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 12px;
   min-width: 600px;
 }
 .rp-pro-table thead tr {
   background: linear-gradient(135deg, #1b5e20, #2e7d32);
 }
+.rp-pro-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
 .rp-pro-table th {
-  padding: 12px 16px;
+  padding: 13px 16px;
   text-align: left;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
-  letter-spacing: 0.3px;
-  border-right: 1px solid rgba(255,255,255,0.1);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-right: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
 }
 .rp-pro-table th:last-child  { border-right: none; }
-.rp-pro-table th:first-child { border-radius: 10px 0 0 0; }
-.rp-pro-table th:last-child  { border-radius: 0 10px 0 0; }
 .rp-pro-table td {
-  padding: 11px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid #f0f4f1;
   color: #333;
   white-space: nowrap;
   line-height: 1.5;
 }
 .rp-pro-table tbody tr:nth-child(even) { background: #f9fef9; }
-.rp-pro-table tbody tr:hover { background: #e8f5e9; transition: background 0.1s; }
+.rp-pro-table tbody tr:hover { background: #e8f5e9; transition: background 0.12s; }
 .rp-pro-table tbody tr:last-child td { border-bottom: none; }
 
 /* ─── No data ─────────────────────────────────────────────────────────────── */

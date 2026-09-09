@@ -399,6 +399,9 @@ def gcash_request_list_view(request):
             'verified_at':      str(r.verified_at)[:16] if r.verified_at else '',
             'reject_reason':    r.reject_reason,
             'created_at':       r.created_at.strftime('%Y-%m-%d %H:%M'),
+            # ── BAGO: aling GCash account ang ginamit ng member. ────────
+            'paid_to_number':   r.paid_to_number,
+            'paid_to_name':     r.paid_to_name,
         } for r in qs])
 
     # POST — member submits
@@ -423,6 +426,9 @@ def gcash_request_list_view(request):
     # frontend), hindi ito naisasave sa database dahil wala itong
     # dinaanan papunta sa .create() call sa ibaba. ────────────────────
     screenshot_url = data.get('screenshot_url', '')
+    # ── BAGO: kung aling GCash account ang pinili ng member. ────────────
+    paid_to_number = data.get('paid_to_number', '')
+    paid_to_name   = data.get('paid_to_name', '')
 
     if not loan_pk:
         return Response({'error': 'loan_id is required.'}, status=400)
@@ -451,6 +457,7 @@ def gcash_request_list_view(request):
         loan=loan, member=member, amount=float(amount),
         reference_number=ref_no, note=note,
         screenshot_url=screenshot_url,
+        paid_to_number=paid_to_number, paid_to_name=paid_to_name,
     )
 
     log_activity('payment',
@@ -501,6 +508,9 @@ def gcash_request_detail_view(request, pk):
         'verified_at':      str(req.verified_at)[:16] if req.verified_at else '',
         'reject_reason':    req.reject_reason,
         'created_at':       req.created_at.strftime('%Y-%m-%d %H:%M'),
+        # ── BAGO: aling GCash account ang ginamit ng member. ────────────
+        'paid_to_number':   req.paid_to_number,
+        'paid_to_name':     req.paid_to_name,
     })
 
 
